@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  getGpsMatchReferenceRecordsFromSupabase,
   getGpsRecordsBySessionId,
   getGpsSessionsFromSupabase,
   type GpsRecordRow,
   type GpsSessionRow,
 } from "@/lib/supabase/gps";
+import { buildGpsMatchReference } from "@/lib/gps/match-reference";
 
 import {
   Bar,
@@ -28,6 +30,16 @@ import {
   type ObjectiveStatus,
 } from "@/lib/gps/objectives";
 
+import { supabase } from "@/lib/supabase/client";
+
+import {
+  fetchGpsWeeklyEvaluations,
+  type GpsWeeklyEvaluationResult,
+  type GpsWeeklyMetricEvaluation,
+  type GpsWeeklyPlayerEvaluation,
+  type GpsWeeklyStatus,
+} from "@/lib/gps/references";
+
 function formatMeters(value: number | null | undefined) {
   const number = Number(value ?? 0);
   return `${Math.round(number).toLocaleString("es-ES")} m`;
@@ -36,11 +48,6 @@ function formatMeters(value: number | null | undefined) {
 function formatNumber(value: number | null | undefined) {
   const number = Number(value ?? 0);
   return Math.round(number).toLocaleString("es-ES");
-}
-
-function formatPercent(value: number | null | undefined) {
-  const number = Number(value ?? 0);
-  return `${number.toFixed(1).replace(".", ",")} %`;
 }
 
 function getNumeric(value: number | null | undefined) {
@@ -125,6 +132,71 @@ function getMetricValue(row: GpsRecordRow, metric: GpsMetricKey) {
   return Number(row[metric] ?? 0);
 }
 
+function getTodayInputDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatPercent(value: number | null | undefined) {
+  const number = Number(value ?? 0);
+  return `${Math.round(number)}%`;
+}
+
+function formatMetricValueForUnit(value: number, unit: string) {
+  if (unit === "m" || unit === " m") {
+    return formatMeters(value);
+  }
+
+  return formatNumber(value);
+}
+
+function getWeeklyStatusClass(status: GpsWeeklyStatus) {
+  if (status === "BAJO") {
+    return "bg-amber-50 text-amber-700 border-amber-200";
+  }
+
+  if (status === "ALTO") {
+    return "bg-red-50 text-red-700 border-red-200";
+  }
+
+  return "bg-emerald-50 text-emerald-700 border-emerald-200";
+}
+
+function getWeeklyMetric(
+  evaluation: GpsWeeklyPlayerEvaluation,
+  key: GpsMetricKey,
+): GpsWeeklyMetricEvaluation | null {
+  return evaluation.metrics.find((metric) => metric.key === key) ?? null;
+}
+
+function formatWeeklyMetricCell(metric: GpsWeeklyMetricEvaluation | null) {
+  if (!metric) return "—";
+
+  return `${formatMetricValueForUnit(
+    metric.currentValue,
+    metric.unit,
+  )} · ${formatPercent(metric.percentOfReference)}`;
+}
+
+function formatWeeklyActionCell(metric: GpsWeeklyMetricEvaluation | null) {
+  if (!metric) return "—";
+
+  if (metric.status === "BAJO") {
+    return `Faltan ${formatMetricValueForUnit(
+      metric.missingToMinimum,
+      metric.unit,
+    )}`;
+  }
+
+  if (metric.status === "ALTO") {
+    return `Exceso ${formatMetricValueForUnit(
+      metric.excessOverMaximum,
+      metric.unit,
+    )}`;
+  }
+
+  return "En rango";
+}
+
 function formatMetricValue(
   value: number | null | undefined,
   metric: GpsMetricKey,
@@ -199,6 +271,12 @@ function RankingCard({
 }
 
 export default function GpsPage() {
+  const [weeklyDate, setWeeklyDate] = useState(getTodayInputDate);
+  const [weeklyEvaluation, setWeeklyEvaluation] =
+    useState<GpsWeeklyEvaluationResult | null>(null);
+  const [loadingWeeklyEvaluation, setLoadingWeeklyEvaluation] = useState(false);
+  const [weeklyError, setWeeklyError] = useState<string | null>(null);
+
   const [sessions, setSessions] = useState<GpsSessionRow[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [records, setRecords] = useState<GpsRecordRow[]>([]);
@@ -208,6 +286,11 @@ export default function GpsPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [matchReferenceRecords, setMatchReferenceRecords] = useState<
+    GpsRecordRow[]
+  >([]);
+  const [loadingMatchReference, setLoadingMatchReference] = useState(false);
 
   useEffect(() => {
     async function loadSessions() {
@@ -238,6 +321,42 @@ export default function GpsPage() {
   }, []);
 
   useEffect(() => {
+    async function loadWeeklyEvaluation() {
+      if (!weeklyDate) {
+        setWeeklyEvaluation(null);
+        return;
+      }
+
+      if (!supabase) {
+        setWeeklyError("Supabase no está configurado.");
+        setWeeklyEvaluation(null);
+        return;
+      }
+
+      try {
+        setLoadingWeeklyEvaluation(true);
+        setWeeklyError(null);
+
+        const data = await fetchGpsWeeklyEvaluations(supabase, weeklyDate);
+
+        setWeeklyEvaluation(data);
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Error desconocido al calcular la semana GPS.";
+
+        setWeeklyError(message);
+        setWeeklyEvaluation(null);
+      } finally {
+        setLoadingWeeklyEvaluation(false);
+      }
+    }
+
+    loadWeeklyEvaluation();
+  }, [weeklyDate]);
+
+  useEffect(() => {
     async function loadRecords() {
       if (!selectedSessionId) {
         setRecords([]);
@@ -264,6 +383,25 @@ export default function GpsPage() {
 
     loadRecords();
   }, [selectedSessionId]);
+
+  useEffect(() => {
+    async function loadMatchReferenceRecords() {
+      try {
+        setLoadingMatchReference(true);
+
+        const data = await getGpsMatchReferenceRecordsFromSupabase();
+
+        setMatchReferenceRecords(data);
+      } catch (err) {
+        console.warn("No se ha podido cargar la referencia de partido GPS:", err);
+        setMatchReferenceRecords([]);
+      } finally {
+        setLoadingMatchReference(false);
+      }
+    }
+
+    loadMatchReferenceRecords();
+  }, []);
 
   const selectedSession = useMemo(() => {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
@@ -301,15 +439,23 @@ export default function GpsPage() {
     return getGpsObjectiveForMicrocycle(selectedMicrocycle);
   }, [selectedMicrocycle]);
 
+  const matchReference = useMemo(() => {
+    return buildGpsMatchReference(matchReferenceRecords, 5);
+  }, [matchReferenceRecords]);
+
   const selectedMetricObjective = selectedObjective.metrics[selectedMetric];
 
   const selectedMetricReference = useMemo(() => {
-    return getMetricReference(selectedMetric);
-  }, [selectedMetric]);
+    return getMetricReference(selectedMetric, matchReference.values);
+  }, [selectedMetric, matchReference.values]);
 
   const selectedMetricObjectiveValue = useMemo(() => {
-    return getObjectiveValue(selectedMetric, selectedMicrocycle);
-  }, [selectedMetric, selectedMicrocycle]);
+    return getObjectiveValue(
+      selectedMetric,
+      selectedMicrocycle,
+      matchReference.values,
+    );
+  }, [selectedMetric, selectedMicrocycle, matchReference.values]);
 
   const chartData = useMemo(() => {
     return sortByMetric(filteredRecords, selectedMetric)
@@ -328,6 +474,7 @@ export default function GpsPage() {
         value,
         metric: selectedMetric,
         microcycle: selectedMicrocycle,
+        reference: matchReference.values,
       });
 
       return {
@@ -337,7 +484,12 @@ export default function GpsPage() {
         ...objective,
       };
     });
-  }, [filteredRecords, selectedMetric, selectedMicrocycle]);
+  }, [
+    filteredRecords,
+    selectedMetric,
+    selectedMicrocycle,
+    matchReference.values,
+  ]);
 
   const objectiveSummary = useMemo(() => {
     return objectiveRows.reduce(
@@ -355,6 +507,21 @@ export default function GpsPage() {
       },
     );
   }, [objectiveRows]);
+
+  const weeklySummary = useMemo(() => {
+    const evaluations = weeklyEvaluation?.evaluations ?? [];
+
+    return {
+      totalPlayers: evaluations.length,
+      lowPlayers: evaluations.filter((row) => row.generalStatus === "BAJO")
+        .length,
+      targetPlayers: evaluations.filter(
+        (row) => row.generalStatus === "OBJETIVO",
+      ).length,
+      highPlayers: evaluations.filter((row) => row.generalStatus === "ALTO")
+        .length,
+    };
+  }, [weeklyEvaluation]);
 
   const summary = useMemo(() => {
     const players = filteredRecords.length;
@@ -662,6 +829,251 @@ export default function GpsPage() {
               </div>
 
               <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                      Carga semanal GPS
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black">
+                      Qué le falta por hacer esta semana
+                    </h2>
+
+                    <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                      La aplicación calcula la carga acumulada de lunes a
+                      domingo y la compara con la referencia de partido del
+                      jugador. Si no existe referencia propia suficiente, usa
+                      referencia posicional o general.
+                    </p>
+                  </div>
+
+                  <label className="w-full text-sm font-bold text-slate-700 md:w-[260px]">
+                    Fecha de la semana
+                    <input
+                      type="date"
+                      value={weeklyDate}
+                      onChange={(event) => setWeeklyDate(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </label>
+                </div>
+
+                {weeklyError && (
+                  <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+                    {weeklyError}
+                  </div>
+                )}
+
+                {loadingWeeklyEvaluation && (
+                  <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+                    Calculando carga semanal GPS...
+                  </div>
+                )}
+
+                {!loadingWeeklyEvaluation && weeklyEvaluation && (
+                  <>
+                    <div className="mt-6 grid gap-4 md:grid-cols-4">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-bold text-slate-500">
+                          Semana
+                        </p>
+                        <p className="mt-2 text-lg font-black">
+                          {weeklyEvaluation.weekStart} /{" "}
+                          {weeklyEvaluation.weekEnd}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-bold text-slate-500">
+                          Jugadores
+                        </p>
+                        <p className="mt-2 text-3xl font-black">
+                          {weeklySummary.totalPlayers}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                        <p className="text-xs font-bold text-emerald-700">
+                          En objetivo
+                        </p>
+                        <p className="mt-2 text-3xl font-black text-emerald-800">
+                          {weeklySummary.targetPlayers}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <p className="text-xs font-bold text-amber-700">
+                          Por debajo
+                        </p>
+                        <p className="mt-2 text-3xl font-black text-amber-800">
+                          {weeklySummary.lowPlayers}
+                        </p>
+                      </div>
+                    </div>
+
+                    {weeklyEvaluation.evaluations.length === 0 ? (
+                      <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+                        No hay registros GPS de entrenamiento para la semana
+                        seleccionada.
+                      </div>
+                    ) : (
+                      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+                        <div className="max-h-[520px] overflow-auto">
+                          <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
+                            <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                              <tr>
+                                <th className="px-4 py-3">Jugador</th>
+                                <th className="px-4 py-3">Estado</th>
+                                <th className="px-4 py-3">Distancia</th>
+                                <th className="px-4 py-3">HSR</th>
+                                <th className="px-4 py-3">Sprint</th>
+                                <th className="px-4 py-3">Sprints</th>
+                                <th className="px-4 py-3">ACC</th>
+                                <th className="px-4 py-3">DEC</th>
+                                <th className="px-4 py-3">Referencia</th>
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {weeklyEvaluation.evaluations.map(
+                                (evaluation) => {
+                                  const totalDistance = getWeeklyMetric(
+                                    evaluation,
+                                    "total_distance",
+                                  );
+                                  const hsr = getWeeklyMetric(
+                                    evaluation,
+                                    "hsr",
+                                  );
+                                  const sprintDistance = getWeeklyMetric(
+                                    evaluation,
+                                    "distance_vrange6",
+                                  );
+                                  const sprints = getWeeklyMetric(
+                                    evaluation,
+                                    "sprints",
+                                  );
+                                  const acc = getWeeklyMetric(
+                                    evaluation,
+                                    "num_acc",
+                                  );
+                                  const dec = getWeeklyMetric(
+                                    evaluation,
+                                    "num_dec",
+                                  );
+
+                                  return (
+                                    <tr
+                                      key={evaluation.normalizedName}
+                                      className="border-t border-slate-100"
+                                    >
+                                      <td className="px-4 py-3">
+                                        <p className="font-black text-slate-950">
+                                          {evaluation.playerName}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {evaluation.position ??
+                                            "Sin posición"}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <span
+                                          className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
+                                            evaluation.generalStatus,
+                                          )}`}
+                                        >
+                                          {evaluation.generalStatus}
+                                        </span>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {formatWeeklyMetricCell(
+                                            totalDistance,
+                                          )}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyActionCell(
+                                            totalDistance,
+                                          )}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {formatWeeklyMetricCell(hsr)}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyActionCell(hsr)}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {formatWeeklyMetricCell(
+                                            sprintDistance,
+                                          )}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyActionCell(
+                                            sprintDistance,
+                                          )}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {formatWeeklyMetricCell(sprints)}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyActionCell(sprints)}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {formatWeeklyMetricCell(acc)}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyActionCell(acc)}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {formatWeeklyMetricCell(dec)}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyActionCell(dec)}
+                                        </p>
+                                      </td>
+
+                                      <td className="px-4 py-3">
+                                        <p className="font-black">
+                                          {evaluation.referenceSource}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          Partidos válidos:{" "}
+                                          {
+                                            evaluation.referenceValidMatches
+                                          }
+                                        </p>
+                                      </td>
+                                    </tr>
+                                  );
+                                },
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
@@ -681,6 +1093,30 @@ export default function GpsPage() {
                     <p className="mt-2 text-sm font-bold text-slate-700">
                       {selectedObjective.label}: {selectedObjective.description}
                     </p>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                        Origen de la referencia de partido
+                      </p>
+
+                      <p className="mt-2 text-sm font-bold text-slate-800">
+                        {loadingMatchReference
+                          ? "Cargando referencia de partido..."
+                          : matchReference.source === "dynamic"
+                            ? "Referencia propia calculada desde partidos guardados"
+                            : "Referencia fija provisional"}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-600">
+                        {matchReference.reason}
+                      </p>
+
+                      <p className="mt-2 text-xs font-bold text-slate-500">
+                        Partidos válidos: {matchReference.validMatchSessions}/
+                        {matchReference.minimumMatchesRequired} · Registros
+                        válidos: {matchReference.validRecords}
+                      </p>
+                    </div>
                   </div>
 
                   <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
@@ -707,7 +1143,10 @@ export default function GpsPage() {
                       Referencia partido
                     </p>
                     <p className="mt-2 text-2xl font-black">
-                      {formatMetricValue(selectedMetricReference, selectedMetric)}
+                      {formatMetricValue(
+                        selectedMetricReference,
+                        selectedMetric,
+                      )}
                     </p>
                   </div>
 
