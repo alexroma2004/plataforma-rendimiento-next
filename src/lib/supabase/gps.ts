@@ -228,3 +228,111 @@ export async function saveGpsSessionToSupabase(
     insertedRecords: recordPayload.length,
   };
 }
+
+export type GpsSessionRow = {
+  id: string;
+  team_id: string | null;
+  session_date: string;
+  microcycle: string | null;
+  session_name: string | null;
+  source_filename: string | null;
+  is_match: boolean | null;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type GpsRecordRow = {
+  id: string;
+  session_id: string;
+  team_id: string | null;
+  player_id: string | null;
+
+  session_date: string | null;
+  microcycle: string | null;
+
+  player_name: string;
+  normalized_name: string | null;
+
+  position: string | null;
+  is_goalkeeper: boolean | null;
+  time_played: number | null;
+
+  total_distance: number | null;
+  hsr: number | null;
+  distance_vrange6: number | null;
+  sprints: number | null;
+  num_acc: number | null;
+  num_dec: number | null;
+
+  match_reference_source?: string | null;
+  valid_matches_count?: number | null;
+
+  reference_total_distance?: number | null;
+  reference_hsr?: number | null;
+  reference_distance_vrange6?: number | null;
+  reference_sprints?: number | null;
+  reference_num_acc?: number | null;
+  reference_num_dec?: number | null;
+
+  pct_total_distance?: number | null;
+  pct_hsr?: number | null;
+  pct_distance_vrange6?: number | null;
+  pct_sprints?: number | null;
+  pct_num_acc?: number | null;
+  pct_num_dec?: number | null;
+
+  gps_status: string | null;
+  notes: string | null;
+};
+
+export async function getGpsSessionsFromSupabase(): Promise<GpsSessionRow[]> {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const { data, error } = await supabase
+    .from("gps_sessions")
+    .select(
+      `
+      id,
+      team_id,
+      session_date,
+      microcycle,
+      session_name,
+      source_filename,
+      is_match,
+      notes,
+      created_at,
+      updated_at
+    `,
+    )
+    .order("session_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`No se han podido cargar las sesiones GPS: ${error.message}`);
+  }
+
+  return (data ?? []) as GpsSessionRow[];
+}
+
+export async function getGpsRecordsBySessionId(
+  sessionId: string,
+): Promise<GpsRecordRow[]> {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const { data, error } = await supabase
+    .from("gps_records")
+    .select("*")
+    .eq("session_id", sessionId)
+    .order("total_distance", { ascending: false });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los registros GPS: ${error.message}`);
+  }
+
+  return (data ?? []) as GpsRecordRow[];
+}
