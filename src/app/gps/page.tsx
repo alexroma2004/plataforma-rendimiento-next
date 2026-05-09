@@ -87,7 +87,29 @@ const gpsMetricOptions: {
     unit: "",
   },
 ];
+type PlayerScope = "field" | "all" | "goalkeepers";
 
+const playerScopeOptions: {
+  key: PlayerScope;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "field",
+    label: "Jugadores de campo",
+    description: "Excluye porteros del análisis principal.",
+  },
+  {
+    key: "all",
+    label: "Todos",
+    description: "Incluye jugadores de campo y porteros.",
+  },
+  {
+    key: "goalkeepers",
+    label: "Solo porteros",
+    description: "Muestra únicamente porteros.",
+  },
+];
 function getMetricValue(row: GpsRecordRow, metric: GpsMetricKey) {
   return Number(row[metric] ?? 0);
 }
@@ -144,6 +166,7 @@ export default function GpsPage() {
   const [records, setRecords] = useState<GpsRecordRow[]>([]);
 const [selectedMetric, setSelectedMetric] =
   useState<GpsMetricKey>("total_distance");
+  const [playerScope, setPlayerScope] = useState<PlayerScope>("field");
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
@@ -205,39 +228,74 @@ const [selectedMetric, setSelectedMetric] =
     loadRecords();
   }, [selectedSessionId]);
 
-  const selectedSession = useMemo(() => {
-    return sessions.find((session) => session.id === selectedSessionId) ?? null;
-  }, [sessions, selectedSessionId]);
+const selectedSession = useMemo(() => {
+  return sessions.find((session) => session.id === selectedSessionId) ?? null;
+}, [sessions, selectedSessionId]);
 
- const summary = useMemo(() => {
-  const players = records.length;
+const filteredRecords = useMemo(() => {
+  if (playerScope === "all") {
+    return records;
+  }
 
-  const totalDistance = records.reduce(
+  if (playerScope === "goalkeepers") {
+    return records.filter((row) => row.is_goalkeeper === true);
+  }
+
+  return records.filter((row) => row.is_goalkeeper !== true);
+}, [records, playerScope]);
+
+const selectedPlayerScopeMeta = useMemo(() => {
+  return (
+    playerScopeOptions.find((option) => option.key === playerScope) ??
+    playerScopeOptions[0]
+  );
+}, [playerScope]);
+
+const selectedMetricMeta = useMemo(() => {
+  return (
+    gpsMetricOptions.find((option) => option.key === selectedMetric) ??
+    gpsMetricOptions[0]
+  );
+}, [selectedMetric]);
+
+const chartData = useMemo(() => {
+  return sortByMetric(filteredRecords, selectedMetric)
+    .slice(0, 12)
+    .map((row) => ({
+      jugador: row.player_name,
+      valor: getMetricValue(row, selectedMetric),
+    }));
+}, [filteredRecords, selectedMetric]);
+
+const summary = useMemo(() => {
+  const players = filteredRecords.length;
+
+  const totalDistance = filteredRecords.reduce(
     (sum, row) => sum + getNumeric(row.total_distance),
     0,
   );
 
-  const totalHsr = records.reduce(
+  const totalHsr = filteredRecords.reduce(
     (sum, row) => sum + getNumeric(row.hsr),
     0,
   );
 
-  const totalSprintDistance = records.reduce(
+  const totalSprintDistance = filteredRecords.reduce(
     (sum, row) => sum + getNumeric(row.distance_vrange6),
     0,
   );
 
-  const totalSprints = records.reduce(
+  const totalSprints = filteredRecords.reduce(
     (sum, row) => sum + getNumeric(row.sprints),
     0,
   );
 
-  const totalAcc = records.reduce(
+  const totalAcc = filteredRecords.reduce(
     (sum, row) => sum + getNumeric(row.num_acc),
     0,
   );
 
-  const totalDec = records.reduce(
+  const totalDec = filteredRecords.reduce(
     (sum, row) => sum + getNumeric(row.num_dec),
     0,
   );
@@ -254,23 +312,7 @@ const [selectedMetric, setSelectedMetric] =
     totalAcc,
     totalDec,
   };
-}, [records]);
-
-const selectedMetricMeta = useMemo(() => {
-  return (
-    gpsMetricOptions.find((option) => option.key === selectedMetric) ??
-    gpsMetricOptions[0]
-  );
-}, [selectedMetric]);
-
-const chartData = useMemo(() => {
-  return sortByMetric(records, selectedMetric)
-    .slice(0, 12)
-    .map((row) => ({
-      jugador: row.player_name,
-      valor: getMetricValue(row, selectedMetric),
-    }));
-}, [records, selectedMetric]);
+}, [filteredRecords]);
 
   return (
     <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
@@ -377,6 +419,71 @@ const chartData = useMemo(() => {
             </div>
           </div>
         )}
+        {selectedSession && (
+  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+          Filtro de análisis
+        </p>
+
+        <h3 className="mt-2 text-lg font-black text-slate-950">
+          Población analizada
+        </h3>
+
+        <p className="mt-2 text-sm text-slate-600">
+          {selectedPlayerScopeMeta.description}
+        </p>
+      </div>
+
+      <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+        Analizar
+        <select
+          value={playerScope}
+          onChange={(event) =>
+            setPlayerScope(event.target.value as PlayerScope)
+          }
+          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+        >
+          {playerScopeOptions.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">
+          Registros totales
+        </p>
+        <p className="mt-1 text-2xl font-black text-slate-950">
+          {records.length}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">
+          Registros analizados
+        </p>
+        <p className="mt-1 text-2xl font-black text-slate-950">
+          {filteredRecords.length}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">
+          Registros excluidos
+        </p>
+        <p className="mt-1 text-2xl font-black text-slate-950">
+          {records.length - filteredRecords.length}
+        </p>
+      </div>
+    </div>
+  </div>
+)}
       </section>
 
       {selectedSessionId && (
@@ -548,40 +655,40 @@ const chartData = useMemo(() => {
               <div className="mt-8 grid gap-4 xl:grid-cols-3">
                 <RankingCard
                   title="Ranking distancia"
-                  rows={records}
+                  rows={filteredRecords}
                   metric="total_distance"
                   suffix=" m"
                 />
 
                 <RankingCard
                   title="Ranking HSR"
-                  rows={records}
+                  rows={filteredRecords}
                   metric="hsr"
                   suffix=" m"
                 />
 
                 <RankingCard
                   title="Ranking sprint"
-                  rows={records}
+                  rows={filteredRecords}
                   metric="distance_vrange6"
                   suffix=" m"
                 />
 
                 <RankingCard
                   title="Ranking sprints"
-                  rows={records}
+                  rows={filteredRecords}
                   metric="sprints"
                 />
 
                 <RankingCard
                   title="Ranking aceleraciones"
-                  rows={records}
+                  rows={filteredRecords}
                   metric="num_acc"
                 />
 
                 <RankingCard
                   title="Ranking deceleraciones"
-                  rows={records}
+                  rows={filteredRecords}
                   metric="num_dec"
                 />
               </div>
@@ -613,7 +720,7 @@ const chartData = useMemo(() => {
                     </thead>
 
                     <tbody>
-                      {records.map((row) => (
+                      {filteredRecords.map((row) => (
                         <tr key={row.id} className="border-t border-slate-100">
                           <td className="px-4 py-3 font-black">
                             {row.player_name}
