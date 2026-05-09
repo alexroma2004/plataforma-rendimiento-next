@@ -8,6 +8,16 @@ import {
   type GpsSessionRow,
 } from "@/lib/supabase/gps";
 
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 function formatMeters(value: number | null | undefined) {
   const number = Number(value ?? 0);
   return `${Math.round(number).toLocaleString("es-ES")} m`;
@@ -31,6 +41,55 @@ function sortByMetric(
     const valueB = Number(b[metric] ?? 0);
     return valueB - valueA;
   });
+}
+
+type GpsMetricKey =
+  | "total_distance"
+  | "hsr"
+  | "distance_vrange6"
+  | "sprints"
+  | "num_acc"
+  | "num_dec";
+
+const gpsMetricOptions: {
+  key: GpsMetricKey;
+  label: string;
+  unit: string;
+}[] = [
+  {
+    key: "total_distance",
+    label: "Distancia total",
+    unit: " m",
+  },
+  {
+    key: "hsr",
+    label: "HSR",
+    unit: " m",
+  },
+  {
+    key: "distance_vrange6",
+    label: "Distancia sprint",
+    unit: " m",
+  },
+  {
+    key: "sprints",
+    label: "Número de sprints",
+    unit: "",
+  },
+  {
+    key: "num_acc",
+    label: "Aceleraciones",
+    unit: "",
+  },
+  {
+    key: "num_dec",
+    label: "Deceleraciones",
+    unit: "",
+  },
+];
+
+function getMetricValue(row: GpsRecordRow, metric: GpsMetricKey) {
+  return Number(row[metric] ?? 0);
 }
 
 function RankingCard({
@@ -83,7 +142,8 @@ export default function GpsPage() {
   const [sessions, setSessions] = useState<GpsSessionRow[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [records, setRecords] = useState<GpsRecordRow[]>([]);
-
+const [selectedMetric, setSelectedMetric] =
+  useState<GpsMetricKey>("total_distance");
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
@@ -149,52 +209,68 @@ export default function GpsPage() {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
 
-  const summary = useMemo(() => {
-    const players = records.length;
+ const summary = useMemo(() => {
+  const players = records.length;
 
-    const totalDistance = records.reduce(
-      (sum, row) => sum + getNumeric(row.total_distance),
-      0,
-    );
+  const totalDistance = records.reduce(
+    (sum, row) => sum + getNumeric(row.total_distance),
+    0,
+  );
 
-    const totalHsr = records.reduce(
-      (sum, row) => sum + getNumeric(row.hsr),
-      0,
-    );
+  const totalHsr = records.reduce(
+    (sum, row) => sum + getNumeric(row.hsr),
+    0,
+  );
 
-    const totalSprintDistance = records.reduce(
-      (sum, row) => sum + getNumeric(row.distance_vrange6),
-      0,
-    );
+  const totalSprintDistance = records.reduce(
+    (sum, row) => sum + getNumeric(row.distance_vrange6),
+    0,
+  );
 
-    const totalSprints = records.reduce(
-      (sum, row) => sum + getNumeric(row.sprints),
-      0,
-    );
+  const totalSprints = records.reduce(
+    (sum, row) => sum + getNumeric(row.sprints),
+    0,
+  );
 
-    const totalAcc = records.reduce(
-      (sum, row) => sum + getNumeric(row.num_acc),
-      0,
-    );
+  const totalAcc = records.reduce(
+    (sum, row) => sum + getNumeric(row.num_acc),
+    0,
+  );
 
-    const totalDec = records.reduce(
-      (sum, row) => sum + getNumeric(row.num_dec),
-      0,
-    );
+  const totalDec = records.reduce(
+    (sum, row) => sum + getNumeric(row.num_dec),
+    0,
+  );
 
-    const averageDistance = players > 0 ? totalDistance / players : 0;
+  const averageDistance = players > 0 ? totalDistance / players : 0;
 
-    return {
-      players,
-      totalDistance,
-      averageDistance,
-      totalHsr,
-      totalSprintDistance,
-      totalSprints,
-      totalAcc,
-      totalDec,
-    };
-  }, [records]);
+  return {
+    players,
+    totalDistance,
+    averageDistance,
+    totalHsr,
+    totalSprintDistance,
+    totalSprints,
+    totalAcc,
+    totalDec,
+  };
+}, [records]);
+
+const selectedMetricMeta = useMemo(() => {
+  return (
+    gpsMetricOptions.find((option) => option.key === selectedMetric) ??
+    gpsMetricOptions[0]
+  );
+}, [selectedMetric]);
+
+const chartData = useMemo(() => {
+  return sortByMetric(records, selectedMetric)
+    .slice(0, 12)
+    .map((row) => ({
+      jugador: row.player_name,
+      valor: getMetricValue(row, selectedMetric),
+    }));
+}, [records, selectedMetric]);
 
   return (
     <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
@@ -386,7 +462,89 @@ export default function GpsPage() {
                   </p>
                 </div>
               </div>
+<div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
+  <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div>
+      <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+        Visualización por jugador
+      </p>
 
+      <h2 className="mt-2 text-xl font-black">
+        Ranking gráfico de carga externa
+      </h2>
+
+      <p className="mt-2 text-sm text-slate-600">
+        Selecciona una métrica para comparar visualmente a los jugadores de la
+        sesión GPS.
+      </p>
+    </div>
+
+    <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+      Métrica
+      <select
+        value={selectedMetric}
+        onChange={(event) =>
+          setSelectedMetric(event.target.value as GpsMetricKey)
+        }
+        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+      >
+        {gpsMetricOptions.map((option) => (
+          <option key={option.key} value={option.key}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  </div>
+
+  <div className="mt-6 h-[420px] w-full">
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart
+        data={chartData}
+        layout="vertical"
+        margin={{
+          top: 10,
+          right: 30,
+          left: 80,
+          bottom: 10,
+        }}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+
+        <XAxis
+          type="number"
+          tickFormatter={(value) =>
+            Math.round(Number(value)).toLocaleString("es-ES")
+          }
+        />
+
+        <YAxis
+          type="category"
+          dataKey="jugador"
+          width={120}
+          tick={{
+            fontSize: 12,
+          }}
+        />
+
+        <Tooltip
+          formatter={(value) => {
+            const number = Math.round(Number(value ?? 0)).toLocaleString(
+              "es-ES",
+            );
+
+            return [
+              `${number}${selectedMetricMeta.unit}`,
+              selectedMetricMeta.label,
+            ];
+          }}
+        />
+
+        <Bar dataKey="valor" radius={[0, 8, 8, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+</div>
               <div className="mt-8 grid gap-4 xl:grid-cols-3">
                 <RankingCard
                   title="Ranking distancia"
