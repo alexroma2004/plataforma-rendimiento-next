@@ -12,11 +12,21 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+import {
+  getGpsObjectiveForMicrocycle,
+  getMetricReference,
+  getObjectiveStatus,
+  getObjectiveValue,
+  type GpsObjectiveMetricKey,
+  type ObjectiveStatus,
+} from "@/lib/gps/objectives";
 
 function formatMeters(value: number | null | undefined) {
   const number = Number(value ?? 0);
@@ -26,6 +36,11 @@ function formatMeters(value: number | null | undefined) {
 function formatNumber(value: number | null | undefined) {
   const number = Number(value ?? 0);
   return Math.round(number).toLocaleString("es-ES");
+}
+
+function formatPercent(value: number | null | undefined) {
+  const number = Number(value ?? 0);
+  return `${number.toFixed(1).replace(".", ",")} %`;
 }
 
 function getNumeric(value: number | null | undefined) {
@@ -43,13 +58,7 @@ function sortByMetric(
   });
 }
 
-type GpsMetricKey =
-  | "total_distance"
-  | "hsr"
-  | "distance_vrange6"
-  | "sprints"
-  | "num_acc"
-  | "num_dec";
+type GpsMetricKey = GpsObjectiveMetricKey;
 
 const gpsMetricOptions: {
   key: GpsMetricKey;
@@ -87,6 +96,7 @@ const gpsMetricOptions: {
     unit: "",
   },
 ];
+
 type PlayerScope = "field" | "all" | "goalkeepers";
 
 const playerScopeOptions: {
@@ -110,8 +120,36 @@ const playerScopeOptions: {
     description: "Muestra únicamente porteros.",
   },
 ];
+
 function getMetricValue(row: GpsRecordRow, metric: GpsMetricKey) {
   return Number(row[metric] ?? 0);
+}
+
+function formatMetricValue(
+  value: number | null | undefined,
+  metric: GpsMetricKey,
+) {
+  if (
+    metric === "total_distance" ||
+    metric === "hsr" ||
+    metric === "distance_vrange6"
+  ) {
+    return formatMeters(value);
+  }
+
+  return formatNumber(value);
+}
+
+function getObjectiveBadgeClass(status: ObjectiveStatus) {
+  if (status === "low") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  if (status === "high") {
+    return "bg-red-50 text-red-700";
+  }
+
+  return "bg-emerald-50 text-emerald-700";
 }
 
 function RankingCard({
@@ -164,12 +202,11 @@ export default function GpsPage() {
   const [sessions, setSessions] = useState<GpsSessionRow[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [records, setRecords] = useState<GpsRecordRow[]>([]);
-const [selectedMetric, setSelectedMetric] =
-  useState<GpsMetricKey>("total_distance");
+  const [selectedMetric, setSelectedMetric] =
+    useState<GpsMetricKey>("total_distance");
   const [playerScope, setPlayerScope] = useState<PlayerScope>("field");
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -228,91 +265,143 @@ const [selectedMetric, setSelectedMetric] =
     loadRecords();
   }, [selectedSessionId]);
 
-const selectedSession = useMemo(() => {
-  return sessions.find((session) => session.id === selectedSessionId) ?? null;
-}, [sessions, selectedSessionId]);
+  const selectedSession = useMemo(() => {
+    return sessions.find((session) => session.id === selectedSessionId) ?? null;
+  }, [sessions, selectedSessionId]);
 
-const filteredRecords = useMemo(() => {
-  if (playerScope === "all") {
-    return records;
-  }
+  const selectedMicrocycle = selectedSession?.microcycle ?? "MD-1";
 
-  if (playerScope === "goalkeepers") {
-    return records.filter((row) => row.is_goalkeeper === true);
-  }
+  const filteredRecords = useMemo(() => {
+    if (playerScope === "all") {
+      return records;
+    }
 
-  return records.filter((row) => row.is_goalkeeper !== true);
-}, [records, playerScope]);
+    if (playerScope === "goalkeepers") {
+      return records.filter((row) => row.is_goalkeeper === true);
+    }
 
-const selectedPlayerScopeMeta = useMemo(() => {
-  return (
-    playerScopeOptions.find((option) => option.key === playerScope) ??
-    playerScopeOptions[0]
-  );
-}, [playerScope]);
+    return records.filter((row) => row.is_goalkeeper !== true);
+  }, [records, playerScope]);
 
-const selectedMetricMeta = useMemo(() => {
-  return (
-    gpsMetricOptions.find((option) => option.key === selectedMetric) ??
-    gpsMetricOptions[0]
-  );
-}, [selectedMetric]);
+  const selectedPlayerScopeMeta = useMemo(() => {
+    return (
+      playerScopeOptions.find((option) => option.key === playerScope) ??
+      playerScopeOptions[0]
+    );
+  }, [playerScope]);
 
-const chartData = useMemo(() => {
-  return sortByMetric(filteredRecords, selectedMetric)
-    .slice(0, 12)
-    .map((row) => ({
-      jugador: row.player_name,
-      valor: getMetricValue(row, selectedMetric),
-    }));
-}, [filteredRecords, selectedMetric]);
+  const selectedMetricMeta = useMemo(() => {
+    return (
+      gpsMetricOptions.find((option) => option.key === selectedMetric) ??
+      gpsMetricOptions[0]
+    );
+  }, [selectedMetric]);
 
-const summary = useMemo(() => {
-  const players = filteredRecords.length;
+  const selectedObjective = useMemo(() => {
+    return getGpsObjectiveForMicrocycle(selectedMicrocycle);
+  }, [selectedMicrocycle]);
 
-  const totalDistance = filteredRecords.reduce(
-    (sum, row) => sum + getNumeric(row.total_distance),
-    0,
-  );
+  const selectedMetricObjective = selectedObjective.metrics[selectedMetric];
 
-  const totalHsr = filteredRecords.reduce(
-    (sum, row) => sum + getNumeric(row.hsr),
-    0,
-  );
+  const selectedMetricReference = useMemo(() => {
+    return getMetricReference(selectedMetric);
+  }, [selectedMetric]);
 
-  const totalSprintDistance = filteredRecords.reduce(
-    (sum, row) => sum + getNumeric(row.distance_vrange6),
-    0,
-  );
+  const selectedMetricObjectiveValue = useMemo(() => {
+    return getObjectiveValue(selectedMetric, selectedMicrocycle);
+  }, [selectedMetric, selectedMicrocycle]);
 
-  const totalSprints = filteredRecords.reduce(
-    (sum, row) => sum + getNumeric(row.sprints),
-    0,
-  );
+  const chartData = useMemo(() => {
+    return sortByMetric(filteredRecords, selectedMetric)
+      .slice(0, 12)
+      .map((row) => ({
+        jugador: row.player_name,
+        valor: getMetricValue(row, selectedMetric),
+      }));
+  }, [filteredRecords, selectedMetric]);
 
-  const totalAcc = filteredRecords.reduce(
-    (sum, row) => sum + getNumeric(row.num_acc),
-    0,
-  );
+  const objectiveRows = useMemo(() => {
+    return filteredRecords.map((row) => {
+      const value = getMetricValue(row, selectedMetric);
 
-  const totalDec = filteredRecords.reduce(
-    (sum, row) => sum + getNumeric(row.num_dec),
-    0,
-  );
+      const objective = getObjectiveStatus({
+        value,
+        metric: selectedMetric,
+        microcycle: selectedMicrocycle,
+      });
 
-  const averageDistance = players > 0 ? totalDistance / players : 0;
+      return {
+        id: row.id,
+        playerName: row.player_name,
+        value,
+        ...objective,
+      };
+    });
+  }, [filteredRecords, selectedMetric, selectedMicrocycle]);
 
-  return {
-    players,
-    totalDistance,
-    averageDistance,
-    totalHsr,
-    totalSprintDistance,
-    totalSprints,
-    totalAcc,
-    totalDec,
-  };
-}, [filteredRecords]);
+  const objectiveSummary = useMemo(() => {
+    return objectiveRows.reduce(
+      (acc, row) => {
+        if (row.status === "low") acc.low += 1;
+        if (row.status === "ok") acc.ok += 1;
+        if (row.status === "high") acc.high += 1;
+
+        return acc;
+      },
+      {
+        low: 0,
+        ok: 0,
+        high: 0,
+      },
+    );
+  }, [objectiveRows]);
+
+  const summary = useMemo(() => {
+    const players = filteredRecords.length;
+
+    const totalDistance = filteredRecords.reduce(
+      (sum, row) => sum + getNumeric(row.total_distance),
+      0,
+    );
+
+    const totalHsr = filteredRecords.reduce(
+      (sum, row) => sum + getNumeric(row.hsr),
+      0,
+    );
+
+    const totalSprintDistance = filteredRecords.reduce(
+      (sum, row) => sum + getNumeric(row.distance_vrange6),
+      0,
+    );
+
+    const totalSprints = filteredRecords.reduce(
+      (sum, row) => sum + getNumeric(row.sprints),
+      0,
+    );
+
+    const totalAcc = filteredRecords.reduce(
+      (sum, row) => sum + getNumeric(row.num_acc),
+      0,
+    );
+
+    const totalDec = filteredRecords.reduce(
+      (sum, row) => sum + getNumeric(row.num_dec),
+      0,
+    );
+
+    const averageDistance = players > 0 ? totalDistance / players : 0;
+
+    return {
+      players,
+      totalDistance,
+      averageDistance,
+      totalHsr,
+      totalSprintDistance,
+      totalSprints,
+      totalAcc,
+      totalDec,
+    };
+  }, [filteredRecords]);
 
   return (
     <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
@@ -325,7 +414,8 @@ const summary = useMemo(() => {
 
         <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
           Análisis de sesiones GPS guardadas en Supabase. Consulta el resumen de
-          carga externa, rankings individuales y registros por jugador.
+          carga externa, rankings individuales, referencia de partido y
+          objetivos por microciclo.
         </p>
       </section>
 
@@ -419,71 +509,72 @@ const summary = useMemo(() => {
             </div>
           </div>
         )}
+
         {selectedSession && (
-  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div>
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-          Filtro de análisis
-        </p>
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                  Filtro de análisis
+                </p>
 
-        <h3 className="mt-2 text-lg font-black text-slate-950">
-          Población analizada
-        </h3>
+                <h3 className="mt-2 text-lg font-black text-slate-950">
+                  Población analizada
+                </h3>
 
-        <p className="mt-2 text-sm text-slate-600">
-          {selectedPlayerScopeMeta.description}
-        </p>
-      </div>
+                <p className="mt-2 text-sm text-slate-600">
+                  {selectedPlayerScopeMeta.description}
+                </p>
+              </div>
 
-      <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-        Analizar
-        <select
-          value={playerScope}
-          onChange={(event) =>
-            setPlayerScope(event.target.value as PlayerScope)
-          }
-          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-        >
-          {playerScopeOptions.map((option) => (
-            <option key={option.key} value={option.key}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
+              <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                Analizar
+                <select
+                  value={playerScope}
+                  onChange={(event) =>
+                    setPlayerScope(event.target.value as PlayerScope)
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                >
+                  {playerScopeOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-    <div className="mt-4 grid gap-3 md:grid-cols-3">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">
-          Registros totales
-        </p>
-        <p className="mt-1 text-2xl font-black text-slate-950">
-          {records.length}
-        </p>
-      </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs font-bold text-slate-500">
+                  Registros totales
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {records.length}
+                </p>
+              </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">
-          Registros analizados
-        </p>
-        <p className="mt-1 text-2xl font-black text-slate-950">
-          {filteredRecords.length}
-        </p>
-      </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs font-bold text-slate-500">
+                  Registros analizados
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {filteredRecords.length}
+                </p>
+              </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">
-          Registros excluidos
-        </p>
-        <p className="mt-1 text-2xl font-black text-slate-950">
-          {records.length - filteredRecords.length}
-        </p>
-      </div>
-    </div>
-  </div>
-)}
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-xs font-bold text-slate-500">
+                  Registros excluidos
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {records.length - filteredRecords.length}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {selectedSessionId && (
@@ -569,89 +660,233 @@ const summary = useMemo(() => {
                   </p>
                 </div>
               </div>
-<div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
-  <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-    <div>
-      <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-        Visualización por jugador
-      </p>
 
-      <h2 className="mt-2 text-xl font-black">
-        Ranking gráfico de carga externa
-      </h2>
+              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                      Objetivos GPS
+                    </p>
 
-      <p className="mt-2 text-sm text-slate-600">
-        Selecciona una métrica para comparar visualmente a los jugadores de la
-        sesión GPS.
-      </p>
-    </div>
+                    <h2 className="mt-2 text-xl font-black">
+                      Referencia de partido y objetivo del microciclo
+                    </h2>
 
-    <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-      Métrica
-      <select
-        value={selectedMetric}
-        onChange={(event) =>
-          setSelectedMetric(event.target.value as GpsMetricKey)
-        }
-        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-      >
-        {gpsMetricOptions.map((option) => (
-          <option key={option.key} value={option.key}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  </div>
+                    <p className="mt-2 max-w-4xl text-sm text-slate-600">
+                      Para cada métrica se compara la carga realizada con una
+                      referencia media de partido y con el rango objetivo
+                      estimado para el día de microciclo seleccionado.
+                    </p>
 
-  <div className="mt-6 h-[420px] w-full">
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart
-        data={chartData}
-        layout="vertical"
-        margin={{
-          top: 10,
-          right: 30,
-          left: 80,
-          bottom: 10,
-        }}
-      >
-        <CartesianGrid strokeDasharray="3 3" />
+                    <p className="mt-2 text-sm font-bold text-slate-700">
+                      {selectedObjective.label}: {selectedObjective.description}
+                    </p>
+                  </div>
 
-        <XAxis
-          type="number"
-          tickFormatter={(value) =>
-            Math.round(Number(value)).toLocaleString("es-ES")
-          }
-        />
+                  <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                    Métrica
+                    <select
+                      value={selectedMetric}
+                      onChange={(event) =>
+                        setSelectedMetric(event.target.value as GpsMetricKey)
+                      }
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    >
+                      {gpsMetricOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
-        <YAxis
-          type="category"
-          dataKey="jugador"
-          width={120}
-          tick={{
-            fontSize: 12,
-          }}
-        />
+                <div className="mt-6 grid gap-4 md:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">
+                      Referencia partido
+                    </p>
+                    <p className="mt-2 text-2xl font-black">
+                      {formatMetricValue(selectedMetricReference, selectedMetric)}
+                    </p>
+                  </div>
 
-        <Tooltip
-          formatter={(value) => {
-            const number = Math.round(Number(value ?? 0)).toLocaleString(
-              "es-ES",
-            );
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">
+                      Objetivo {selectedObjective.label}
+                    </p>
+                    <p className="mt-2 text-2xl font-black">
+                      {formatPercent(selectedMetricObjective.targetPercent)}
+                    </p>
+                  </div>
 
-            return [
-              `${number}${selectedMetricMeta.unit}`,
-              selectedMetricMeta.label,
-            ];
-          }}
-        />
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">
+                      Rango adecuado
+                    </p>
+                    <p className="mt-2 text-2xl font-black">
+                      {formatPercent(selectedMetricObjective.minPercent)} -{" "}
+                      {formatPercent(selectedMetricObjective.maxPercent)}
+                    </p>
+                  </div>
 
-        <Bar dataKey="valor" radius={[0, 8, 8, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-</div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">
+                      Jugadores en rango
+                    </p>
+                    <p className="mt-2 text-2xl font-black">
+                      {objectiveSummary.ok}/{filteredRecords.length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-xs font-bold text-amber-700">
+                      Por debajo
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-amber-700">
+                      {objectiveSummary.low}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-xs font-bold text-emerald-700">
+                      Adecuado
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-emerald-700">
+                      {objectiveSummary.ok}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                    <p className="text-xs font-bold text-red-700">
+                      Por encima
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-red-700">
+                      {objectiveSummary.high}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 h-[420px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      layout="vertical"
+                      margin={{
+                        top: 10,
+                        right: 30,
+                        left: 80,
+                        bottom: 10,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+
+                      <XAxis
+                        type="number"
+                        tickFormatter={(value) =>
+                          Math.round(Number(value)).toLocaleString("es-ES")
+                        }
+                      />
+
+                      <YAxis
+                        type="category"
+                        dataKey="jugador"
+                        width={120}
+                        tick={{
+                          fontSize: 12,
+                        }}
+                      />
+
+                      <Tooltip
+                        formatter={(value) => {
+                          const number = Math.round(
+                            Number(value ?? 0),
+                          ).toLocaleString("es-ES");
+
+                          return [
+                            `${number}${selectedMetricMeta.unit}`,
+                            selectedMetricMeta.label,
+                          ];
+                        }}
+                      />
+
+                      <ReferenceLine
+                        x={selectedMetricObjectiveValue}
+                        strokeDasharray="4 4"
+                        label="Objetivo"
+                      />
+
+                      <Bar dataKey="valor" radius={[0, 8, 8, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+                  <div className="border-b border-slate-200 bg-slate-50 p-4">
+                    <h3 className="text-lg font-black">
+                      Cumplimiento individual del objetivo
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Comparación de cada jugador con el objetivo de{" "}
+                      {selectedMetricMeta.label} para {selectedObjective.label}.
+                    </p>
+                  </div>
+
+                  <div className="max-h-[420px] overflow-auto">
+                    <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+                      <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Jugador</th>
+                          <th className="px-4 py-3">Realizado</th>
+                          <th className="px-4 py-3">% partido</th>
+                          <th className="px-4 py-3">Objetivo</th>
+                          <th className="px-4 py-3">Diferencia</th>
+                          <th className="px-4 py-3">Estado</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {objectiveRows.map((row) => (
+                          <tr key={row.id} className="border-t border-slate-100">
+                            <td className="px-4 py-3 font-black">
+                              {row.playerName}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatMetricValue(row.value, selectedMetric)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatPercent(row.percent)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatPercent(row.targetPercent)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatPercent(row.differenceToTarget)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-black ${getObjectiveBadgeClass(
+                                  row.status,
+                                )}`}
+                              >
+                                {row.label}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
               <div className="mt-8 grid gap-4 xl:grid-cols-3">
                 <RankingCard
                   title="Ranking distancia"
@@ -744,9 +979,7 @@ const summary = useMemo(() => {
                             {formatMeters(row.total_distance)}
                           </td>
 
-                          <td className="px-4 py-3">
-                            {formatMeters(row.hsr)}
-                          </td>
+                          <td className="px-4 py-3">{formatMeters(row.hsr)}</td>
 
                           <td className="px-4 py-3">
                             {formatMeters(row.distance_vrange6)}
