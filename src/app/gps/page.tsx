@@ -274,6 +274,7 @@ export default function GpsPage() {
   const [weeklyDate, setWeeklyDate] = useState(getTodayInputDate);
   const [weeklyEvaluation, setWeeklyEvaluation] =
     useState<GpsWeeklyEvaluationResult | null>(null);
+    const [selectedWeeklyPlayer, setSelectedWeeklyPlayer] = useState("");
   const [loadingWeeklyEvaluation, setLoadingWeeklyEvaluation] = useState(false);
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
 
@@ -523,6 +524,26 @@ export default function GpsPage() {
     };
   }, [weeklyEvaluation]);
 
+  const weeklyPlayerOptions = useMemo(() => {
+  return weeklyEvaluation?.evaluations ?? [];
+}, [weeklyEvaluation]);
+
+const selectedWeeklyPlayerEvaluation = useMemo(() => {
+  const evaluations = weeklyEvaluation?.evaluations ?? [];
+
+  if (evaluations.length === 0) return null;
+
+  if (!selectedWeeklyPlayer) {
+    return evaluations[0];
+  }
+
+  return (
+    evaluations.find(
+      (evaluation) => evaluation.normalizedName === selectedWeeklyPlayer,
+    ) ?? evaluations[0]
+  );
+}, [weeklyEvaluation, selectedWeeklyPlayer]);
+
   const summary = useMemo(() => {
     const players = filteredRecords.length;
 
@@ -569,6 +590,23 @@ export default function GpsPage() {
       totalDec,
     };
   }, [filteredRecords]);
+
+useEffect(() => {
+  const evaluations = weeklyEvaluation?.evaluations ?? [];
+
+  if (evaluations.length === 0) {
+    setSelectedWeeklyPlayer("");
+    return;
+  }
+
+  const selectedExists = evaluations.some(
+    (evaluation) => evaluation.normalizedName === selectedWeeklyPlayer,
+  );
+
+  if (!selectedExists) {
+    setSelectedWeeklyPlayer(evaluations[0].normalizedName);
+  }
+}, [weeklyEvaluation, selectedWeeklyPlayer]);
 
   return (
     <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
@@ -910,6 +948,136 @@ export default function GpsPage() {
                         </p>
                       </div>
                     </div>
+
+{selectedWeeklyPlayerEvaluation && (
+  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+          Detalle individual
+        </p>
+
+        <h3 className="mt-2 text-lg font-black text-slate-950">
+          Lectura semanal por jugador
+        </h3>
+
+        <p className="mt-2 text-sm text-slate-600">
+          Visualiza qué porcentaje de la referencia semanal lleva acumulado el
+          jugador y qué le falta por completar.
+        </p>
+      </div>
+
+      <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+        Jugador
+        <select
+          value={selectedWeeklyPlayerEvaluation.normalizedName}
+          onChange={(event) => setSelectedWeeklyPlayer(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+        >
+          {weeklyPlayerOptions.map((evaluation) => (
+            <option
+              key={evaluation.normalizedName}
+              value={evaluation.normalizedName}
+            >
+              {evaluation.playerName}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+
+    <div className="mt-5 grid gap-4 md:grid-cols-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">Jugador</p>
+        <p className="mt-2 text-xl font-black text-slate-950">
+          {selectedWeeklyPlayerEvaluation.playerName}
+        </p>
+        <p className="mt-1 text-xs font-bold text-slate-500">
+          {selectedWeeklyPlayerEvaluation.position ?? "Sin posición"}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">Estado general</p>
+        <span
+          className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
+            selectedWeeklyPlayerEvaluation.generalStatus,
+          )}`}
+        >
+          {selectedWeeklyPlayerEvaluation.generalStatus}
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">Referencia</p>
+        <p className="mt-2 text-lg font-black text-slate-950">
+          {selectedWeeklyPlayerEvaluation.referenceSource}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold text-slate-500">Partidos válidos</p>
+        <p className="mt-2 text-3xl font-black text-slate-950">
+          {selectedWeeklyPlayerEvaluation.referenceValidMatches}
+        </p>
+      </div>
+    </div>
+
+    <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {selectedWeeklyPlayerEvaluation.metrics.map((metric) => {
+        const progress = Math.min(
+          Math.max(metric.percentOfReference, 0),
+          140,
+        );
+
+        return (
+          <div
+            key={metric.key}
+            className="rounded-xl border border-slate-200 bg-white p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-slate-950">
+                  {metric.label}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                  {formatWeeklyMetricCell(metric)}
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
+                  metric.status,
+                )}`}
+              >
+                {metric.status}
+              </span>
+            </div>
+
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-slate-950"
+                style={{
+                  width: `${Math.min(progress, 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
+              <span>0%</span>
+              <span>{formatPercent(metric.percentOfReference)}</span>
+              <span>100%</span>
+            </div>
+
+            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+              {formatWeeklyActionCell(metric)}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
 
                     {weeklyEvaluation.evaluations.length === 0 ? (
                       <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
