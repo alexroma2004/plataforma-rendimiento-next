@@ -197,6 +197,82 @@ function formatWeeklyActionCell(metric: GpsWeeklyMetricEvaluation | null) {
   return "En rango";
 }
 
+type WeeklyInterventionPriority = "ALTA" | "MEDIA" | "CONTROL" | "OK";
+
+function getWeeklyInterventionPriority(
+  evaluation: GpsWeeklyPlayerEvaluation,
+): WeeklyInterventionPriority {
+  const lowMetrics = evaluation.metrics.filter(
+    (metric) => metric.status === "BAJO",
+  );
+
+  const highMetrics = evaluation.metrics.filter(
+    (metric) => metric.status === "ALTO",
+  );
+
+  if (evaluation.generalStatus === "ALTO" || highMetrics.length >= 2) {
+    return "CONTROL";
+  }
+
+  if (lowMetrics.length >= 3) {
+    return "ALTA";
+  }
+
+  if (lowMetrics.length >= 1) {
+    return "MEDIA";
+  }
+
+  return "OK";
+}
+
+function getWeeklyInterventionPriorityLabel(
+  priority: WeeklyInterventionPriority,
+) {
+  if (priority === "ALTA") return "Prioridad alta";
+  if (priority === "MEDIA") return "Prioridad media";
+  if (priority === "CONTROL") return "Controlar exceso";
+  return "En rango";
+}
+
+function getWeeklyInterventionPriorityClass(
+  priority: WeeklyInterventionPriority,
+) {
+  if (priority === "ALTA") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (priority === "MEDIA") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (priority === "CONTROL") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function getWeeklyInterventionMessage(
+  priority: WeeklyInterventionPriority,
+  metrics: GpsWeeklyMetricEvaluation[],
+) {
+  const metricNames = metrics.map((metric) => metric.label).join(", ");
+
+  if (priority === "ALTA") {
+    return `Necesita carga complementaria prioritaria en: ${metricNames}.`;
+  }
+
+  if (priority === "MEDIA") {
+    return `Puede necesitar un ajuste complementario en: ${metricNames}.`;
+  }
+
+  if (priority === "CONTROL") {
+    return `Conviene controlar el exceso acumulado en: ${metricNames}.`;
+  }
+
+  return "Jugador dentro del rango semanal previsto.";
+}
+
 function formatMetricValue(
   value: number | null | undefined,
   metric: GpsMetricKey,
@@ -543,6 +619,50 @@ const selectedWeeklyPlayerEvaluation = useMemo(() => {
     ) ?? evaluations[0]
   );
 }, [weeklyEvaluation, selectedWeeklyPlayer]);
+
+const weeklyInterventionRows = useMemo(() => {
+  const evaluations = weeklyEvaluation?.evaluations ?? [];
+
+  const priorityOrder: Record<WeeklyInterventionPriority, number> = {
+    ALTA: 1,
+    MEDIA: 2,
+    CONTROL: 3,
+    OK: 4,
+  };
+
+  return evaluations
+    .map((evaluation) => {
+      const priority = getWeeklyInterventionPriority(evaluation);
+
+      const lowMetrics = evaluation.metrics.filter(
+        (metric) => metric.status === "BAJO",
+      );
+
+      const highMetrics = evaluation.metrics.filter(
+        (metric) => metric.status === "ALTO",
+      );
+
+      const problemMetrics =
+        priority === "CONTROL" ? highMetrics.slice(0, 3) : lowMetrics.slice(0, 3);
+
+      return {
+        evaluation,
+        priority,
+        problemMetrics,
+      };
+    })
+    .filter((row) => row.priority !== "OK")
+    .sort((a, b) => {
+      const priorityDifference =
+        priorityOrder[a.priority] - priorityOrder[b.priority];
+
+      if (priorityDifference !== 0) {
+        return priorityDifference;
+      }
+
+      return b.problemMetrics.length - a.problemMetrics.length;
+    });
+}, [weeklyEvaluation]);
 
   const summary = useMemo(() => {
     const players = filteredRecords.length;
@@ -948,6 +1068,97 @@ useEffect(() => {
                         </p>
                       </div>
                     </div>
+
+<div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+  <div className="flex flex-col gap-2">
+    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+      Prioridades semanales
+    </p>
+
+    <h3 className="text-lg font-black text-slate-950">
+      Jugadores que requieren ajuste de carga
+    </h3>
+
+    <p className="max-w-4xl text-sm text-slate-600">
+      Esta sección detecta automáticamente qué jugadores están por debajo del
+      objetivo semanal, cuáles acumulan exceso de carga y en qué métricas hay que
+      actuar.
+    </p>
+  </div>
+
+  {weeklyInterventionRows.length === 0 ? (
+    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+      Todos los jugadores se encuentran dentro del rango semanal previsto.
+    </div>
+  ) : (
+    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      {weeklyInterventionRows.map(({ evaluation, priority, problemMetrics }) => (
+        <div
+          key={evaluation.normalizedName}
+          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-base font-black text-slate-950">
+                {evaluation.playerName}
+              </p>
+
+              <p className="mt-1 text-xs font-bold text-slate-500">
+                {evaluation.position ?? "Sin posición"} · Referencia:{" "}
+                {evaluation.referenceSource}
+              </p>
+            </div>
+
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyInterventionPriorityClass(
+                priority,
+              )}`}
+            >
+              {getWeeklyInterventionPriorityLabel(priority)}
+            </span>
+          </div>
+
+          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+            {getWeeklyInterventionMessage(priority, problemMetrics)}
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {problemMetrics.map((metric) => (
+              <div
+                key={metric.key}
+                className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-black text-slate-900">
+                    {metric.label}
+                  </p>
+
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
+                      metric.status,
+                    )}`}
+                  >
+                    {metric.status}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex flex-col gap-1 text-xs font-bold text-slate-600">
+                  <span>
+                    Acumulado:{" "}
+                    {formatMetricValueForUnit(metric.currentValue, metric.unit)}{" "}
+                    · {formatPercent(metric.percentOfReference)}
+                  </span>
+
+                  <span>{formatWeeklyActionCell(metric)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
 {selectedWeeklyPlayerEvaluation && (
   <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
