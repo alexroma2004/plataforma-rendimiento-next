@@ -525,3 +525,377 @@ export async function updateGpsReferencesForSession(
     updatedRecords: enrichedRecords.length,
   };
 }
+export type GpsWeeklyStatus = "BAJO" | "OBJETIVO" | "ALTO";
+
+export type GpsWeeklyMetricEvaluation = {
+  key: GpsMetricKey;
+  label: string;
+  unit: string;
+
+  currentValue: number;
+  referenceValue: number;
+  percentOfReference: number;
+
+  targetMinPercent: number;
+  targetMaxPercent: number;
+
+  targetMinValue: number;
+  targetMaxValue: number;
+
+  missingToMinimum: number;
+  marginToMaximum: number;
+  excessOverMaximum: number;
+
+  status: GpsWeeklyStatus;
+};
+
+export type GpsWeeklyPlayerEvaluation = {
+  playerName: string;
+  normalizedName: string;
+  position: string | null;
+
+  referenceSource: GpsReferenceSource;
+  referenceValidMatches: number;
+  referenceLastMatchDate: string | null;
+
+  weekStart: string;
+  weekEnd: string;
+
+  metrics: GpsWeeklyMetricEvaluation[];
+
+  generalStatus: GpsWeeklyStatus;
+};
+
+export type GpsWeeklyEvaluationResult = {
+  weekStart: string;
+  weekEnd: string;
+  evaluations: GpsWeeklyPlayerEvaluation[];
+};
+
+const GPS_WEEKLY_METRICS: {
+  key: GpsMetricKey;
+  label: string;
+  unit: string;
+  targetMinPercent: number;
+  targetMaxPercent: number;
+}[] = [
+  {
+    key: "total_distance",
+    label: "Distancia total",
+    unit: "m",
+    targetMinPercent: 170,
+    targetMaxPercent: 210,
+  },
+  {
+    key: "hsr",
+    label: "HSR",
+    unit: "m",
+    targetMinPercent: 90,
+    targetMaxPercent: 125,
+  },
+  {
+    key: "distance_vrange6",
+    label: "Distancia sprint",
+    unit: "m",
+    targetMinPercent: 75,
+    targetMaxPercent: 105,
+  },
+  {
+    key: "sprints",
+    label: "Sprints",
+    unit: "",
+    targetMinPercent: 75,
+    targetMaxPercent: 105,
+  },
+  {
+    key: "num_acc",
+    label: "Aceleraciones",
+    unit: "",
+    targetMinPercent: 145,
+    targetMaxPercent: 185,
+  },
+  {
+    key: "num_dec",
+    label: "Deceleraciones",
+    unit: "",
+    targetMinPercent: 145,
+    targetMaxPercent: 185,
+  },
+];
+
+function formatDateForGpsWeek(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+export function getGpsWeekBoundsFromDate(dateString: string): {
+  weekStart: string;
+  weekEnd: string;
+} {
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  const selectedDate = new Date(year, month - 1, day);
+  const dayOfWeek = selectedDate.getDay();
+
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  const monday = new Date(selectedDate);
+  monday.setDate(selectedDate.getDate() - daysFromMonday);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  return {
+    weekStart: formatDateForGpsWeek(monday),
+    weekEnd: formatDateForGpsWeek(sunday),
+  };
+}
+
+function isDateInsideRange(
+  dateString: string | null | undefined,
+  weekStart: string,
+  weekEnd: string,
+): boolean {
+  if (!dateString) return false;
+
+  return dateString >= weekStart && dateString <= weekEnd;
+}
+
+function getSessionMapForWeeklyEvaluation(
+  sessions: GpsSessionForReference[],
+): Map<string, GpsSessionForReference> {
+  const sessionMap = new Map<string, GpsSessionForReference>();
+
+  for (const session of sessions) {
+    sessionMap.set(session.id, session);
+  }
+
+  return sessionMap;
+}
+
+function getWeeklyGeneralStatus(
+  metrics: GpsWeeklyMetricEvaluation[],
+): GpsWeeklyStatus {
+  const hasHighMetric = metrics.some((metric) => metric.status === "ALTO");
+
+  if (hasHighMetric) {
+    return "ALTO";
+  }
+
+  const hasLowMetric = metrics.some((metric) => metric.status === "BAJO");
+
+  if (hasLowMetric) {
+    return "BAJO";
+  }
+
+  return "OBJETIVO";
+}
+
+function buildWeeklyMetricEvaluation(params: {
+  key: GpsMetricKey;
+  label: string;
+  unit: string;
+  currentValue: number;
+  referenceValue: number;
+  targetMinPercent: number;
+  targetMaxPercent: number;
+}): GpsWeeklyMetricEvaluation {
+  const {
+    key,
+    label,
+    unit,
+    currentValue,
+    referenceValue,
+    targetMinPercent,
+    targetMaxPercent,
+  } = params;
+
+  const percentOfReference = percentage(currentValue, referenceValue);
+
+  const targetMinValue = referenceValue * (targetMinPercent / 100);
+  const targetMaxValue = referenceValue * (targetMaxPercent / 100);
+
+  const missingToMinimum = Math.max(0, targetMinValue - currentValue);
+  const marginToMaximum = targetMaxValue - currentValue;
+  const excessOverMaximum = Math.max(0, currentValue - targetMaxValue);
+
+  let status: GpsWeeklyStatus = "OBJETIVO";
+
+  if (percentOfReference < targetMinPercent) {
+    status = "BAJO";
+  }
+
+  if (percentOfReference > targetMaxPercent) {
+    status = "ALTO";
+  }
+
+  return {
+    key,
+    label,
+    unit,
+
+    currentValue,
+    referenceValue,
+    percentOfReference,
+
+    targetMinPercent,
+    targetMaxPercent,
+
+    targetMinValue,
+    targetMaxValue,
+
+    missingToMinimum,
+    marginToMaximum,
+    excessOverMaximum,
+
+    status,
+  };
+}
+
+export function buildGpsWeeklyEvaluations(params: {
+  sessions: GpsSessionForReference[];
+  records: GpsRecordForReference[];
+  selectedDate: string;
+}): GpsWeeklyEvaluationResult {
+  const { sessions, records, selectedDate } = params;
+
+  const { weekStart, weekEnd } = getGpsWeekBoundsFromDate(selectedDate);
+
+  const sessionMap = getSessionMapForWeeklyEvaluation(sessions);
+
+  const referenceModel = buildGpsReferenceModel(sessions, records);
+
+  const weeklyTrainingRecords = records.filter((record) => {
+    const session = sessionMap.get(record.session_id);
+
+    if (!session) return false;
+
+    if (isMatchSession(session)) return false;
+
+    if (record.is_goalkeeper) return false;
+
+    if (!isDateInsideRange(session.session_date, weekStart, weekEnd)) {
+      return false;
+    }
+
+    const playerKey = getPlayerKey(record);
+
+    if (!playerKey) return false;
+
+    return true;
+  });
+
+  const weeklyRowsByPlayer = new Map<string, GpsRecordForReference[]>();
+
+  for (const record of weeklyTrainingRecords) {
+    const playerKey = getPlayerKey(record);
+
+    if (!weeklyRowsByPlayer.has(playerKey)) {
+      weeklyRowsByPlayer.set(playerKey, []);
+    }
+
+    weeklyRowsByPlayer.get(playerKey)?.push(record);
+  }
+
+  const evaluations: GpsWeeklyPlayerEvaluation[] = [];
+
+  for (const [playerKey, playerRows] of weeklyRowsByPlayer.entries()) {
+    const firstRow = playerRows[0];
+
+    const reference = getReferenceForRecord(firstRow, referenceModel);
+
+    const metrics = GPS_WEEKLY_METRICS.map((metric) => {
+      const currentValue = playerRows.reduce(
+        (sum, row) => sum + getMetricValue(row, metric.key),
+        0,
+      );
+
+      const referenceValue = reference[metric.key];
+
+      return buildWeeklyMetricEvaluation({
+        key: metric.key,
+        label: metric.label,
+        unit: metric.unit,
+        currentValue,
+        referenceValue,
+        targetMinPercent: metric.targetMinPercent,
+        targetMaxPercent: metric.targetMaxPercent,
+      });
+    });
+
+    evaluations.push({
+      playerName: firstRow.player_name ?? playerKey,
+      normalizedName: playerKey,
+      position: firstRow.position,
+
+      referenceSource: reference.source,
+      referenceValidMatches: reference.validMatches,
+      referenceLastMatchDate: reference.lastMatchDate,
+
+      weekStart,
+      weekEnd,
+
+      metrics,
+
+      generalStatus: getWeeklyGeneralStatus(metrics),
+    });
+  }
+
+  return {
+    weekStart,
+    weekEnd,
+    evaluations: evaluations.sort((a, b) =>
+      a.playerName.localeCompare(b.playerName),
+    ),
+  };
+}
+
+export async function fetchGpsWeeklyEvaluations(
+  supabase: SupabaseClient,
+  selectedDate: string,
+): Promise<GpsWeeklyEvaluationResult> {
+  const { data: sessions, error: sessionsError } = await supabase
+    .from("gps_sessions")
+    .select("id, session_date, microcycle, is_match");
+
+  if (sessionsError) {
+    throw new Error(
+      `No se han podido leer las sesiones GPS para calcular la semana: ${sessionsError.message}`,
+    );
+  }
+
+  const { data: records, error: recordsError } = await supabase
+    .from("gps_records")
+    .select(
+      `
+      id,
+      session_id,
+      player_name,
+      normalized_name,
+      position,
+      is_goalkeeper,
+      time_played,
+      total_distance,
+      hsr,
+      distance_vrange6,
+      sprints,
+      num_acc,
+      num_dec
+    `,
+    );
+
+  if (recordsError) {
+    throw new Error(
+      `No se han podido leer los registros GPS para calcular la semana: ${recordsError.message}`,
+    );
+  }
+
+  return buildGpsWeeklyEvaluations({
+    sessions: (sessions ?? []) as GpsSessionForReference[],
+    records: (records ?? []) as GpsRecordForReference[],
+    selectedDate,
+  });
+}

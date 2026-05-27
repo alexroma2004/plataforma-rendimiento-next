@@ -336,3 +336,42 @@ export async function getGpsRecordsBySessionId(
 
   return (data ?? []) as GpsRecordRow[];
 }
+export async function getGpsMatchReferenceRecordsFromSupabase(): Promise<
+  GpsRecordRow[]
+> {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const { data: matchSessions, error: sessionsError } = await supabase
+    .from("gps_sessions")
+    .select("id")
+    .eq("is_match", true);
+
+  if (sessionsError) {
+    throw new Error(
+      `No se han podido cargar las sesiones de partido: ${sessionsError.message}`,
+    );
+  }
+
+  const sessionIds = (matchSessions ?? [])
+    .map((session) => session.id)
+    .filter(Boolean);
+
+  if (sessionIds.length === 0) {
+    return [];
+  }
+
+  const { data: records, error: recordsError } = await supabase
+    .from("gps_records")
+    .select("*")
+    .in("session_id", sessionIds);
+
+  if (recordsError) {
+    throw new Error(
+      `No se han podido cargar los registros de partido: ${recordsError.message}`,
+    );
+  }
+
+  return (records ?? []) as GpsRecordRow[];
+}

@@ -23,6 +23,8 @@ export type GpsObjectiveRange = {
   maxPercent: number;
 };
 
+export type GpsMatchReference = Record<GpsObjectiveMetricKey, number>;
+
 export type GpsMicrocycleObjective = {
   key: MicrocycleKey;
   label: string;
@@ -30,7 +32,7 @@ export type GpsMicrocycleObjective = {
   metrics: Record<GpsObjectiveMetricKey, GpsObjectiveRange>;
 };
 
-export const GPS_MATCH_REFERENCE: Record<GpsObjectiveMetricKey, number> = {
+export const GPS_MATCH_REFERENCE: GpsMatchReference = {
   total_distance: 11040,
   hsr: 567,
   distance_vrange6: 186,
@@ -161,7 +163,9 @@ export const GPS_MICROCYCLE_OBJECTIVES: Record<
   },
 };
 
-export function normalizeMicrocycleKey(value: string | null | undefined): MicrocycleKey {
+export function normalizeMicrocycleKey(
+  value: string | null | undefined,
+): MicrocycleKey {
   const normalized = String(value ?? "")
     .trim()
     .toUpperCase()
@@ -185,41 +189,47 @@ export function getGpsObjectiveForMicrocycle(
   return GPS_MICROCYCLE_OBJECTIVES[key];
 }
 
-export function getMetricReference(metric: GpsObjectiveMetricKey): number {
-  return GPS_MATCH_REFERENCE[metric] ?? 0;
+export function getMetricReference(
+  metric: GpsObjectiveMetricKey,
+  reference: GpsMatchReference = GPS_MATCH_REFERENCE,
+): number {
+  return reference[metric] ?? GPS_MATCH_REFERENCE[metric] ?? 0;
 }
 
 export function getObjectiveValue(
   metric: GpsObjectiveMetricKey,
   microcycle: string | null | undefined,
+  reference: GpsMatchReference = GPS_MATCH_REFERENCE,
 ): number {
-  const reference = getMetricReference(metric);
+  const matchReference = getMetricReference(metric, reference);
   const objective = getGpsObjectiveForMicrocycle(microcycle);
 
-  return reference * (objective.metrics[metric].targetPercent / 100);
+  return matchReference * (objective.metrics[metric].targetPercent / 100);
 }
 
 export function getMetricMatchPercent(
   value: number | null | undefined,
   metric: GpsObjectiveMetricKey,
+  reference: GpsMatchReference = GPS_MATCH_REFERENCE,
 ): number {
-  const reference = getMetricReference(metric);
+  const matchReference = getMetricReference(metric, reference);
 
-  if (!reference) return 0;
+  if (!matchReference) return 0;
 
-  return (Number(value ?? 0) / reference) * 100;
+  return (Number(value ?? 0) / matchReference) * 100;
 }
 
 export function getObjectiveStatus(params: {
   value: number | null | undefined;
   metric: GpsObjectiveMetricKey;
   microcycle: string | null | undefined;
+  reference?: GpsMatchReference;
 }) {
-  const { value, metric, microcycle } = params;
+  const { value, metric, microcycle, reference = GPS_MATCH_REFERENCE } = params;
 
   const objective = getGpsObjectiveForMicrocycle(microcycle);
   const range = objective.metrics[metric];
-  const percent = getMetricMatchPercent(value, metric);
+  const percent = getMetricMatchPercent(value, metric, reference);
 
   let status: ObjectiveStatus = "ok";
 
@@ -230,11 +240,7 @@ export function getObjectiveStatus(params: {
   }
 
   const label =
-    status === "low"
-      ? "Bajo"
-      : status === "high"
-        ? "Alto"
-        : "Adecuado";
+    status === "low" ? "Bajo" : status === "high" ? "Alto" : "Adecuado";
 
   return {
     status,

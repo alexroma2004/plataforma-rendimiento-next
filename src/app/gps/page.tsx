@@ -104,6 +104,35 @@ const gpsMetricOptions: {
   },
 ];
 
+type GpsView = "session" | "objectives" | "weekly" | "records";
+
+const gpsViewOptions: {
+  key: GpsView;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "session",
+    label: "Resumen sesión",
+    description: "KPIs principales y rankings.",
+  },
+  {
+    key: "objectives",
+    label: "Objetivos microciclo",
+    description: "Referencia de partido y cumplimiento diario.",
+  },
+  {
+    key: "weekly",
+    label: "Carga semanal",
+    description: "Qué le falta por hacer esta semana.",
+  },
+  {
+    key: "records",
+    label: "Registros",
+    description: "Tabla completa por jugador.",
+  },
+];
+
 type PlayerScope = "field" | "all" | "goalkeepers";
 
 const playerScopeOptions: {
@@ -197,6 +226,275 @@ function formatWeeklyActionCell(metric: GpsWeeklyMetricEvaluation | null) {
   return "En rango";
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function buildWeeklyHtmlReport(evaluation: GpsWeeklyEvaluationResult) {
+  const totalPlayers = evaluation.evaluations.length;
+  const targetPlayers = evaluation.evaluations.filter(
+    (row) => row.generalStatus === "OBJETIVO",
+  ).length;
+  const lowPlayers = evaluation.evaluations.filter(
+    (row) => row.generalStatus === "BAJO",
+  ).length;
+  const highPlayers = evaluation.evaluations.filter(
+    (row) => row.generalStatus === "ALTO",
+  ).length;
+
+  const metricLabels: Record<GpsMetricKey, string> = {
+    total_distance: "Distancia total",
+    hsr: "HSR",
+    distance_vrange6: "Distancia sprint",
+    sprints: "Sprints",
+    num_acc: "Aceleraciones",
+    num_dec: "Deceleraciones",
+  };
+
+  const rowsHtml = evaluation.evaluations
+    .map((player) => {
+      const metricRows = player.metrics
+        .map((metric) => {
+          const label = metricLabels[metric.key as GpsMetricKey] ?? metric.key;
+
+          return `
+            <tr>
+              <td>${escapeHtml(label)}</td>
+              <td>${escapeHtml(formatMetricValueForUnit(metric.currentValue, metric.unit))}</td>
+              <td>${escapeHtml(formatPercent(metric.percentOfReference))}</td>
+              <td>${escapeHtml(metric.status)}</td>
+              <td>${escapeHtml(formatWeeklyActionCell(metric))}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      return `
+        <section class="player-card">
+          <div class="player-header">
+            <div>
+              <h2>${escapeHtml(player.playerName)}</h2>
+              <p>${escapeHtml(player.position ?? "Sin posición")} · Referencia: ${escapeHtml(player.referenceSource)}</p>
+            </div>
+            <span class="badge ${player.generalStatus.toLowerCase()}">
+              ${escapeHtml(player.generalStatus)}
+            </span>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Métrica</th>
+                <th>Acumulado</th>
+                <th>% referencia</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${metricRows}
+            </tbody>
+          </table>
+
+          <p class="small">Partidos válidos para referencia: ${escapeHtml(player.referenceValidMatches)}</p>
+        </section>
+      `;
+    })
+    .join("");
+
+  return `
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Informe semanal GPS</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 32px;
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      color: #020617;
+    }
+
+    .header {
+      background: #020617;
+      color: white;
+      padding: 28px;
+      border-radius: 18px;
+      margin-bottom: 24px;
+    }
+
+    .header p {
+      color: #cbd5e1;
+      margin: 8px 0 0;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .card span {
+      display: block;
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .card strong {
+      font-size: 26px;
+    }
+
+    .player-card {
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+
+    .player-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    h1, h2 {
+      margin: 0;
+    }
+
+    .player-header p {
+      margin: 6px 0 0;
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .badge {
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      border: 1px solid;
+    }
+
+    .badge.bajo {
+      background: #fffbeb;
+      color: #b45309;
+      border-color: #facc15;
+    }
+
+    .badge.objetivo {
+      background: #ecfdf5;
+      color: #047857;
+      border-color: #6ee7b7;
+    }
+
+    .badge.alto {
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      background: #f1f5f9;
+      color: #475569;
+      padding: 10px;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    td {
+      border-top: 1px solid #e2e8f0;
+      padding: 10px;
+      font-weight: 700;
+    }
+
+    .small {
+      margin-top: 12px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    @media print {
+      body {
+        background: white;
+        padding: 16px;
+      }
+
+      .player-card, .card, .header {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Informe semanal GPS</h1>
+    <p>Semana ${escapeHtml(evaluation.weekStart)} / ${escapeHtml(evaluation.weekEnd)}</p>
+    <p>Carga acumulada semanal comparada con referencia individual, posicional o general.</p>
+  </div>
+
+  <div class="summary">
+    <div class="card">
+      <span>Jugadores</span>
+      <strong>${totalPlayers}</strong>
+    </div>
+    <div class="card">
+      <span>En objetivo</span>
+      <strong>${targetPlayers}</strong>
+    </div>
+    <div class="card">
+      <span>Por debajo</span>
+      <strong>${lowPlayers}</strong>
+    </div>
+    <div class="card">
+      <span>Por encima</span>
+      <strong>${highPlayers}</strong>
+    </div>
+  </div>
+
+  ${rowsHtml}
+</body>
+</html>
+`;
+}
+
+function buildWeeklyHtmlHref(evaluation: GpsWeeklyEvaluationResult | null) {
+  if (!evaluation) return "";
+
+  const html = buildWeeklyHtmlReport(evaluation);
+
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
 type WeeklyInterventionPriority = "ALTA" | "MEDIA" | "CONTROL" | "OK";
 
 function getWeeklyInterventionPriority(
@@ -273,6 +571,128 @@ function getWeeklyInterventionMessage(
   return "Jugador dentro del rango semanal previsto.";
 }
 
+function escapeCsvCell(value: unknown) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function getWeeklyMetricForCsv(
+  evaluation: GpsWeeklyPlayerEvaluation,
+  key: GpsMetricKey,
+) {
+  return evaluation.metrics.find((metric) => metric.key === key) ?? null;
+}
+
+function buildWeeklyCsv(weeklyEvaluation: GpsWeeklyEvaluationResult) {
+  const headers = [
+    "Semana inicio",
+    "Semana fin",
+    "Jugador",
+    "Posición",
+    "Estado general",
+    "Referencia",
+    "Partidos válidos",
+
+    "Distancia acumulada",
+    "Distancia % referencia",
+    "Distancia falta mínimo",
+    "Distancia exceso máximo",
+    "Distancia estado",
+
+    "HSR acumulado",
+    "HSR % referencia",
+    "HSR falta mínimo",
+    "HSR exceso máximo",
+    "HSR estado",
+
+    "Sprint acumulado",
+    "Sprint % referencia",
+    "Sprint falta mínimo",
+    "Sprint exceso máximo",
+    "Sprint estado",
+
+    "Sprints acumulados",
+    "Sprints % referencia",
+    "Sprints faltan mínimo",
+    "Sprints exceso máximo",
+    "Sprints estado",
+
+    "Aceleraciones acumuladas",
+    "Aceleraciones % referencia",
+    "Aceleraciones faltan mínimo",
+    "Aceleraciones exceso máximo",
+    "Aceleraciones estado",
+
+    "Deceleraciones acumuladas",
+    "Deceleraciones % referencia",
+    "Deceleraciones faltan mínimo",
+    "Deceleraciones exceso máximo",
+    "Deceleraciones estado",
+  ];
+
+  const rows = weeklyEvaluation.evaluations.map((evaluation) => {
+    const totalDistance = getWeeklyMetricForCsv(evaluation, "total_distance");
+    const hsr = getWeeklyMetricForCsv(evaluation, "hsr");
+    const sprintDistance = getWeeklyMetricForCsv(
+      evaluation,
+      "distance_vrange6",
+    );
+    const sprints = getWeeklyMetricForCsv(evaluation, "sprints");
+    const acc = getWeeklyMetricForCsv(evaluation, "num_acc");
+    const dec = getWeeklyMetricForCsv(evaluation, "num_dec");
+
+    return [
+      weeklyEvaluation.weekStart,
+      weeklyEvaluation.weekEnd,
+      evaluation.playerName,
+      evaluation.position ?? "",
+      evaluation.generalStatus,
+      evaluation.referenceSource,
+      evaluation.referenceValidMatches,
+
+      totalDistance?.currentValue ?? "",
+      totalDistance?.percentOfReference ?? "",
+      totalDistance?.missingToMinimum ?? "",
+      totalDistance?.excessOverMaximum ?? "",
+      totalDistance?.status ?? "",
+
+      hsr?.currentValue ?? "",
+      hsr?.percentOfReference ?? "",
+      hsr?.missingToMinimum ?? "",
+      hsr?.excessOverMaximum ?? "",
+      hsr?.status ?? "",
+
+      sprintDistance?.currentValue ?? "",
+      sprintDistance?.percentOfReference ?? "",
+      sprintDistance?.missingToMinimum ?? "",
+      sprintDistance?.excessOverMaximum ?? "",
+      sprintDistance?.status ?? "",
+
+      sprints?.currentValue ?? "",
+      sprints?.percentOfReference ?? "",
+      sprints?.missingToMinimum ?? "",
+      sprints?.excessOverMaximum ?? "",
+      sprints?.status ?? "",
+
+      acc?.currentValue ?? "",
+      acc?.percentOfReference ?? "",
+      acc?.missingToMinimum ?? "",
+      acc?.excessOverMaximum ?? "",
+      acc?.status ?? "",
+
+      dec?.currentValue ?? "",
+      dec?.percentOfReference ?? "",
+      dec?.missingToMinimum ?? "",
+      dec?.excessOverMaximum ?? "",
+      dec?.status ?? "",
+    ];
+  });
+
+  return [headers, ...rows]
+    .map((row) => row.map(escapeCsvCell).join(";"))
+    .join("\n");
+}
+
 function formatMetricValue(
   value: number | null | undefined,
   metric: GpsMetricKey,
@@ -347,10 +767,11 @@ function RankingCard({
 }
 
 export default function GpsPage() {
+  const [gpsView, setGpsView] = useState<GpsView>("session");
   const [weeklyDate, setWeeklyDate] = useState(getTodayInputDate);
   const [weeklyEvaluation, setWeeklyEvaluation] =
     useState<GpsWeeklyEvaluationResult | null>(null);
-    const [selectedWeeklyPlayer, setSelectedWeeklyPlayer] = useState("");
+  const [selectedWeeklyPlayer, setSelectedWeeklyPlayer] = useState("");
   const [loadingWeeklyEvaluation, setLoadingWeeklyEvaluation] = useState(false);
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
 
@@ -601,98 +1022,119 @@ export default function GpsPage() {
   }, [weeklyEvaluation]);
 
   const weeklyPlayerOptions = useMemo(() => {
-  return weeklyEvaluation?.evaluations ?? [];
-}, [weeklyEvaluation]);
+    return weeklyEvaluation?.evaluations ?? [];
+  }, [weeklyEvaluation]);
 
-const selectedWeeklyPlayerEvaluation = useMemo(() => {
-  const evaluations = weeklyEvaluation?.evaluations ?? [];
+  const selectedWeeklyPlayerEvaluation = useMemo(() => {
+    const evaluations = weeklyEvaluation?.evaluations ?? [];
 
-  if (evaluations.length === 0) return null;
+    if (evaluations.length === 0) return null;
 
-  if (!selectedWeeklyPlayer) {
-    return evaluations[0];
-  }
+    if (!selectedWeeklyPlayer) {
+      return evaluations[0];
+    }
 
-  return (
-    evaluations.find(
-      (evaluation) => evaluation.normalizedName === selectedWeeklyPlayer,
-    ) ?? evaluations[0]
-  );
-}, [weeklyEvaluation, selectedWeeklyPlayer]);
+    return (
+      evaluations.find(
+        (evaluation) => evaluation.normalizedName === selectedWeeklyPlayer,
+      ) ?? evaluations[0]
+    );
+  }, [weeklyEvaluation, selectedWeeklyPlayer]);
 
-const weeklyInterventionRows = useMemo(() => {
-  const evaluations = weeklyEvaluation?.evaluations ?? [];
+  const weeklyInterventionRows = useMemo(() => {
+    const evaluations = weeklyEvaluation?.evaluations ?? [];
 
-  const priorityOrder: Record<WeeklyInterventionPriority, number> = {
-    ALTA: 1,
-    MEDIA: 2,
-    CONTROL: 3,
-    OK: 4,
-  };
+    const priorityOrder: Record<WeeklyInterventionPriority, number> = {
+      ALTA: 1,
+      MEDIA: 2,
+      CONTROL: 3,
+      OK: 4,
+    };
 
-  return evaluations
-    .map((evaluation) => {
-      const priority = getWeeklyInterventionPriority(evaluation);
+    return evaluations
+      .map((evaluation) => {
+        const priority = getWeeklyInterventionPriority(evaluation);
 
-      const lowMetrics = evaluation.metrics.filter(
-        (metric) => metric.status === "BAJO",
-      );
+        const lowMetrics = evaluation.metrics.filter(
+          (metric) => metric.status === "BAJO",
+        );
 
-      const highMetrics = evaluation.metrics.filter(
-        (metric) => metric.status === "ALTO",
-      );
+        const highMetrics = evaluation.metrics.filter(
+          (metric) => metric.status === "ALTO",
+        );
 
-      const problemMetrics =
-        priority === "CONTROL" ? highMetrics.slice(0, 3) : lowMetrics.slice(0, 3);
+        const problemMetrics =
+          priority === "CONTROL"
+            ? highMetrics.slice(0, 3)
+            : lowMetrics.slice(0, 3);
 
-      return {
-        evaluation,
-        priority,
-        problemMetrics,
-      };
-    })
-    .filter((row) => row.priority !== "OK")
-    .sort((a, b) => {
-      const priorityDifference =
-        priorityOrder[a.priority] - priorityOrder[b.priority];
+        return {
+          evaluation,
+          priority,
+          problemMetrics,
+        };
+      })
+      .filter((row) => row.priority !== "OK")
+      .sort((a, b) => {
+        const priorityDifference =
+          priorityOrder[a.priority] - priorityOrder[b.priority];
 
-      if (priorityDifference !== 0) {
-        return priorityDifference;
-      }
+        if (priorityDifference !== 0) {
+          return priorityDifference;
+        }
 
-      return b.problemMetrics.length - a.problemMetrics.length;
-    });
-}, [weeklyEvaluation]);
+        return b.problemMetrics.length - a.problemMetrics.length;
+      });
+  }, [weeklyEvaluation]);
+
+  const weeklyCsvHref = useMemo(() => {
+    if (!weeklyEvaluation || weeklyEvaluation.evaluations.length === 0) {
+      return "";
+    }
+
+    const csv = buildWeeklyCsv(weeklyEvaluation);
+
+    return `data:text/csv;charset=utf-8,${encodeURIComponent(`\uFEFF${csv}`)}`;
+  }, [weeklyEvaluation]);
+
+  const weeklyHtmlHref = useMemo(() => {
+    if (!weeklyEvaluation || weeklyEvaluation.evaluations.length === 0) {
+      return "";
+    }
+
+    return buildWeeklyHtmlHref(weeklyEvaluation);
+  }, [weeklyEvaluation]);
 
   const summary = useMemo(() => {
-    const players = filteredRecords.length;
+    const safeFilteredRecords = filteredRecords ?? [];
+    const players = safeFilteredRecords.length;
 
-    const totalDistance = filteredRecords.reduce(
+    const totalDistance = safeFilteredRecords.reduce(
       (sum, row) => sum + getNumeric(row.total_distance),
       0,
     );
 
-    const totalHsr = filteredRecords.reduce(
+    const totalHsr = safeFilteredRecords.reduce(
       (sum, row) => sum + getNumeric(row.hsr),
       0,
     );
 
-    const totalSprintDistance = filteredRecords.reduce(
+    const totalSprintDistance = safeFilteredRecords.reduce(
       (sum, row) => sum + getNumeric(row.distance_vrange6),
       0,
     );
 
-    const totalSprints = filteredRecords.reduce(
+    const totalSprints = safeFilteredRecords.reduce(
       (sum, row) => sum + getNumeric(row.sprints),
       0,
     );
 
-    const totalAcc = filteredRecords.reduce(
+    const totalAcc = safeFilteredRecords.reduce(
       (sum, row) => sum + getNumeric(row.num_acc),
       0,
     );
 
-    const totalDec = filteredRecords.reduce(
+    const totalDec = safeFilteredRecords.reduce(
       (sum, row) => sum + getNumeric(row.num_dec),
       0,
     );
@@ -711,22 +1153,22 @@ const weeklyInterventionRows = useMemo(() => {
     };
   }, [filteredRecords]);
 
-useEffect(() => {
-  const evaluations = weeklyEvaluation?.evaluations ?? [];
+  useEffect(() => {
+    const evaluations = weeklyEvaluation?.evaluations ?? [];
 
-  if (evaluations.length === 0) {
-    setSelectedWeeklyPlayer("");
-    return;
-  }
+    if (evaluations.length === 0) {
+      setSelectedWeeklyPlayer("");
+      return;
+    }
 
-  const selectedExists = evaluations.some(
-    (evaluation) => evaluation.normalizedName === selectedWeeklyPlayer,
-  );
+    const selectedExists = evaluations.some(
+      (evaluation) => evaluation.normalizedName === selectedWeeklyPlayer,
+    );
 
-  if (!selectedExists) {
-    setSelectedWeeklyPlayer(evaluations[0].normalizedName);
-  }
-}, [weeklyEvaluation, selectedWeeklyPlayer]);
+    if (!selectedExists) {
+      setSelectedWeeklyPlayer(evaluations[0].normalizedName);
+    }
+  }, [weeklyEvaluation, selectedWeeklyPlayer]);
 
   return (
     <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
@@ -903,14 +1345,40 @@ useEffect(() => {
       </section>
 
       {selectedSessionId && (
-        <section className="mt-8">
-          {loadingRecords ? (
+  <section className="mt-8">
+    <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow">
+      <div className="grid gap-2 md:grid-cols-4">
+        {gpsViewOptions.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => setGpsView(option.key)}
+            className={`rounded-xl border px-4 py-3 text-left transition ${
+              gpsView === option.key
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <span className="block text-sm font-black">{option.label}</span>
+            <span
+              className={`mt-1 block text-xs font-bold ${
+                gpsView === option.key ? "text-slate-200" : "text-slate-500"
+              }`}
+            >
+              {option.description}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {loadingRecords ? (
             <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
               Cargando registros de la sesión...
             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className={gpsView === "session" ? "grid gap-4 md:grid-cols-4" : "hidden"}>
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <p className="text-xs font-bold text-slate-500">
                     Jugadores
@@ -948,7 +1416,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-4">
+              <div className={gpsView === "session" ? "mt-4 grid gap-4 md:grid-cols-4" : "hidden"}>
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <p className="text-xs font-bold text-slate-500">
                     Distancia media
@@ -986,7 +1454,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
+              <div className={gpsView === "weekly" ? "mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow" : "hidden"}>
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
@@ -1005,15 +1473,37 @@ useEffect(() => {
                     </p>
                   </div>
 
-                  <label className="w-full text-sm font-bold text-slate-700 md:w-[260px]">
-                    Fecha de la semana
-                    <input
-                      type="date"
-                      value={weeklyDate}
-                      onChange={(event) => setWeeklyDate(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                    />
-                  </label>
+                  <div className="flex w-full flex-col gap-3 md:w-[260px]">
+                    <label className="text-sm font-bold text-slate-700">
+                      Fecha de la semana
+                      <input
+                        type="date"
+                        value={weeklyDate}
+                        onChange={(event) => setWeeklyDate(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                      />
+                    </label>
+
+                    {weeklyCsvHref && weeklyEvaluation && (
+                      <a
+                        href={weeklyCsvHref}
+                        download={`gps-semanal-${weeklyEvaluation.weekStart}-${weeklyEvaluation.weekEnd}.csv`}
+                        className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-black text-white shadow hover:bg-slate-800"
+                      >
+                        Descargar CSV semanal
+                      </a>
+                    )}
+
+                    {weeklyHtmlHref && weeklyEvaluation && (
+                      <a
+                        href={weeklyHtmlHref}
+                        download={`informe-gps-semanal-${weeklyEvaluation.weekStart}-${weeklyEvaluation.weekEnd}.html`}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-black text-slate-950 shadow hover:bg-slate-50"
+                      >
+                        Descargar informe HTML
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {weeklyError && (
@@ -1069,226 +1559,264 @@ useEffect(() => {
                       </div>
                     </div>
 
-<div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-  <div className="flex flex-col gap-2">
-    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-      Prioridades semanales
-    </p>
+                    <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                          Prioridades semanales
+                        </p>
 
-    <h3 className="text-lg font-black text-slate-950">
-      Jugadores que requieren ajuste de carga
-    </h3>
+                        <h3 className="text-lg font-black text-slate-950">
+                          Jugadores que requieren ajuste de carga
+                        </h3>
 
-    <p className="max-w-4xl text-sm text-slate-600">
-      Esta sección detecta automáticamente qué jugadores están por debajo del
-      objetivo semanal, cuáles acumulan exceso de carga y en qué métricas hay que
-      actuar.
-    </p>
-  </div>
+                        <p className="max-w-4xl text-sm text-slate-600">
+                          Esta sección detecta automáticamente qué jugadores
+                          están por debajo del objetivo semanal, cuáles acumulan
+                          exceso de carga y en qué métricas hay que actuar.
+                        </p>
+                      </div>
 
-  {weeklyInterventionRows.length === 0 ? (
-    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-      Todos los jugadores se encuentran dentro del rango semanal previsto.
-    </div>
-  ) : (
-    <div className="mt-5 grid gap-4 lg:grid-cols-2">
-      {weeklyInterventionRows.map(({ evaluation, priority, problemMetrics }) => (
-        <div
-          key={evaluation.normalizedName}
-          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-        >
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-base font-black text-slate-950">
-                {evaluation.playerName}
-              </p>
+                      {weeklyInterventionRows.length === 0 ? (
+                        <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                          Todos los jugadores se encuentran dentro del rango
+                          semanal previsto.
+                        </div>
+                      ) : (
+                        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                          {weeklyInterventionRows.map(
+                            ({ evaluation, priority, problemMetrics }) => (
+                              <div
+                                key={evaluation.normalizedName}
+                                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                              >
+                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                  <div>
+                                    <p className="text-base font-black text-slate-950">
+                                      {evaluation.playerName}
+                                    </p>
 
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                {evaluation.position ?? "Sin posición"} · Referencia:{" "}
-                {evaluation.referenceSource}
-              </p>
-            </div>
+                                    <p className="mt-1 text-xs font-bold text-slate-500">
+                                      {evaluation.position ?? "Sin posición"} ·
+                                      Referencia: {" "}
+                                      {evaluation.referenceSource}
+                                    </p>
+                                  </div>
 
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyInterventionPriorityClass(
-                priority,
-              )}`}
-            >
-              {getWeeklyInterventionPriorityLabel(priority)}
-            </span>
-          </div>
+                                  <span
+                                    className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyInterventionPriorityClass(
+                                      priority,
+                                    )}`}
+                                  >
+                                    {getWeeklyInterventionPriorityLabel(
+                                      priority,
+                                    )}
+                                  </span>
+                                </div>
 
-          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
-            {getWeeklyInterventionMessage(priority, problemMetrics)}
-          </p>
+                                <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+                                  {getWeeklyInterventionMessage(
+                                    priority,
+                                    problemMetrics,
+                                  )}
+                                </p>
 
-          <div className="mt-4 space-y-3">
-            {problemMetrics.map((metric) => (
-              <div
-                key={metric.key}
-                className="rounded-lg border border-slate-100 bg-slate-50 p-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-black text-slate-900">
-                    {metric.label}
-                  </p>
+                                <div className="mt-4 space-y-3">
+                                  {problemMetrics.map((metric) => (
+                                    <div
+                                      key={metric.key}
+                                      className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+                                    >
+                                      <div className="flex items-center justify-between gap-3">
+                                        <p className="text-sm font-black text-slate-900">
+                                          {metric.label}
+                                        </p>
 
-                  <span
-                    className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
-                      metric.status,
-                    )}`}
-                  >
-                    {metric.status}
-                  </span>
-                </div>
+                                        <span
+                                          className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
+                                            metric.status,
+                                          )}`}
+                                        >
+                                          {metric.status}
+                                        </span>
+                                      </div>
 
-                <div className="mt-2 flex flex-col gap-1 text-xs font-bold text-slate-600">
-                  <span>
-                    Acumulado:{" "}
-                    {formatMetricValueForUnit(metric.currentValue, metric.unit)}{" "}
-                    · {formatPercent(metric.percentOfReference)}
-                  </span>
+                                      <div className="mt-2 flex flex-col gap-1 text-xs font-bold text-slate-600">
+                                        <span>
+                                          Acumulado: {" "}
+                                          {formatMetricValueForUnit(
+                                            metric.currentValue,
+                                            metric.unit,
+                                          )}{" "}
+                                          · {formatPercent(
+                                            metric.percentOfReference,
+                                          )}
+                                        </span>
 
-                  <span>{formatWeeklyActionCell(metric)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
+                                        <span>
+                                          {formatWeeklyActionCell(metric)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-{selectedWeeklyPlayerEvaluation && (
-  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div>
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-          Detalle individual
-        </p>
+                    {selectedWeeklyPlayerEvaluation && (
+                      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                              Detalle individual
+                            </p>
 
-        <h3 className="mt-2 text-lg font-black text-slate-950">
-          Lectura semanal por jugador
-        </h3>
+                            <h3 className="mt-2 text-lg font-black text-slate-950">
+                              Lectura semanal por jugador
+                            </h3>
 
-        <p className="mt-2 text-sm text-slate-600">
-          Visualiza qué porcentaje de la referencia semanal lleva acumulado el
-          jugador y qué le falta por completar.
-        </p>
-      </div>
+                            <p className="mt-2 text-sm text-slate-600">
+                              Visualiza qué porcentaje de la referencia semanal
+                              lleva acumulado el jugador y qué le falta por
+                              completar.
+                            </p>
+                          </div>
 
-      <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-        Jugador
-        <select
-          value={selectedWeeklyPlayerEvaluation.normalizedName}
-          onChange={(event) => setSelectedWeeklyPlayer(event.target.value)}
-          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-        >
-          {weeklyPlayerOptions.map((evaluation) => (
-            <option
-              key={evaluation.normalizedName}
-              value={evaluation.normalizedName}
-            >
-              {evaluation.playerName}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
+                          <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                            Jugador
+                            <select
+                              value={
+                                selectedWeeklyPlayerEvaluation.normalizedName
+                              }
+                              onChange={(event) =>
+                                setSelectedWeeklyPlayer(event.target.value)
+                              }
+                              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                            >
+                              {weeklyPlayerOptions.map((evaluation) => (
+                                <option
+                                  key={evaluation.normalizedName}
+                                  value={evaluation.normalizedName}
+                                >
+                                  {evaluation.playerName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
 
-    <div className="mt-5 grid gap-4 md:grid-cols-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">Jugador</p>
-        <p className="mt-2 text-xl font-black text-slate-950">
-          {selectedWeeklyPlayerEvaluation.playerName}
-        </p>
-        <p className="mt-1 text-xs font-bold text-slate-500">
-          {selectedWeeklyPlayerEvaluation.position ?? "Sin posición"}
-        </p>
-      </div>
+                        <div className="mt-5 grid gap-4 md:grid-cols-4">
+                          <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-bold text-slate-500">
+                              Jugador
+                            </p>
+                            <p className="mt-2 text-xl font-black text-slate-950">
+                              {selectedWeeklyPlayerEvaluation.playerName}
+                            </p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {selectedWeeklyPlayerEvaluation.position ??
+                                "Sin posición"}
+                            </p>
+                          </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">Estado general</p>
-        <span
-          className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
-            selectedWeeklyPlayerEvaluation.generalStatus,
-          )}`}
-        >
-          {selectedWeeklyPlayerEvaluation.generalStatus}
-        </span>
-      </div>
+                          <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-bold text-slate-500">
+                              Estado general
+                            </p>
+                            <span
+                              className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
+                                selectedWeeklyPlayerEvaluation.generalStatus,
+                              )}`}
+                            >
+                              {selectedWeeklyPlayerEvaluation.generalStatus}
+                            </span>
+                          </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">Referencia</p>
-        <p className="mt-2 text-lg font-black text-slate-950">
-          {selectedWeeklyPlayerEvaluation.referenceSource}
-        </p>
-      </div>
+                          <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-bold text-slate-500">
+                              Referencia
+                            </p>
+                            <p className="mt-2 text-lg font-black text-slate-950">
+                              {selectedWeeklyPlayerEvaluation.referenceSource}
+                            </p>
+                          </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold text-slate-500">Partidos válidos</p>
-        <p className="mt-2 text-3xl font-black text-slate-950">
-          {selectedWeeklyPlayerEvaluation.referenceValidMatches}
-        </p>
-      </div>
-    </div>
+                          <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-bold text-slate-500">
+                              Partidos válidos
+                            </p>
+                            <p className="mt-2 text-3xl font-black text-slate-950">
+                              {
+                                selectedWeeklyPlayerEvaluation.referenceValidMatches
+                              }
+                            </p>
+                          </div>
+                        </div>
 
-    <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {selectedWeeklyPlayerEvaluation.metrics.map((metric) => {
-        const progress = Math.min(
-          Math.max(metric.percentOfReference, 0),
-          140,
-        );
+                        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                          {selectedWeeklyPlayerEvaluation.metrics.map(
+                            (metric) => {
+                              const progress = Math.min(
+                                Math.max(metric.percentOfReference, 0),
+                                140,
+                              );
 
-        return (
-          <div
-            key={metric.key}
-            className="rounded-xl border border-slate-200 bg-white p-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-slate-950">
-                  {metric.label}
-                </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  {formatWeeklyMetricCell(metric)}
-                </p>
-              </div>
+                              return (
+                                <div
+                                  key={metric.key}
+                                  className="rounded-xl border border-slate-200 bg-white p-4"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-black text-slate-950">
+                                        {metric.label}
+                                      </p>
+                                      <p className="mt-1 text-xs font-bold text-slate-500">
+                                        {formatWeeklyMetricCell(metric)}
+                                      </p>
+                                    </div>
 
-              <span
-                className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
-                  metric.status,
-                )}`}
-              >
-                {metric.status}
-              </span>
-            </div>
+                                    <span
+                                      className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
+                                        metric.status,
+                                      )}`}
+                                    >
+                                      {metric.status}
+                                    </span>
+                                  </div>
 
-            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-slate-950"
-                style={{
-                  width: `${Math.min(progress, 100)}%`,
-                }}
-              />
-            </div>
+                                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                                    <div
+                                      className="h-full rounded-full bg-slate-950"
+                                      style={{
+                                        width: `${Math.min(progress, 100)}%`,
+                                      }}
+                                    />
+                                  </div>
 
-            <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
-              <span>0%</span>
-              <span>{formatPercent(metric.percentOfReference)}</span>
-              <span>100%</span>
-            </div>
+                                  <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
+                                    <span>0%</span>
+                                    <span>
+                                      {formatPercent(
+                                        metric.percentOfReference,
+                                      )}
+                                    </span>
+                                    <span>100%</span>
+                                  </div>
 
-            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
-              {formatWeeklyActionCell(metric)}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
+                                  <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+                                    {formatWeeklyActionCell(metric)}
+                                  </p>
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {weeklyEvaluation.evaluations.length === 0 ? (
                       <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
@@ -1433,7 +1961,7 @@ useEffect(() => {
                                           {evaluation.referenceSource}
                                         </p>
                                         <p className="mt-1 text-xs font-bold text-slate-500">
-                                          Partidos válidos:{" "}
+                                          Partidos válidos: {" "}
                                           {
                                             evaluation.referenceValidMatches
                                           }
@@ -1452,7 +1980,7 @@ useEffect(() => {
                 )}
               </div>
 
-              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
+              <div className={gpsView === "objectives" ? "mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow" : "hidden"}>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
@@ -1705,7 +2233,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              <div className="mt-8 grid gap-4 xl:grid-cols-3">
+              <div className={gpsView === "session" ? "mt-8 grid gap-4 xl:grid-cols-3" : "hidden"}>
                 <RankingCard
                   title="Ranking distancia"
                   rows={filteredRecords}
@@ -1746,7 +2274,7 @@ useEffect(() => {
                 />
               </div>
 
-              <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+              <div className={gpsView === "records" ? "mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow" : "hidden"}>
                 <div className="border-b border-slate-200 p-5">
                   <h2 className="text-xl font-black">Registros por jugador</h2>
                   <p className="mt-1 text-sm text-slate-600">
