@@ -5,6 +5,7 @@ type AppShellProps = {
   title: string;
   subtitle: string;
   eyebrow?: string;
+  actions?: ReactNode;
   children: ReactNode;
 };
 
@@ -12,21 +13,32 @@ export default function AppShell({
   title,
   subtitle,
   eyebrow = "Plataforma de rendimiento",
+  actions,
   children,
 }: AppShellProps) {
   return (
-    <main className="flex min-h-screen bg-slate-100">
+    <main className="flex min-h-screen bg-slate-100 text-slate-950">
       <Sidebar />
 
-      <section className="flex-1 px-8 py-8">
-        <div className="rounded-3xl bg-slate-950 p-8 text-white shadow-xl">
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-300">
-            {eyebrow}
-          </p>
+      <section className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="rounded-3xl bg-slate-950 p-6 text-white shadow-xl sm:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
+                {eyebrow}
+              </p>
 
-          <h1 className="mt-4 text-4xl font-black tracking-tight">{title}</h1>
+              <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+                {title}
+              </h1>
 
-          <p className="mt-4 max-w-4xl text-lg text-slate-300">{subtitle}</p>
+              <p className="mt-4 max-w-5xl text-sm leading-6 text-slate-300 sm:text-base">
+                {subtitle}
+              </p>
+            </div>
+
+            {actions && <div className="shrink-0">{actions}</div>}
+          </div>
         </div>
 
         <div className="mt-8">{children}</div>

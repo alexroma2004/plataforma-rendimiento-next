@@ -3,52 +3,106 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+};
+
+type NavGroup = {
+  title: string;
+  items: NavItem[];
+};
+
+const navGroups: NavGroup[] = [
   {
-    label: "Dashboard",
-    href: "/",
+    title: "Inicio",
+    items: [
+      {
+        label: "Dashboard",
+        href: "/",
+      },
+    ],
   },
   {
-    label: "Cargar datos",
-    href: "/cargar",
+    title: "Carga de datos",
+    items: [
+      {
+        label: "Cargar datos",
+        href: "/cargar",
+      },
+      {
+        label: "Cargar GPS",
+        href: "/cargar-gps",
+      },
+      {
+        label: "Cargar neuromuscular",
+        href: "/cargar-neuromuscular",
+      },
+      {
+        label: "Cargar tests",
+        href: "/cargar-tests",
+      },
+    ],
   },
   {
-    label: "Equipo",
-    href: "/equipo",
+    title: "Análisis",
+    items: [
+      {
+        label: "Equipo",
+        href: "/equipo",
+      },
+      {
+        label: "Jugador",
+        href: "/jugador",
+      },
+      {
+        label: "GPS",
+        href: "/gps",
+      },
+      {
+        label: "Rendimiento neuromuscular",
+        href: "/neuromuscular",
+      },
+      {
+        label: "Tests",
+        href: "/tests",
+      },
+      {
+        label: "Perfil F-R",
+        href: "/perfil-fr",
+      },
+      {
+        label: "Comparador",
+        href: "/comparador",
+      },
+      {
+        label: "Lupa IA",
+        href: "/lupa-ia",
+      },
+      {
+        label: "Informes",
+        href: "/informes",
+      },
+    ],
   },
   {
-    label: "Jugador",
-    href: "/jugador",
-  },
-  {
-    label: "Perfil F-R",
-    href: "/perfil-fr",
-  },
-  {
-    label: "Comparador",
-    href: "/comparador",
-  },
-  {
-    label: "Tests",
-    href: "/tests",
-  },
-  {
-    label: "GPS",
-    href: "/gps",
-  },
-  {
-    label: "Lupa IA",
-    href: "/lupa-ia",
-  },
-  {
-    label: "Informes",
-    href: "/informes",
-  },
-  {
-    label: "Administración",
-    href: "/admin",
+    title: "Sistema",
+    items: [
+      {
+        label: "Administración",
+        href: "/admin",
+      },
+    ],
   },
 ];
+
+function isItemActive(pathname: string, href: string) {
+  if (href === "/") {
+    return pathname === "/";
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -56,7 +110,7 @@ export default function Sidebar() {
   return (
     <aside className="min-h-screen w-72 shrink-0 border-r border-slate-200 bg-white px-5 py-6">
       <div className="mb-8">
-        <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
+        <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">
           Plataforma
         </p>
 
@@ -64,30 +118,40 @@ export default function Sidebar() {
           Rendimiento
         </h1>
 
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm font-bold text-slate-500">
           Next.js · Supabase · Vercel
         </p>
       </div>
 
-      <nav className="space-y-1">
-        {navItems.map((item) => {
-          const active = pathname === item.href;
+      <nav className="space-y-6">
+        {navGroups.map((group) => (
+          <div key={group.title}>
+            <p className="mb-2 px-4 text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+              {group.title}
+            </p>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={[
-                "block rounded-xl px-4 py-3 text-sm font-semibold transition",
-                active
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
-              ].join(" ")}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const active = isItemActive(pathname, item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={[
+                      "block rounded-xl px-4 py-3 text-sm font-bold transition",
+                      active
+                        ? "bg-slate-950 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );
