@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 type NavItem = {
   label: string;
@@ -106,9 +107,19 @@ function isItemActive(pathname: string, href: string) {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    const supabase = getSupabaseClient();
+
+    await supabase.auth.signOut();
+
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
-    <aside className="min-h-screen w-72 shrink-0 border-r border-slate-200 bg-white px-5 py-6">
+    <aside className="flex min-h-screen w-72 shrink-0 flex-col border-r border-slate-200 bg-white px-5 py-6">
       <div className="mb-8">
         <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">
           Plataforma
@@ -123,7 +134,7 @@ export default function Sidebar() {
         </p>
       </div>
 
-      <nav className="space-y-6">
+      <nav className="flex-1 space-y-6">
         {navGroups.map((group) => (
           <div key={group.title}>
             <p className="mb-2 px-4 text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
@@ -153,6 +164,16 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      <div className="mt-6 border-t border-slate-200 pt-5">
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-black text-slate-700 transition hover:bg-red-50 hover:text-red-700"
+        >
+          Cerrar sesión
+        </button>
+      </div>
     </aside>
   );
 }
