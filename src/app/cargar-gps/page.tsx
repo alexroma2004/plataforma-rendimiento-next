@@ -3,6 +3,7 @@
 import { type ChangeEvent, useMemo, useState } from "react";
 import Papa from "papaparse";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import { saveGpsSessionToSupabase, type RawGpsRow } from "@/lib/supabase/gps";
 
 type GpsPreviewRow = {
@@ -587,14 +588,18 @@ export default function CargarGpsPage() {
                 </button>
 
                 {saveMessage && (
-                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                    {saveMessage}
+                  <div className="mt-4">
+                    <StatusMessage variant="success" title="Sesión guardada">
+                      {saveMessage}
+                    </StatusMessage>
                   </div>
                 )}
 
                 {saveError && (
-                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-                    {saveError}
+                  <div className="mt-4">
+                    <StatusMessage variant="error" title="No se ha podido guardar">
+                      {saveError}
+                    </StatusMessage>
                   </div>
                 )}
               </section>
@@ -754,9 +759,11 @@ export default function CargarGpsPage() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-                Archivo GPS leído correctamente. Revisa la fecha, el microciclo
-                y el nombre de sesión antes de guardar en Supabase.
+              <div className="mt-4">
+                <StatusMessage variant="success" title="Archivo leído correctamente">
+                  Archivo GPS leído correctamente. Revisa la fecha, el
+                  microciclo y el nombre de sesión antes de guardar en Supabase.
+                </StatusMessage>
               </div>
             </>
           )}

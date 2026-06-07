@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   createNeuromuscularSessionWithRecords,
   type NeuromuscularRecordInput,
@@ -920,16 +921,20 @@ export default function CargarNeuromuscularPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
-            </div>
-          )}
+  <div className="mt-6">
+    <StatusMessage variant="error" title="Error en la carga neuromuscular">
+      {error}
+    </StatusMessage>
+  </div>
+)}
 
-          {successMessage && (
-            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-              {successMessage}
-            </div>
-          )}
+{successMessage && (
+  <div className="mt-6">
+    <StatusMessage variant="success" title="Operación completada">
+      {successMessage}
+    </StatusMessage>
+  </div>
+)}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
@@ -1170,10 +1175,13 @@ export default function CargarNeuromuscularPage() {
           </div>
 
           {records.length === 0 ? (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-              Todavía no hay registros preparados.
-            </div>
-          ) : (
+  <div className="mt-6">
+    <StatusMessage variant="warning" title="Sin registros preparados">
+      Todavía no hay registros preparados. Carga un CSV o añade jugadores de
+      forma manual antes de guardar la sesión.
+    </StatusMessage>
+  </div>
+) : (
             <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
               <div className="divide-y divide-slate-100 md:hidden">
                 {records.map((record, index) => (

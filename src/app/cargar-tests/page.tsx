@@ -3,6 +3,7 @@
 import { type ChangeEvent, useMemo, useState } from "react";
 import Papa from "papaparse";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   createTestSessionWithResults,
   type RawTestRow,
@@ -488,12 +489,17 @@ export default function CargarTestsPage() {
           </div>
 
           {rawRows.length > 0 && previewRows.length === 0 && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              El archivo se ha leído, pero no se ha detectado ningún registro
-              válido. Revisa que existan columnas equivalentes a jugador,
-              bloque/capacidad y variable/prueba.
-            </div>
-          )}
+  <div className="mt-6">
+    <StatusMessage
+      variant="error"
+      title="Archivo leído sin registros válidos"
+    >
+      El archivo se ha leído, pero no se ha detectado ningún registro
+      válido. Revisa que existan columnas equivalentes a jugador,
+      bloque/capacidad y variable/prueba.
+    </StatusMessage>
+  </div>
+)}
 
           {previewRows.length > 0 && (
             <>
@@ -558,16 +564,20 @@ export default function CargarTestsPage() {
                 </button>
 
                 {saveMessage && (
-                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                    {saveMessage}
-                  </div>
-                )}
+  <div className="mt-4">
+    <StatusMessage variant="success" title="Sesión guardada">
+      {saveMessage}
+    </StatusMessage>
+  </div>
+)}
 
-                {saveError && (
-                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-                    {saveError}
-                  </div>
-                )}
+{saveError && (
+  <div className="mt-4">
+    <StatusMessage variant="error" title="No se ha podido guardar">
+      {saveError}
+    </StatusMessage>
+  </div>
+)}
               </section>
 
               <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -693,10 +703,12 @@ export default function CargarTestsPage() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-                Archivo de tests leído correctamente. Revisa la fecha, el
-                contexto y el nombre de sesión antes de guardar en Supabase.
-              </div>
+              <div className="mt-4">
+  <StatusMessage variant="success" title="Archivo leído correctamente">
+    Archivo de tests leído correctamente. Revisa la fecha, el contexto y el
+    nombre de sesión antes de guardar en Supabase.
+  </StatusMessage>
+</div>
             </>
           )}
         </section>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 
 const uploadSections = [
   {
@@ -53,6 +54,12 @@ export default function CargarDatosPage() {
       subtitle="Selecciona el tipo de información que quieres importar a la plataforma. Cada bloque tiene su propio flujo de carga, previsualización y guardado en Supabase."
     >
       <div className="space-y-8">
+        <StatusMessage variant="info" title="Flujo seguro de carga">
+          Primero importa el archivo, después revisa la previsualización y solo
+          guarda en Supabase cuando los jugadores, métricas y valores sean
+          correctos.
+        </StatusMessage>
+
         <section className="grid gap-6 lg:grid-cols-3">
           {uploadSections.map((section) => (
             <Link
