@@ -58,7 +58,10 @@ function downloadTextFile(filename: string, content: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-function buildAdminAuditCsv(data: AdminDashboardData, qualityIssues: QualityIssue[]) {
+function buildAdminAuditCsv(
+  data: AdminDashboardData,
+  qualityIssues: QualityIssue[],
+) {
   const summaryRows = [
     ["Bloque", "Variable", "Valor"],
     ["Resumen", "Equipos", data.counts.teams],
@@ -79,7 +82,16 @@ function buildAdminAuditCsv(data: AdminDashboardData, qualityIssues: QualityIssu
       issue.description,
     ]),
     [],
-    ["Jugadores", "Nombre", "Nombre normalizado", "Posición", "Línea", "Dorsal", "Portero", "Estado"],
+    [
+      "Jugadores",
+      "Nombre",
+      "Nombre normalizado",
+      "Posición",
+      "Línea",
+      "Dorsal",
+      "Portero",
+      "Estado",
+    ],
     ...data.players.map((player) => [
       "Jugadores",
       player.name,
@@ -95,7 +107,10 @@ function buildAdminAuditCsv(data: AdminDashboardData, qualityIssues: QualityIssu
   return summaryRows.map((row) => row.map(escapeCsvCell).join(";")).join("\n");
 }
 
-function buildAdminHtmlReport(data: AdminDashboardData, qualityIssues: QualityIssue[]) {
+function buildAdminHtmlReport(
+  data: AdminDashboardData,
+  qualityIssues: QualityIssue[],
+) {
   const totalIssues = qualityIssues.reduce((sum, issue) => sum + issue.value, 0);
 
   const issuesHtml = qualityIssues
@@ -337,12 +352,12 @@ function SummaryCard({
   description: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {title}
       </p>
 
-      <p className="mt-3 text-3xl font-black text-slate-950">
+      <p className="mt-3 text-2xl font-black text-slate-950 sm:text-3xl">
         {formatNumber(value)}
       </p>
 
@@ -361,17 +376,19 @@ function IssueCard({
   description: string;
 }) {
   return (
-    <div className={`rounded-2xl border p-5 ${getIssueClass(value)}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
+    <div className={`rounded-2xl border p-4 sm:p-5 ${getIssueClass(value)}`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-wide">{title}</p>
 
-          <p className="mt-3 text-3xl font-black">{formatNumber(value)}</p>
+          <p className="mt-3 text-2xl font-black sm:text-3xl">
+            {formatNumber(value)}
+          </p>
 
           <p className="mt-2 text-sm font-bold">{description}</p>
         </div>
 
-        <span className="rounded-full border border-current px-3 py-1 text-xs font-black">
+        <span className="w-fit rounded-full border border-current px-3 py-1 text-xs font-black sm:shrink-0">
           {getIssueLabel(value)}
         </span>
       </div>
@@ -490,14 +507,14 @@ export default function AdminPage() {
       subtitle="Panel de control interno para revisar equipo, plantilla, sesiones cargadas e integridad de datos."
     >
       <div className="space-y-8">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
                 Control general
               </p>
 
-              <h2 className="mt-2 text-2xl font-black text-slate-950">
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
                 Estado de la base de datos
               </h2>
 
@@ -508,12 +525,12 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 md:min-w-[240px]">
+            <div className="flex w-full flex-col gap-3 md:min-w-[240px] md:max-w-[260px]">
               <button
                 type="button"
                 onClick={loadAdminData}
                 disabled={loading}
-                className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Actualizando..." : "Actualizar datos"}
               </button>
@@ -522,7 +539,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleDownloadCsv}
                 disabled={!data || loading}
-                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Descargar auditoría CSV
               </button>
@@ -531,7 +548,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleDownloadHtml}
                 disabled={!data || loading}
-                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Descargar informe HTML
               </button>
@@ -569,7 +586,7 @@ export default function AdminPage() {
 
         {data && (
           <>
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <SummaryCard
                 title="Equipos"
                 value={data.counts.teams}
@@ -597,9 +614,9 @@ export default function AdminPage() {
               />
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
                   Integridad
                 </p>
 
@@ -627,8 +644,8 @@ export default function AdminPage() {
             </section>
 
             <section className="grid gap-6 xl:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-1">
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:col-span-1">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
                   Equipo
                 </p>
 
@@ -640,14 +657,14 @@ export default function AdminPage() {
                   <div className="mt-5 space-y-3 text-sm">
                     <div className="rounded-xl bg-slate-50 p-4">
                       <p className="text-xs font-bold text-slate-500">Nombre</p>
-                      <p className="mt-1 font-black text-slate-950">
+                      <p className="mt-1 break-words font-black text-slate-950">
                         {data.team.name}
                       </p>
                     </div>
 
                     <div className="rounded-xl bg-slate-50 p-4">
                       <p className="text-xs font-bold text-slate-500">Club</p>
-                      <p className="mt-1 font-black text-slate-950">
+                      <p className="mt-1 break-words font-black text-slate-950">
                         {data.team.club ?? "—"}
                       </p>
                     </div>
@@ -656,7 +673,7 @@ export default function AdminPage() {
                       <p className="text-xs font-bold text-slate-500">
                         Categoría / temporada
                       </p>
-                      <p className="mt-1 font-black text-slate-950">
+                      <p className="mt-1 break-words font-black text-slate-950">
                         {data.team.category ?? "—"} · {data.team.season ?? "—"}
                       </p>
                     </div>
@@ -665,7 +682,7 @@ export default function AdminPage() {
                       <p className="text-xs font-bold text-slate-500">
                         Contexto
                       </p>
-                      <p className="mt-1 font-black text-slate-950">
+                      <p className="mt-1 break-words font-black text-slate-950">
                         {data.team.context ?? "—"}
                       </p>
                     </div>
@@ -679,16 +696,92 @@ export default function AdminPage() {
 
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:col-span-2">
                 <div className="border-b border-slate-200 p-5">
-                  <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
                     Plantilla
                   </p>
 
                   <h2 className="mt-2 text-xl font-black text-slate-950">
                     Jugadores registrados
                   </h2>
+
+                  <p className="mt-1 text-sm font-bold text-slate-500">
+                    {formatNumber(data.players.length)} jugadores en la base de
+                    datos.
+                  </p>
                 </div>
 
-                <div className="max-h-[520px] overflow-auto">
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {data.players.map((player) => (
+                    <article key={player.id} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-black text-slate-950">
+                            {player.name}
+                          </p>
+                          <p className="mt-1 break-words text-xs font-bold text-slate-500">
+                            {player.normalized_name}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                            player.active === false
+                              ? "bg-slate-100 text-slate-500"
+                              : "bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          {player.active === false ? "Inactivo" : "Activo"}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Posición
+                          </p>
+                          <p className="mt-1 font-bold text-slate-700">
+                            {player.position ?? "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Línea
+                          </p>
+                          <p className="mt-1 font-bold text-slate-700">
+                            {player.line ?? "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Dorsal
+                          </p>
+                          <p className="mt-1 font-bold text-slate-700">
+                            {player.shirt_number ?? "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Portero
+                          </p>
+                          <p className="mt-1 font-bold text-slate-700">
+                            {player.is_goalkeeper ? "Sí" : "No"}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+
+                  {data.players.length === 0 && (
+                    <div className="p-6 text-center text-sm font-bold text-slate-500">
+                      No hay jugadores registrados.
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden max-h-[520px] overflow-auto md:block">
                   <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                     <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
@@ -773,12 +866,12 @@ export default function AdminPage() {
                         {session.session_date}
                       </p>
 
-                      <p className="mt-1 text-sm font-bold text-slate-600">
+                      <p className="mt-1 break-words text-sm font-bold text-slate-600">
                         {session.microcycle ?? "Sin microciclo"} ·{" "}
                         {session.session_name ?? "Sesión GPS"}
                       </p>
 
-                      <p className="mt-1 text-xs font-bold text-slate-500">
+                      <p className="mt-1 break-words text-xs font-bold text-slate-500">
                         {session.is_match ? "Partido" : "Entrenamiento"} ·{" "}
                         {session.source_filename ?? "Sin archivo"}
                       </p>
@@ -808,12 +901,12 @@ export default function AdminPage() {
                         {session.session_date}
                       </p>
 
-                      <p className="mt-1 text-sm font-bold text-slate-600">
+                      <p className="mt-1 break-words text-sm font-bold text-slate-600">
                         {session.microcycle} ·{" "}
                         {session.session_name ?? "Control neuromuscular"}
                       </p>
 
-                      <p className="mt-1 text-xs font-bold text-slate-500">
+                      <p className="mt-1 break-words text-xs font-bold text-slate-500">
                         {session.source_filename ?? "Sin archivo"}
                       </p>
                     </div>
@@ -842,11 +935,11 @@ export default function AdminPage() {
                         {session.session_date}
                       </p>
 
-                      <p className="mt-1 text-sm font-bold text-slate-600">
+                      <p className="mt-1 break-words text-sm font-bold text-slate-600">
                         {session.context} · {session.session_name}
                       </p>
 
-                      <p className="mt-1 text-xs font-bold text-slate-500">
+                      <p className="mt-1 break-words text-xs font-bold text-slate-500">
                         {session.notes ?? "Sin notas"}
                       </p>
                     </div>

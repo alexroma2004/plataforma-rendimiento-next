@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AppShell from "@/components/layout/AppShell";
 import {
   getTeamDashboardData,
   type TeamDashboardData,
@@ -79,7 +80,11 @@ function getDifferencePercent(
     return null;
   }
 
-  return ((Number(currentValue) - Number(referenceValue)) / Number(referenceValue)) * 100;
+  return (
+    ((Number(currentValue) - Number(referenceValue)) /
+      Number(referenceValue)) *
+    100
+  );
 }
 
 function getStatusClass(value: number | null | undefined) {
@@ -174,6 +179,38 @@ type TestPlayerSummary = {
   bestClassification: string | null;
 };
 
+function SummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string | number;
+  description?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs font-bold text-slate-500">{description}</p>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ children }: { children: string }) {
+  return (
+    <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-700">
+      {children}
+    </div>
+  );
+}
+
 export default function EquipoPage() {
   const [data, setData] = useState<TeamDashboardData>(emptyTeamDashboardData);
   const [loading, setLoading] = useState(true);
@@ -231,7 +268,9 @@ export default function EquipoPage() {
       neuromuscularPlayers: neuromuscularPlayers.size,
       testScores: data.testScores.length,
       testPlayers: testPlayers.size,
-      averageDistance: average(data.gpsRecords.map((record) => record.total_distance)),
+      averageDistance: average(
+        data.gpsRecords.map((record) => record.total_distance),
+      ),
       averageHsr: average(data.gpsRecords.map((record) => record.hsr)),
       averageSprint: average(
         data.gpsRecords.map((record) => record.distance_vrange6),
@@ -245,7 +284,9 @@ export default function EquipoPage() {
       averageVmp: average(
         data.neuromuscularRecords.map((record) => record.vmp_pre),
       ),
-      averageTestScore: average(data.testScores.map((score) => score.final_score)),
+      averageTestScore: average(
+        data.testScores.map((score) => score.final_score),
+      ),
     };
   }, [data]);
 
@@ -294,7 +335,10 @@ export default function EquipoPage() {
 
       const latestRecord = playerRecords[0] ?? null;
       const averageCmj = average(playerRecords.map((record) => record.cmj_pre));
-      const cmjDifference = getDifferencePercent(latestRecord?.cmj_pre, averageCmj);
+      const cmjDifference = getDifferencePercent(
+        latestRecord?.cmj_pre,
+        averageCmj,
+      );
 
       rows.set(player.id, {
         playerId: player.id,
@@ -386,450 +430,623 @@ export default function EquipoPage() {
   }, [testPlayerSummary]);
 
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="Equipo"
+      subtitle="Panel general del equipo. Integra jugadores activos, carga GPS, controles neuromusculares y puntuaciones de tests físicos para obtener una visión global del estado de la plantilla."
+    >
+      <div className="space-y-8">
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+            {error}
+          </div>
+        )}
 
-        <h1 className="mt-3 text-4xl font-black">Equipo</h1>
+        {loading ? (
+          <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
+            Cargando dashboard del equipo...
+          </div>
+        ) : (
+          <>
+            <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <SummaryCard title="Jugadores activos" value={summary.players} />
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Panel general del equipo. Integra jugadores activos, carga GPS,
-          controles neuromusculares y puntuaciones de tests físicos para obtener
-          una visión global del estado de la plantilla.
-        </p>
-      </section>
+              <SummaryCard
+                title="Registros GPS"
+                value={summary.gpsRecords}
+                description={`${summary.gpsPlayers} jugadores con datos`}
+              />
 
-      {error && (
-        <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-          {error}
-        </div>
-      )}
+              <SummaryCard
+                title="Controles neuromusculares"
+                value={summary.neuromuscularRecords}
+                description={`${summary.neuromuscularPlayers} jugadores con datos`}
+              />
 
-      {loading ? (
-        <div className="mt-8 rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-          Cargando dashboard del equipo...
-        </div>
-      ) : (
-        <>
-          <section className="mt-8 grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Jugadores activos
-              </p>
-              <p className="mt-2 text-3xl font-black">{summary.players}</p>
-            </div>
+              <SummaryCard
+                title="Puntuaciones tests"
+                value={summary.testScores}
+                description={`${summary.testPlayers} jugadores con datos`}
+              />
+            </section>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">Registros GPS</p>
-              <p className="mt-2 text-3xl font-black">{summary.gpsRecords}</p>
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                {summary.gpsPlayers} jugadores con datos
-              </p>
-            </div>
+            <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <SummaryCard
+                title="Distancia media GPS"
+                value={formatMeters(summary.averageDistance)}
+              />
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Controles neuromusculares
-              </p>
-              <p className="mt-2 text-3xl font-black">
-                {summary.neuromuscularRecords}
-              </p>
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                {summary.neuromuscularPlayers} jugadores con datos
-              </p>
-            </div>
+              <SummaryCard
+                title="HSR medio"
+                value={formatMeters(summary.averageHsr)}
+              />
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Puntuaciones tests
-              </p>
-              <p className="mt-2 text-3xl font-black">{summary.testScores}</p>
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                {summary.testPlayers} jugadores con datos
-              </p>
-            </div>
-          </section>
+              <SummaryCard
+                title="CMJ medio"
+                value={formatNumber(summary.averageCmj, 2)}
+              />
 
-          <section className="mt-4 grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Distancia media GPS
-              </p>
-              <p className="mt-2 text-3xl font-black">
-                {formatMeters(summary.averageDistance)}
-              </p>
-            </div>
+              <SummaryCard
+                title="Media tests físicos"
+                value={formatNumber(summary.averageTestScore, 1)}
+              />
+            </section>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">HSR medio</p>
-              <p className="mt-2 text-3xl font-black">
-                {formatMeters(summary.averageHsr)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">CMJ medio</p>
-              <p className="mt-2 text-3xl font-black">
-                {formatNumber(summary.averageCmj, 2)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Media tests físicos
-              </p>
-              <p className="mt-2 text-3xl font-black">
-                {formatNumber(summary.averageTestScore, 1)}
-              </p>
-            </div>
-          </section>
-
-          <section className="mt-8 grid gap-6 xl:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow xl:col-span-2">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                GPS
-              </p>
-
-              <h2 className="mt-2 text-xl font-black">
-                Evolución de carga del equipo
-              </h2>
-
-              <p className="mt-2 text-sm text-slate-600">
-                Suma total del equipo por fecha de sesión: distancia total, HSR
-                y distancia sprint.
-              </p>
-
-              <div className="mt-6 h-[380px] w-full">
-                {gpsEvolutionData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                    Todavía no hay registros GPS para representar.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={gpsEvolutionData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-
-                      <XAxis
-                        dataKey="fecha"
-                        tick={{ fontSize: 11 }}
-                        angle={-25}
-                        textAnchor="end"
-                        height={70}
-                      />
-
-                      <YAxis
-                        tickFormatter={(value) =>
-                          Math.round(Number(value)).toLocaleString("es-ES")
-                        }
-                      />
-
-                      <Tooltip
-                        formatter={(value) =>
-                          `${Math.round(Number(value ?? 0)).toLocaleString(
-                            "es-ES",
-                          )} m`
-                        }
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="distancia"
-                        name="Distancia"
-                        strokeWidth={2}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="hsr"
-                        name="HSR"
-                        strokeWidth={2}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="sprint"
-                        name="Sprint"
-                        strokeWidth={2}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                Tests
-              </p>
-
-              <h2 className="mt-2 text-xl font-black">
-                Top puntuación media
-              </h2>
-
-              <p className="mt-2 text-sm text-slate-600">
-                Ranking de jugadores según su puntuación media en tests físicos.
-              </p>
-
-              <div className="mt-6 h-[380px] w-full">
-                {testChartData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                    Todavía no hay puntuaciones de tests.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={testChartData}
-                      layout="vertical"
-                      margin={{
-                        top: 10,
-                        right: 30,
-                        left: 80,
-                        bottom: 10,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-
-                      <XAxis type="number" domain={[0, 10]} />
-
-                      <YAxis
-                        type="category"
-                        dataKey="jugador"
-                        width={120}
-                        tick={{ fontSize: 11 }}
-                      />
-
-                      <Tooltip
-                        formatter={(value) =>
-                          formatNumber(Number(value ?? 0), 1)
-                        }
-                      />
-
-                      <Bar dataKey="puntuacion" name="Puntuación media" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-8 grid gap-6 xl:grid-cols-2">
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-              <div className="border-b border-slate-200 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+            <section className="grid gap-6 xl:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6 xl:col-span-2">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
                   GPS
                 </p>
 
-                <h2 className="mt-2 text-xl font-black">
-                  Ranking acumulado GPS
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Evolución de carga del equipo
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-600">
-                  Carga acumulada por jugador en todos los registros guardados.
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Suma total del equipo por fecha de sesión: distancia total,
+                  HSR y distancia sprint.
                 </p>
+
+                <div className="mt-6 h-[320px] w-full sm:h-[380px]">
+                  {gpsEvolutionData.length === 0 ? (
+                    <EmptyState>
+                      Todavía no hay registros GPS para representar.
+                    </EmptyState>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={gpsEvolutionData}
+                        margin={{
+                          top: 10,
+                          right: 12,
+                          left: 0,
+                          bottom: 10,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+
+                        <XAxis
+                          dataKey="fecha"
+                          tick={{ fontSize: 11 }}
+                          angle={-25}
+                          textAnchor="end"
+                          height={70}
+                        />
+
+                        <YAxis
+                          width={58}
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) =>
+                            Math.round(Number(value)).toLocaleString("es-ES")
+                          }
+                        />
+
+                        <Tooltip
+                          formatter={(value) =>
+                            `${Math.round(Number(value ?? 0)).toLocaleString(
+                              "es-ES",
+                            )} m`
+                          }
+                        />
+
+                        <Line
+                          type="monotone"
+                          dataKey="distancia"
+                          name="Distancia"
+                          strokeWidth={2}
+                        />
+
+                        <Line
+                          type="monotone"
+                          dataKey="hsr"
+                          name="HSR"
+                          strokeWidth={2}
+                        />
+
+                        <Line
+                          type="monotone"
+                          dataKey="sprint"
+                          name="Sprint"
+                          strokeWidth={2}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
               </div>
 
-              <div className="max-h-[520px] overflow-auto">
-                <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Jugador</th>
-                      <th className="px-4 py-3">Posición</th>
-                      <th className="px-4 py-3">Sesiones</th>
-                      <th className="px-4 py-3">Distancia</th>
-                      <th className="px-4 py-3">HSR</th>
-                      <th className="px-4 py-3">Sprint</th>
-                      <th className="px-4 py-3">Sprints</th>
-                    </tr>
-                  </thead>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Tests
+                </p>
 
-                  <tbody>
-                    {gpsPlayerSummary.map((row) => (
-                      <tr key={row.playerId} className="border-t border-slate-100">
-                        <td className="px-4 py-3 font-black">
-                          {row.playerName}
-                        </td>
-                        <td className="px-4 py-3">{row.position ?? "—"}</td>
-                        <td className="px-4 py-3">{row.sessions}</td>
-                        <td className="px-4 py-3">
-                          {formatMeters(row.totalDistance)}
-                        </td>
-                        <td className="px-4 py-3">{formatMeters(row.hsr)}</td>
-                        <td className="px-4 py-3">{formatMeters(row.sprint)}</td>
-                        <td className="px-4 py-3">
-                          {formatNumber(row.sprints, 0)}
-                        </td>
-                      </tr>
-                    ))}
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Top puntuación media
+                </h2>
 
-                    {gpsPlayerSummary.length === 0 && (
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Ranking de jugadores según su puntuación media en tests
+                  físicos.
+                </p>
+
+                <div className="mt-6 h-[320px] w-full sm:h-[380px]">
+                  {testChartData.length === 0 ? (
+                    <EmptyState>Todavía no hay puntuaciones de tests.</EmptyState>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={testChartData}
+                        layout="vertical"
+                        margin={{
+                          top: 10,
+                          right: 12,
+                          left: 40,
+                          bottom: 10,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+
+                        <XAxis
+                          type="number"
+                          domain={[0, 10]}
+                          tick={{ fontSize: 11 }}
+                        />
+
+                        <YAxis
+                          type="category"
+                          dataKey="jugador"
+                          width={100}
+                          tick={{ fontSize: 11 }}
+                        />
+
+                        <Tooltip
+                          formatter={(value) =>
+                            formatNumber(Number(value ?? 0), 1)
+                          }
+                        />
+
+                        <Bar dataKey="puntuacion" name="Puntuación media" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-2">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                <div className="border-b border-slate-200 p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                    GPS
+                  </p>
+
+                  <h2 className="mt-2 text-xl font-black text-slate-950">
+                    Ranking acumulado GPS
+                  </h2>
+
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Carga acumulada por jugador en todos los registros guardados.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {gpsPlayerSummary.map((row) => (
+                    <article key={row.playerId} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-black text-slate-950">
+                            {row.playerName}
+                          </p>
+
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            {row.position ?? "Sin posición"}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                          {row.sessions} ses.
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Distancia
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMeters(row.totalDistance)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            HSR
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMeters(row.hsr)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Sprint
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMeters(row.sprint)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Sprints
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(row.sprints, 0)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+
+                  {gpsPlayerSummary.length === 0 && (
+                    <div className="p-6 text-center text-sm font-bold text-slate-500">
+                      No hay datos GPS disponibles.
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden max-h-[520px] overflow-auto md:block">
+                  <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay datos GPS disponibles.
-                        </td>
+                        <th className="px-4 py-3">Jugador</th>
+                        <th className="px-4 py-3">Posición</th>
+                        <th className="px-4 py-3">Sesiones</th>
+                        <th className="px-4 py-3">Distancia</th>
+                        <th className="px-4 py-3">HSR</th>
+                        <th className="px-4 py-3">Sprint</th>
+                        <th className="px-4 py-3">Sprints</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    </thead>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                    <tbody>
+                      {gpsPlayerSummary.map((row) => (
+                        <tr
+                          key={row.playerId}
+                          className="border-t border-slate-100"
+                        >
+                          <td className="px-4 py-3 font-black">
+                            {row.playerName}
+                          </td>
+                          <td className="px-4 py-3">{row.position ?? "—"}</td>
+                          <td className="px-4 py-3">{row.sessions}</td>
+                          <td className="px-4 py-3">
+                            {formatMeters(row.totalDistance)}
+                          </td>
+                          <td className="px-4 py-3">{formatMeters(row.hsr)}</td>
+                          <td className="px-4 py-3">
+                            {formatMeters(row.sprint)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {formatNumber(row.sprints, 0)}
+                          </td>
+                        </tr>
+                      ))}
+
+                      {gpsPlayerSummary.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                          >
+                            No hay datos GPS disponibles.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                <div className="border-b border-slate-200 p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                    Neuromuscular
+                  </p>
+
+                  <h2 className="mt-2 text-xl font-black text-slate-950">
+                    Control de estado CMJ
+                  </h2>
+
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Comparación del último CMJ del jugador frente a su media
+                    individual.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {neuromuscularPlayerSummary.map((row) => (
+                    <article key={row.playerId} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-black text-slate-950">
+                            {row.playerName}
+                          </p>
+
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            {row.position ?? "Sin posición"} · {row.controls}{" "}
+                            controles
+                          </p>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${getStatusClass(
+                            row.cmjDifference,
+                          )}`}
+                        >
+                          {getStatusLabel(row.cmjDifference)}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Último CMJ
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(row.latestRecord?.cmj_pre, 2)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Media CMJ
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(row.averageCmj, 2)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Diferencia
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatPercent(row.cmjDifference)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Controles
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {row.controls}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+
+                  {neuromuscularPlayerSummary.length === 0 && (
+                    <div className="p-6 text-center text-sm font-bold text-slate-500">
+                      No hay datos neuromusculares disponibles.
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden max-h-[520px] overflow-auto md:block">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Jugador</th>
+                        <th className="px-4 py-3">Posición</th>
+                        <th className="px-4 py-3">Controles</th>
+                        <th className="px-4 py-3">Último CMJ</th>
+                        <th className="px-4 py-3">Media CMJ</th>
+                        <th className="px-4 py-3">Diferencia</th>
+                        <th className="px-4 py-3">Estado</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {neuromuscularPlayerSummary.map((row) => (
+                        <tr
+                          key={row.playerId}
+                          className="border-t border-slate-100"
+                        >
+                          <td className="px-4 py-3 font-black">
+                            {row.playerName}
+                          </td>
+
+                          <td className="px-4 py-3">{row.position ?? "—"}</td>
+
+                          <td className="px-4 py-3">{row.controls}</td>
+
+                          <td className="px-4 py-3">
+                            {formatNumber(row.latestRecord?.cmj_pre, 2)}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {formatNumber(row.averageCmj, 2)}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {formatPercent(row.cmjDifference)}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClass(
+                                row.cmjDifference,
+                              )}`}
+                            >
+                              {getStatusLabel(row.cmjDifference)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {neuromuscularPlayerSummary.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                          >
+                            No hay datos neuromusculares disponibles.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
               <div className="border-b border-slate-200 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                  Neuromuscular
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Tests físicos
                 </p>
 
-                <h2 className="mt-2 text-xl font-black">
-                  Control de estado CMJ
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Ranking medio de tests
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-600">
-                  Comparación del último CMJ del jugador frente a su media
-                  individual.
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Media de puntuaciones por jugador en las capacidades
+                  evaluadas.
                 </p>
               </div>
 
-              <div className="max-h-[520px] overflow-auto">
+              <div className="divide-y divide-slate-100 md:hidden">
+                {testPlayerSummary.map((row, index) => (
+                  <article key={row.playerId} className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+                          Ranking #{index + 1}
+                        </p>
+
+                        <p className="mt-1 break-words text-base font-black text-slate-950">
+                          {row.playerName}
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                          {row.position ?? "Sin posición"} · {row.scores}{" "}
+                          puntuaciones
+                        </p>
+                      </div>
+
+                      <span
+                        className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${getClassificationClass(
+                          row.bestClassification,
+                        )}`}
+                      >
+                        {row.bestClassification ?? "Sin clasificar"}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Media
+                      </p>
+
+                      <p className="mt-1 text-2xl font-black text-slate-950">
+                        {formatNumber(row.averageScore, 1)}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+
+                {testPlayerSummary.length === 0 && (
+                  <div className="p-6 text-center text-sm font-bold text-slate-500">
+                    No hay puntuaciones de tests disponibles.
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden max-h-[520px] overflow-auto md:block">
                 <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
+                      <th className="px-4 py-3">Ranking</th>
                       <th className="px-4 py-3">Jugador</th>
                       <th className="px-4 py-3">Posición</th>
-                      <th className="px-4 py-3">Controles</th>
-                      <th className="px-4 py-3">Último CMJ</th>
-                      <th className="px-4 py-3">Media CMJ</th>
-                      <th className="px-4 py-3">Diferencia</th>
-                      <th className="px-4 py-3">Estado</th>
+                      <th className="px-4 py-3">Puntuaciones</th>
+                      <th className="px-4 py-3">Media</th>
+                      <th className="px-4 py-3">Clasificación</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {neuromuscularPlayerSummary.map((row) => (
-                      <tr key={row.playerId} className="border-t border-slate-100">
+                    {testPlayerSummary.map((row, index) => (
+                      <tr
+                        key={row.playerId}
+                        className="border-t border-slate-100"
+                      >
+                        <td className="px-4 py-3 font-black">{index + 1}</td>
+
                         <td className="px-4 py-3 font-black">
                           {row.playerName}
                         </td>
 
                         <td className="px-4 py-3">{row.position ?? "—"}</td>
 
-                        <td className="px-4 py-3">{row.controls}</td>
+                        <td className="px-4 py-3">{row.scores}</td>
 
-                        <td className="px-4 py-3">
-                          {formatNumber(row.latestRecord?.cmj_pre, 2)}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatNumber(row.averageCmj, 2)}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatPercent(row.cmjDifference)}
+                        <td className="px-4 py-3 font-black">
+                          {formatNumber(row.averageScore, 1)}
                         </td>
 
                         <td className="px-4 py-3">
                           <span
-                            className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClass(
-                              row.cmjDifference,
+                            className={`rounded-full border px-3 py-1 text-xs font-black ${getClassificationClass(
+                              row.bestClassification,
                             )}`}
                           >
-                            {getStatusLabel(row.cmjDifference)}
+                            {row.bestClassification ?? "Sin clasificar"}
                           </span>
                         </td>
                       </tr>
                     ))}
 
-                    {neuromuscularPlayerSummary.length === 0 && (
+                    {testPlayerSummary.length === 0 && (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={6}
                           className="px-4 py-6 text-center text-sm font-bold text-slate-500"
                         >
-                          No hay datos neuromusculares disponibles.
+                          No hay puntuaciones de tests disponibles.
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-            </div>
-          </section>
-
-          <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-            <div className="border-b border-slate-200 p-5">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                Tests físicos
-              </p>
-
-              <h2 className="mt-2 text-xl font-black">
-                Ranking medio de tests
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-600">
-                Media de puntuaciones por jugador en las capacidades evaluadas.
-              </p>
-            </div>
-
-            <div className="max-h-[520px] overflow-auto">
-              <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Ranking</th>
-                    <th className="px-4 py-3">Jugador</th>
-                    <th className="px-4 py-3">Posición</th>
-                    <th className="px-4 py-3">Puntuaciones</th>
-                    <th className="px-4 py-3">Media</th>
-                    <th className="px-4 py-3">Clasificación</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {testPlayerSummary.map((row, index) => (
-                    <tr key={row.playerId} className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">{index + 1}</td>
-
-                      <td className="px-4 py-3 font-black">{row.playerName}</td>
-
-                      <td className="px-4 py-3">{row.position ?? "—"}</td>
-
-                      <td className="px-4 py-3">{row.scores}</td>
-
-                      <td className="px-4 py-3 font-black">
-                        {formatNumber(row.averageScore, 1)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full border px-3 py-1 text-xs font-black ${getClassificationClass(
-                            row.bestClassification,
-                          )}`}
-                        >
-                          {row.bestClassification ?? "Sin clasificar"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {testPlayerSummary.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                      >
-                        No hay puntuaciones de tests disponibles.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
-    </main>
+            </section>
+          </>
+        )}
+      </div>
+    </AppShell>
   );
 }
