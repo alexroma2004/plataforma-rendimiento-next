@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AppShell from "@/components/layout/AppShell";
 import {
   getGpsMatchReferenceRecordsFromSupabase,
   getGpsRecordsBySessionId,
@@ -720,6 +721,30 @@ function getObjectiveBadgeClass(status: ObjectiveStatus) {
   return "bg-emerald-50 text-emerald-700";
 }
 
+function SummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string | number;
+  description?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs font-bold text-slate-500">{description}</p>
+      )}
+    </div>
+  );
+}
+
 function RankingCard({
   title,
   rows,
@@ -745,22 +770,28 @@ function RankingCard({
             key={`${row.id}-${metric}`}
             className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
           >
-            <div className="flex items-center gap-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
                 {index + 1}
               </div>
 
-              <p className="text-sm font-bold text-slate-950">
+              <p className="break-words text-sm font-bold text-slate-950">
                 {row.player_name}
               </p>
             </div>
 
-            <p className="text-sm font-black text-slate-900">
+            <p className="shrink-0 text-sm font-black text-slate-900">
               {formatNumber(Number(row[metric] ?? 0))}
               {suffix}
             </p>
           </div>
         ))}
+
+        {ranking.length === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+            No hay registros disponibles.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1171,1193 +1202,1408 @@ export default function GpsPage() {
   }, [weeklyEvaluation, selectedWeeklyPlayer]);
 
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="GPS"
+      subtitle="Análisis de sesiones GPS guardadas en Supabase. Consulta el resumen de carga externa, rankings individuales, referencia de partido y objetivos por microciclo."
+    >
+      <div className="space-y-8">
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Sesiones guardadas
+              </p>
 
-        <h1 className="mt-3 text-4xl font-black">GPS</h1>
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Seleccionar sesión GPS
+              </h2>
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Análisis de sesiones GPS guardadas en Supabase. Consulta el resumen de
-          carga externa, rankings individuales, referencia de partido y
-          objetivos por microciclo.
-        </p>
-      </section>
-
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Sesiones guardadas
-            </p>
-
-            <h2 className="mt-2 text-2xl font-black">
-              Seleccionar sesión GPS
-            </h2>
-
-            <p className="mt-2 text-sm text-slate-600">
-              Selecciona una sesión para visualizar los registros importados.
-            </p>
-          </div>
-
-          <div className="w-full md:w-[420px]">
-            <label className="text-sm font-bold text-slate-700">
-              Sesión
-              <select
-                value={selectedSessionId}
-                onChange={(event) => setSelectedSessionId(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                disabled={loadingSessions || sessions.length === 0}
-              >
-                {sessions.length === 0 && (
-                  <option value="">No hay sesiones GPS guardadas</option>
-                )}
-
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.session_date} · {session.microcycle ?? "N/A"} ·{" "}
-                    {session.session_name ?? "Sesión sin nombre"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
-          </div>
-        )}
-
-        {loadingSessions && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-            Cargando sesiones GPS...
-          </div>
-        )}
-
-        {!loadingSessions && sessions.length === 0 && (
-          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-            Todavía no hay sesiones GPS guardadas. Primero sube una sesión desde
-            la página Cargar datos.
-          </div>
-        )}
-
-        {selectedSession && (
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Fecha</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.session_date}
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Selecciona una sesión para visualizar los registros importados.
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Microciclo</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.microcycle ?? "N/A"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Nombre</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.session_name ?? "Sesión GPS"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Tipo</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.is_match ? "Partido" : "Entrenamiento"}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {selectedSession && (
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                  Filtro de análisis
-                </p>
-
-                <h3 className="mt-2 text-lg font-black text-slate-950">
-                  Población analizada
-                </h3>
-
-                <p className="mt-2 text-sm text-slate-600">
-                  {selectedPlayerScopeMeta.description}
-                </p>
-              </div>
-
-              <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-                Analizar
+            <div className="w-full md:w-[420px]">
+              <label className="text-sm font-bold text-slate-700">
+                Sesión
                 <select
-                  value={playerScope}
-                  onChange={(event) =>
-                    setPlayerScope(event.target.value as PlayerScope)
-                  }
+                  value={selectedSessionId}
+                  onChange={(event) => setSelectedSessionId(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                  disabled={loadingSessions || sessions.length === 0}
                 >
-                  {playerScopeOptions.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.label}
+                  {sessions.length === 0 && (
+                    <option value="">No hay sesiones GPS guardadas</option>
+                  )}
+
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.session_date} · {session.microcycle ?? "N/A"} ·{" "}
+                      {session.session_name ?? "Sesión sin nombre"}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  Registros totales
-                </p>
-                <p className="mt-1 text-2xl font-black text-slate-950">
-                  {records.length}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  Registros analizados
-                </p>
-                <p className="mt-1 text-2xl font-black text-slate-950">
-                  {filteredRecords.length}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  Registros excluidos
-                </p>
-                <p className="mt-1 text-2xl font-black text-slate-950">
-                  {records.length - filteredRecords.length}
-                </p>
-              </div>
-            </div>
           </div>
-        )}
-      </section>
 
-      {selectedSessionId && (
-  <section className="mt-8">
-    <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow">
-      <div className="grid gap-2 md:grid-cols-4">
-        {gpsViewOptions.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => setGpsView(option.key)}
-            className={`rounded-xl border px-4 py-3 text-left transition ${
-              gpsView === option.key
-                ? "border-slate-950 bg-slate-950 text-white"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            <span className="block text-sm font-black">{option.label}</span>
-            <span
-              className={`mt-1 block text-xs font-bold ${
-                gpsView === option.key ? "text-slate-200" : "text-slate-500"
-              }`}
-            >
-              {option.description}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-
-    {loadingRecords ? (
-            <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-              Cargando registros de la sesión...
+          {error && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {error}
             </div>
-          ) : (
-            <>
-              <div className={gpsView === "session" ? "grid gap-4 md:grid-cols-4" : "hidden"}>
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Jugadores
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {summary.players}
-                  </p>
-                </div>
+          )}
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Distancia total
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatMeters(summary.totalDistance)}
-                  </p>
-                </div>
+          {loadingSessions && (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+              Cargando sesiones GPS...
+            </div>
+          )}
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    HSR total
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatMeters(summary.totalHsr)}
-                  </p>
-                </div>
+          {!loadingSessions && sessions.length === 0 && (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+              Todavía no hay sesiones GPS guardadas. Primero sube una sesión
+              desde la página Cargar datos.
+            </div>
+          )}
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Sprint total
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatMeters(summary.totalSprintDistance)}
-                  </p>
-                </div>
+          {selectedSession && (
+            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Fecha</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.session_date}
+                </p>
               </div>
 
-              <div className={gpsView === "session" ? "mt-4 grid gap-4 md:grid-cols-4" : "hidden"}>
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Distancia media
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatMeters(summary.averageDistance)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Sprints totales
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatNumber(summary.totalSprints)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Aceleraciones
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatNumber(summary.totalAcc)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">
-                    Deceleraciones
-                  </p>
-                  <p className="mt-2 text-3xl font-black">
-                    {formatNumber(summary.totalDec)}
-                  </p>
-                </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Microciclo</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.microcycle ?? "N/A"}
+                </p>
               </div>
 
-              <div className={gpsView === "weekly" ? "mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow" : "hidden"}>
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                      Carga semanal GPS
-                    </p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Nombre</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.session_name ?? "Sesión GPS"}
+                </p>
+              </div>
 
-                    <h2 className="mt-2 text-xl font-black">
-                      Qué le falta por hacer esta semana
-                    </h2>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Tipo</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.is_match ? "Partido" : "Entrenamiento"}
+                </p>
+              </div>
+            </div>
+          )}
 
-                    <p className="mt-2 max-w-3xl text-sm text-slate-600">
-                      La aplicación calcula la carga acumulada de lunes a
-                      domingo y la compara con la referencia de partido del
-                      jugador. Si no existe referencia propia suficiente, usa
-                      referencia posicional o general.
-                    </p>
-                  </div>
+          {selectedSession && (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                    Filtro de análisis
+                  </p>
 
-                  <div className="flex w-full flex-col gap-3 md:w-[260px]">
-                    <label className="text-sm font-bold text-slate-700">
-                      Fecha de la semana
-                      <input
-                        type="date"
-                        value={weeklyDate}
-                        onChange={(event) => setWeeklyDate(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                      />
-                    </label>
+                  <h3 className="mt-2 text-lg font-black text-slate-950">
+                    Población analizada
+                  </h3>
 
-                    {weeklyCsvHref && weeklyEvaluation && (
-                      <a
-                        href={weeklyCsvHref}
-                        download={`gps-semanal-${weeklyEvaluation.weekStart}-${weeklyEvaluation.weekEnd}.csv`}
-                        className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-black text-white shadow hover:bg-slate-800"
-                      >
-                        Descargar CSV semanal
-                      </a>
-                    )}
-
-                    {weeklyHtmlHref && weeklyEvaluation && (
-                      <a
-                        href={weeklyHtmlHref}
-                        download={`informe-gps-semanal-${weeklyEvaluation.weekStart}-${weeklyEvaluation.weekEnd}.html`}
-                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-black text-slate-950 shadow hover:bg-slate-50"
-                      >
-                        Descargar informe HTML
-                      </a>
-                    )}
-                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {selectedPlayerScopeMeta.description}
+                  </p>
                 </div>
 
-                {weeklyError && (
-                  <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-                    {weeklyError}
-                  </div>
-                )}
+                <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                  Analizar
+                  <select
+                    value={playerScope}
+                    onChange={(event) =>
+                      setPlayerScope(event.target.value as PlayerScope)
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                  >
+                    {playerScopeOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-                {loadingWeeklyEvaluation && (
-                  <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-                    Calculando carga semanal GPS...
-                  </div>
-                )}
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <SummaryCard title="Registros totales" value={records.length} />
 
-                {!loadingWeeklyEvaluation && weeklyEvaluation && (
-                  <>
-                    <div className="mt-6 grid gap-4 md:grid-cols-4">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-xs font-bold text-slate-500">
-                          Semana
-                        </p>
-                        <p className="mt-2 text-lg font-black">
-                          {weeklyEvaluation.weekStart} /{" "}
-                          {weeklyEvaluation.weekEnd}
-                        </p>
-                      </div>
+                <SummaryCard
+                  title="Registros analizados"
+                  value={filteredRecords.length}
+                />
 
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-xs font-bold text-slate-500">
-                          Jugadores
-                        </p>
-                        <p className="mt-2 text-3xl font-black">
-                          {weeklySummary.totalPlayers}
-                        </p>
-                      </div>
+                <SummaryCard
+                  title="Registros excluidos"
+                  value={records.length - filteredRecords.length}
+                />
+              </div>
+            </div>
+          )}
+        </section>
 
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                        <p className="text-xs font-bold text-emerald-700">
-                          En objetivo
-                        </p>
-                        <p className="mt-2 text-3xl font-black text-emerald-800">
-                          {weeklySummary.targetPlayers}
-                        </p>
-                      </div>
+        {selectedSessionId && (
+          <section>
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {gpsViewOptions.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setGpsView(option.key)}
+                    className={`rounded-xl border px-4 py-3 text-left transition ${
+                      gpsView === option.key
+                        ? "border-slate-950 bg-slate-950 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="block text-sm font-black">
+                      {option.label}
+                    </span>
+                    <span
+                      className={`mt-1 block text-xs font-bold ${
+                        gpsView === option.key
+                          ? "text-slate-200"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {option.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                        <p className="text-xs font-bold text-amber-700">
-                          Por debajo
-                        </p>
-                        <p className="mt-2 text-3xl font-black text-amber-800">
-                          {weeklySummary.lowPlayers}
-                        </p>
-                      </div>
+            {loadingRecords ? (
+              <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
+                Cargando registros de la sesión...
+              </div>
+            ) : (
+              <>
+                <div
+                  className={
+                    gpsView === "session"
+                      ? "grid grid-cols-2 gap-4 lg:grid-cols-4"
+                      : "hidden"
+                  }
+                >
+                  <SummaryCard title="Jugadores" value={summary.players} />
+
+                  <SummaryCard
+                    title="Distancia total"
+                    value={formatMeters(summary.totalDistance)}
+                  />
+
+                  <SummaryCard
+                    title="HSR total"
+                    value={formatMeters(summary.totalHsr)}
+                  />
+
+                  <SummaryCard
+                    title="Sprint total"
+                    value={formatMeters(summary.totalSprintDistance)}
+                  />
+                </div>
+
+                <div
+                  className={
+                    gpsView === "session"
+                      ? "mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4"
+                      : "hidden"
+                  }
+                >
+                  <SummaryCard
+                    title="Distancia media"
+                    value={formatMeters(summary.averageDistance)}
+                  />
+
+                  <SummaryCard
+                    title="Sprints totales"
+                    value={formatNumber(summary.totalSprints)}
+                  />
+
+                  <SummaryCard
+                    title="Aceleraciones"
+                    value={formatNumber(summary.totalAcc)}
+                  />
+
+                  <SummaryCard
+                    title="Deceleraciones"
+                    value={formatNumber(summary.totalDec)}
+                  />
+                </div>
+
+                <div
+                  className={
+                    gpsView === "session"
+                      ? "mt-8 grid gap-4 xl:grid-cols-3"
+                      : "hidden"
+                  }
+                >
+                  <RankingCard
+                    title="Ranking distancia"
+                    rows={filteredRecords}
+                    metric="total_distance"
+                    suffix=" m"
+                  />
+
+                  <RankingCard
+                    title="Ranking HSR"
+                    rows={filteredRecords}
+                    metric="hsr"
+                    suffix=" m"
+                  />
+
+                  <RankingCard
+                    title="Ranking sprint"
+                    rows={filteredRecords}
+                    metric="distance_vrange6"
+                    suffix=" m"
+                  />
+
+                  <RankingCard
+                    title="Ranking sprints"
+                    rows={filteredRecords}
+                    metric="sprints"
+                  />
+
+                  <RankingCard
+                    title="Ranking aceleraciones"
+                    rows={filteredRecords}
+                    metric="num_acc"
+                  />
+
+                  <RankingCard
+                    title="Ranking deceleraciones"
+                    rows={filteredRecords}
+                    metric="num_dec"
+                  />
+                </div>
+
+                <div
+                  className={
+                    gpsView === "weekly"
+                      ? "rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6"
+                      : "hidden"
+                  }
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                        Carga semanal GPS
+                      </p>
+
+                      <h2 className="mt-2 text-xl font-black text-slate-950">
+                        Qué le falta por hacer esta semana
+                      </h2>
+
+                      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                        La aplicación calcula la carga acumulada de lunes a
+                        domingo y la compara con la referencia de partido del
+                        jugador. Si no existe referencia propia suficiente, usa
+                        referencia posicional o general.
+                      </p>
                     </div>
 
-                    <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                          Prioridades semanales
-                        </p>
+                    <div className="flex w-full flex-col gap-3 md:w-[260px]">
+                      <label className="text-sm font-bold text-slate-700">
+                        Fecha de la semana
+                        <input
+                          type="date"
+                          value={weeklyDate}
+                          onChange={(event) =>
+                            setWeeklyDate(event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                        />
+                      </label>
 
-                        <h3 className="text-lg font-black text-slate-950">
-                          Jugadores que requieren ajuste de carga
-                        </h3>
+                      {weeklyCsvHref && weeklyEvaluation && (
+                        <a
+                          href={weeklyCsvHref}
+                          download={`gps-semanal-${weeklyEvaluation.weekStart}-${weeklyEvaluation.weekEnd}.csv`}
+                          className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-black text-white shadow hover:bg-slate-800"
+                        >
+                          Descargar CSV semanal
+                        </a>
+                      )}
 
-                        <p className="max-w-4xl text-sm text-slate-600">
-                          Esta sección detecta automáticamente qué jugadores
-                          están por debajo del objetivo semanal, cuáles acumulan
-                          exceso de carga y en qué métricas hay que actuar.
-                        </p>
-                      </div>
-
-                      {weeklyInterventionRows.length === 0 ? (
-                        <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                          Todos los jugadores se encuentran dentro del rango
-                          semanal previsto.
-                        </div>
-                      ) : (
-                        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                          {weeklyInterventionRows.map(
-                            ({ evaluation, priority, problemMetrics }) => (
-                              <div
-                                key={evaluation.normalizedName}
-                                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                              >
-                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                  <div>
-                                    <p className="text-base font-black text-slate-950">
-                                      {evaluation.playerName}
-                                    </p>
-
-                                    <p className="mt-1 text-xs font-bold text-slate-500">
-                                      {evaluation.position ?? "Sin posición"} ·
-                                      Referencia: {" "}
-                                      {evaluation.referenceSource}
-                                    </p>
-                                  </div>
-
-                                  <span
-                                    className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyInterventionPriorityClass(
-                                      priority,
-                                    )}`}
-                                  >
-                                    {getWeeklyInterventionPriorityLabel(
-                                      priority,
-                                    )}
-                                  </span>
-                                </div>
-
-                                <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
-                                  {getWeeklyInterventionMessage(
-                                    priority,
-                                    problemMetrics,
-                                  )}
-                                </p>
-
-                                <div className="mt-4 space-y-3">
-                                  {problemMetrics.map((metric) => (
-                                    <div
-                                      key={metric.key}
-                                      className="rounded-lg border border-slate-100 bg-slate-50 p-3"
-                                    >
-                                      <div className="flex items-center justify-between gap-3">
-                                        <p className="text-sm font-black text-slate-900">
-                                          {metric.label}
-                                        </p>
-
-                                        <span
-                                          className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
-                                            metric.status,
-                                          )}`}
-                                        >
-                                          {metric.status}
-                                        </span>
-                                      </div>
-
-                                      <div className="mt-2 flex flex-col gap-1 text-xs font-bold text-slate-600">
-                                        <span>
-                                          Acumulado: {" "}
-                                          {formatMetricValueForUnit(
-                                            metric.currentValue,
-                                            metric.unit,
-                                          )}{" "}
-                                          · {formatPercent(
-                                            metric.percentOfReference,
-                                          )}
-                                        </span>
-
-                                        <span>
-                                          {formatWeeklyActionCell(metric)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ),
-                          )}
-                        </div>
+                      {weeklyHtmlHref && weeklyEvaluation && (
+                        <a
+                          href={weeklyHtmlHref}
+                          download={`informe-gps-semanal-${weeklyEvaluation.weekStart}-${weeklyEvaluation.weekEnd}.html`}
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-black text-slate-950 shadow hover:bg-slate-50"
+                        >
+                          Descargar informe HTML
+                        </a>
                       )}
                     </div>
+                  </div>
 
-                    {selectedWeeklyPlayerEvaluation && (
+                  {weeklyError && (
+                    <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+                      {weeklyError}
+                    </div>
+                  )}
+
+                  {loadingWeeklyEvaluation && (
+                    <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+                      Calculando carga semanal GPS...
+                    </div>
+                  )}
+
+                  {!loadingWeeklyEvaluation && weeklyEvaluation && (
+                    <>
+                      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        <SummaryCard
+                          title="Semana"
+                          value={`${weeklyEvaluation.weekStart} / ${weeklyEvaluation.weekEnd}`}
+                        />
+
+                        <SummaryCard
+                          title="Jugadores"
+                          value={weeklySummary.totalPlayers}
+                        />
+
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                          <p className="text-xs font-bold text-emerald-700">
+                            En objetivo
+                          </p>
+                          <p className="mt-2 text-2xl font-black text-emerald-800 sm:text-3xl">
+                            {weeklySummary.targetPlayers}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                          <p className="text-xs font-bold text-amber-700">
+                            Por debajo
+                          </p>
+                          <p className="mt-2 text-2xl font-black text-amber-800 sm:text-3xl">
+                            {weeklySummary.lowPlayers}
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                              Detalle individual
-                            </p>
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                            Prioridades semanales
+                          </p>
 
-                            <h3 className="mt-2 text-lg font-black text-slate-950">
-                              Lectura semanal por jugador
-                            </h3>
+                          <h3 className="text-lg font-black text-slate-950">
+                            Jugadores que requieren ajuste de carga
+                          </h3>
 
-                            <p className="mt-2 text-sm text-slate-600">
-                              Visualiza qué porcentaje de la referencia semanal
-                              lleva acumulado el jugador y qué le falta por
-                              completar.
-                            </p>
-                          </div>
-
-                          <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-                            Jugador
-                            <select
-                              value={
-                                selectedWeeklyPlayerEvaluation.normalizedName
-                              }
-                              onChange={(event) =>
-                                setSelectedWeeklyPlayer(event.target.value)
-                              }
-                              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                            >
-                              {weeklyPlayerOptions.map((evaluation) => (
-                                <option
-                                  key={evaluation.normalizedName}
-                                  value={evaluation.normalizedName}
-                                >
-                                  {evaluation.playerName}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                          <p className="max-w-4xl text-sm leading-6 text-slate-600">
+                            Esta sección detecta automáticamente qué jugadores
+                            están por debajo del objetivo semanal, cuáles
+                            acumulan exceso de carga y en qué métricas hay que
+                            actuar.
+                          </p>
                         </div>
 
-                        <div className="mt-5 grid gap-4 md:grid-cols-4">
-                          <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <p className="text-xs font-bold text-slate-500">
-                              Jugador
-                            </p>
-                            <p className="mt-2 text-xl font-black text-slate-950">
-                              {selectedWeeklyPlayerEvaluation.playerName}
-                            </p>
-                            <p className="mt-1 text-xs font-bold text-slate-500">
-                              {selectedWeeklyPlayerEvaluation.position ??
-                                "Sin posición"}
-                            </p>
+                        {weeklyInterventionRows.length === 0 ? (
+                          <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                            Todos los jugadores se encuentran dentro del rango
+                            semanal previsto.
                           </div>
-
-                          <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <p className="text-xs font-bold text-slate-500">
-                              Estado general
-                            </p>
-                            <span
-                              className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
-                                selectedWeeklyPlayerEvaluation.generalStatus,
-                              )}`}
-                            >
-                              {selectedWeeklyPlayerEvaluation.generalStatus}
-                            </span>
-                          </div>
-
-                          <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <p className="text-xs font-bold text-slate-500">
-                              Referencia
-                            </p>
-                            <p className="mt-2 text-lg font-black text-slate-950">
-                              {selectedWeeklyPlayerEvaluation.referenceSource}
-                            </p>
-                          </div>
-
-                          <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <p className="text-xs font-bold text-slate-500">
-                              Partidos válidos
-                            </p>
-                            <p className="mt-2 text-3xl font-black text-slate-950">
-                              {
-                                selectedWeeklyPlayerEvaluation.referenceValidMatches
-                              }
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                          {selectedWeeklyPlayerEvaluation.metrics.map(
-                            (metric) => {
-                              const progress = Math.min(
-                                Math.max(metric.percentOfReference, 0),
-                                140,
-                              );
-
-                              return (
+                        ) : (
+                          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                            {weeklyInterventionRows.map(
+                              ({ evaluation, priority, problemMetrics }) => (
                                 <div
-                                  key={metric.key}
-                                  className="rounded-xl border border-slate-200 bg-white p-4"
+                                  key={evaluation.normalizedName}
+                                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p className="text-sm font-black text-slate-950">
-                                        {metric.label}
+                                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                    <div className="min-w-0">
+                                      <p className="break-words text-base font-black text-slate-950">
+                                        {evaluation.playerName}
                                       </p>
+
                                       <p className="mt-1 text-xs font-bold text-slate-500">
-                                        {formatWeeklyMetricCell(metric)}
+                                        {evaluation.position ?? "Sin posición"} ·
+                                        Referencia: {evaluation.referenceSource}
                                       </p>
                                     </div>
 
                                     <span
-                                      className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
-                                        metric.status,
+                                      className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${getWeeklyInterventionPriorityClass(
+                                        priority,
                                       )}`}
                                     >
-                                      {metric.status}
-                                    </span>
-                                  </div>
-
-                                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
-                                    <div
-                                      className="h-full rounded-full bg-slate-950"
-                                      style={{
-                                        width: `${Math.min(progress, 100)}%`,
-                                      }}
-                                    />
-                                  </div>
-
-                                  <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
-                                    <span>0%</span>
-                                    <span>
-                                      {formatPercent(
-                                        metric.percentOfReference,
+                                      {getWeeklyInterventionPriorityLabel(
+                                        priority,
                                       )}
                                     </span>
-                                    <span>100%</span>
                                   </div>
 
-                                  <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
-                                    {formatWeeklyActionCell(metric)}
+                                  <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700">
+                                    {getWeeklyInterventionMessage(
+                                      priority,
+                                      problemMetrics,
+                                    )}
                                   </p>
+
+                                  <div className="mt-4 space-y-3">
+                                    {problemMetrics.map((metric) => (
+                                      <div
+                                        key={metric.key}
+                                        className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+                                      >
+                                        <div className="flex items-center justify-between gap-3">
+                                          <p className="text-sm font-black text-slate-900">
+                                            {metric.label}
+                                          </p>
+
+                                          <span
+                                            className={`rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
+                                              metric.status,
+                                            )}`}
+                                          >
+                                            {metric.status}
+                                          </span>
+                                        </div>
+
+                                        <div className="mt-2 flex flex-col gap-1 text-xs font-bold text-slate-600">
+                                          <span>
+                                            Acumulado:{" "}
+                                            {formatMetricValueForUnit(
+                                              metric.currentValue,
+                                              metric.unit,
+                                            )}{" "}
+                                            ·{" "}
+                                            {formatPercent(
+                                              metric.percentOfReference,
+                                            )}
+                                          </span>
+
+                                          <span>
+                                            {formatWeeklyActionCell(metric)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
+                              ),
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedWeeklyPlayerEvaluation && (
+                        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                                Detalle individual
+                              </p>
+
+                              <h3 className="mt-2 text-lg font-black text-slate-950">
+                                Lectura semanal por jugador
+                              </h3>
+
+                              <p className="mt-2 text-sm leading-6 text-slate-600">
+                                Visualiza qué porcentaje de la referencia
+                                semanal lleva acumulado el jugador y qué le
+                                falta por completar.
+                              </p>
+                            </div>
+
+                            <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                              Jugador
+                              <select
+                                value={
+                                  selectedWeeklyPlayerEvaluation.normalizedName
+                                }
+                                onChange={(event) =>
+                                  setSelectedWeeklyPlayer(event.target.value)
+                                }
+                                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                              >
+                                {weeklyPlayerOptions.map((evaluation) => (
+                                  <option
+                                    key={evaluation.normalizedName}
+                                    value={evaluation.normalizedName}
+                                  >
+                                    {evaluation.playerName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+
+                          <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                            <SummaryCard
+                              title="Jugador"
+                              value={selectedWeeklyPlayerEvaluation.playerName}
+                              description={
+                                selectedWeeklyPlayerEvaluation.position ??
+                                "Sin posición"
+                              }
+                            />
+
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <p className="text-xs font-bold text-slate-500">
+                                Estado general
+                              </p>
+                              <span
+                                className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
+                                  selectedWeeklyPlayerEvaluation.generalStatus,
+                                )}`}
+                              >
+                                {selectedWeeklyPlayerEvaluation.generalStatus}
+                              </span>
+                            </div>
+
+                            <SummaryCard
+                              title="Referencia"
+                              value={
+                                selectedWeeklyPlayerEvaluation.referenceSource
+                              }
+                            />
+
+                            <SummaryCard
+                              title="Partidos válidos"
+                              value={
+                                selectedWeeklyPlayerEvaluation.referenceValidMatches
+                              }
+                            />
+                          </div>
+
+                          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {selectedWeeklyPlayerEvaluation.metrics.map(
+                              (metric) => {
+                                const progress = Math.min(
+                                  Math.max(metric.percentOfReference, 0),
+                                  140,
+                                );
+
+                                return (
+                                  <div
+                                    key={metric.key}
+                                    className="rounded-xl border border-slate-200 bg-white p-4"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="break-words text-sm font-black text-slate-950">
+                                          {metric.label}
+                                        </p>
+                                        <p className="mt-1 text-xs font-bold text-slate-500">
+                                          {formatWeeklyMetricCell(metric)}
+                                        </p>
+                                      </div>
+
+                                      <span
+                                        className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black ${getWeeklyStatusClass(
+                                          metric.status,
+                                        )}`}
+                                      >
+                                        {metric.status}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                                      <div
+                                        className="h-full rounded-full bg-slate-950"
+                                        style={{
+                                          width: `${Math.min(progress, 100)}%`,
+                                        }}
+                                      />
+                                    </div>
+
+                                    <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
+                                      <span>0%</span>
+                                      <span>
+                                        {formatPercent(
+                                          metric.percentOfReference,
+                                        )}
+                                      </span>
+                                      <span>100%</span>
+                                    </div>
+
+                                    <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+                                      {formatWeeklyActionCell(metric)}
+                                    </p>
+                                  </div>
+                                );
+                              },
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {weeklyEvaluation.evaluations.length === 0 ? (
+                        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+                          No hay registros GPS de entrenamiento para la semana
+                          seleccionada.
+                        </div>
+                      ) : (
+                        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+                          <div className="divide-y divide-slate-100 md:hidden">
+                            {weeklyEvaluation.evaluations.map((evaluation) => {
+                              const totalDistance = getWeeklyMetric(
+                                evaluation,
+                                "total_distance",
                               );
-                            },
-                          )}
-                        </div>
-                      </div>
-                    )}
+                              const hsr = getWeeklyMetric(evaluation, "hsr");
+                              const sprintDistance = getWeeklyMetric(
+                                evaluation,
+                                "distance_vrange6",
+                              );
+                              const sprints = getWeeklyMetric(
+                                evaluation,
+                                "sprints",
+                              );
+                              const acc = getWeeklyMetric(evaluation, "num_acc");
+                              const dec = getWeeklyMetric(evaluation, "num_dec");
 
-                    {weeklyEvaluation.evaluations.length === 0 ? (
-                      <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                        No hay registros GPS de entrenamiento para la semana
-                        seleccionada.
-                      </div>
-                    ) : (
-                      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-                        <div className="max-h-[520px] overflow-auto">
-                          <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
-                            <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                              <tr>
-                                <th className="px-4 py-3">Jugador</th>
-                                <th className="px-4 py-3">Estado</th>
-                                <th className="px-4 py-3">Distancia</th>
-                                <th className="px-4 py-3">HSR</th>
-                                <th className="px-4 py-3">Sprint</th>
-                                <th className="px-4 py-3">Sprints</th>
-                                <th className="px-4 py-3">ACC</th>
-                                <th className="px-4 py-3">DEC</th>
-                                <th className="px-4 py-3">Referencia</th>
-                              </tr>
-                            </thead>
+                              return (
+                                <article
+                                  key={evaluation.normalizedName}
+                                  className="bg-white p-5"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="break-words text-base font-black text-slate-950">
+                                        {evaluation.playerName}
+                                      </p>
+                                      <p className="mt-1 text-xs font-bold text-slate-500">
+                                        {evaluation.position ?? "Sin posición"} ·{" "}
+                                        {evaluation.referenceSource}
+                                      </p>
+                                    </div>
 
-                            <tbody>
-                              {weeklyEvaluation.evaluations.map(
-                                (evaluation) => {
-                                  const totalDistance = getWeeklyMetric(
-                                    evaluation,
-                                    "total_distance",
-                                  );
-                                  const hsr = getWeeklyMetric(
-                                    evaluation,
-                                    "hsr",
-                                  );
-                                  const sprintDistance = getWeeklyMetric(
-                                    evaluation,
-                                    "distance_vrange6",
-                                  );
-                                  const sprints = getWeeklyMetric(
-                                    evaluation,
-                                    "sprints",
-                                  );
-                                  const acc = getWeeklyMetric(
-                                    evaluation,
-                                    "num_acc",
-                                  );
-                                  const dec = getWeeklyMetric(
-                                    evaluation,
-                                    "num_dec",
-                                  );
-
-                                  return (
-                                    <tr
-                                      key={evaluation.normalizedName}
-                                      className="border-t border-slate-100"
+                                    <span
+                                      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
+                                        evaluation.generalStatus,
+                                      )}`}
                                     >
-                                      <td className="px-4 py-3">
-                                        <p className="font-black text-slate-950">
-                                          {evaluation.playerName}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          {evaluation.position ??
-                                            "Sin posición"}
-                                        </p>
-                                      </td>
+                                      {evaluation.generalStatus}
+                                    </span>
+                                  </div>
 
-                                      <td className="px-4 py-3">
-                                        <span
-                                          className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
-                                            evaluation.generalStatus,
-                                          )}`}
-                                        >
-                                          {evaluation.generalStatus}
-                                        </span>
-                                      </td>
-
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
+                                  <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                                    {[
+                                      ["Distancia", totalDistance],
+                                      ["HSR", hsr],
+                                      ["Sprint", sprintDistance],
+                                      ["Sprints", sprints],
+                                      ["ACC", acc],
+                                      ["DEC", dec],
+                                    ].map(([label, metric]) => (
+                                      <div
+                                        key={String(label)}
+                                        className="rounded-xl bg-white p-3"
+                                      >
+                                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                          {String(label)}
+                                        </p>
+                                        <p className="mt-1 font-black text-slate-950">
                                           {formatWeeklyMetricCell(
-                                            totalDistance,
+                                            metric as GpsWeeklyMetricEvaluation | null,
                                           )}
                                         </p>
                                         <p className="mt-1 text-xs font-bold text-slate-500">
                                           {formatWeeklyActionCell(
-                                            totalDistance,
+                                            metric as GpsWeeklyMetricEvaluation | null,
                                           )}
                                         </p>
-                                      </td>
+                                      </div>
+                                    ))}
 
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
-                                          {formatWeeklyMetricCell(hsr)}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          {formatWeeklyActionCell(hsr)}
-                                        </p>
-                                      </td>
+                                    <div className="rounded-xl bg-white p-3">
+                                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                        Partidos válidos
+                                      </p>
+                                      <p className="mt-1 font-black text-slate-950">
+                                        {evaluation.referenceValidMatches}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
 
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
-                                          {formatWeeklyMetricCell(
-                                            sprintDistance,
-                                          )}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          {formatWeeklyActionCell(
-                                            sprintDistance,
-                                          )}
-                                        </p>
-                                      </td>
+                          <div className="hidden max-h-[520px] overflow-auto md:block">
+                            <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
+                              <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                                <tr>
+                                  <th className="px-4 py-3">Jugador</th>
+                                  <th className="px-4 py-3">Estado</th>
+                                  <th className="px-4 py-3">Distancia</th>
+                                  <th className="px-4 py-3">HSR</th>
+                                  <th className="px-4 py-3">Sprint</th>
+                                  <th className="px-4 py-3">Sprints</th>
+                                  <th className="px-4 py-3">ACC</th>
+                                  <th className="px-4 py-3">DEC</th>
+                                  <th className="px-4 py-3">Referencia</th>
+                                </tr>
+                              </thead>
 
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
-                                          {formatWeeklyMetricCell(sprints)}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          {formatWeeklyActionCell(sprints)}
-                                        </p>
-                                      </td>
+                              <tbody>
+                                {weeklyEvaluation.evaluations.map(
+                                  (evaluation) => {
+                                    const totalDistance = getWeeklyMetric(
+                                      evaluation,
+                                      "total_distance",
+                                    );
+                                    const hsr = getWeeklyMetric(
+                                      evaluation,
+                                      "hsr",
+                                    );
+                                    const sprintDistance = getWeeklyMetric(
+                                      evaluation,
+                                      "distance_vrange6",
+                                    );
+                                    const sprints = getWeeklyMetric(
+                                      evaluation,
+                                      "sprints",
+                                    );
+                                    const acc = getWeeklyMetric(
+                                      evaluation,
+                                      "num_acc",
+                                    );
+                                    const dec = getWeeklyMetric(
+                                      evaluation,
+                                      "num_dec",
+                                    );
 
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
-                                          {formatWeeklyMetricCell(acc)}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          {formatWeeklyActionCell(acc)}
-                                        </p>
-                                      </td>
+                                    return (
+                                      <tr
+                                        key={evaluation.normalizedName}
+                                        className="border-t border-slate-100"
+                                      >
+                                        <td className="px-4 py-3">
+                                          <p className="font-black text-slate-950">
+                                            {evaluation.playerName}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {evaluation.position ??
+                                              "Sin posición"}
+                                          </p>
+                                        </td>
 
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
-                                          {formatWeeklyMetricCell(dec)}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          {formatWeeklyActionCell(dec)}
-                                        </p>
-                                      </td>
+                                        <td className="px-4 py-3">
+                                          <span
+                                            className={`rounded-full border px-3 py-1 text-xs font-black ${getWeeklyStatusClass(
+                                              evaluation.generalStatus,
+                                            )}`}
+                                          >
+                                            {evaluation.generalStatus}
+                                          </span>
+                                        </td>
 
-                                      <td className="px-4 py-3">
-                                        <p className="font-black">
-                                          {evaluation.referenceSource}
-                                        </p>
-                                        <p className="mt-1 text-xs font-bold text-slate-500">
-                                          Partidos válidos: {" "}
-                                          {
-                                            evaluation.referenceValidMatches
-                                          }
-                                        </p>
-                                      </td>
-                                    </tr>
-                                  );
-                                },
-                              )}
-                            </tbody>
-                          </table>
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {formatWeeklyMetricCell(
+                                              totalDistance,
+                                            )}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {formatWeeklyActionCell(
+                                              totalDistance,
+                                            )}
+                                          </p>
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {formatWeeklyMetricCell(hsr)}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {formatWeeklyActionCell(hsr)}
+                                          </p>
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {formatWeeklyMetricCell(
+                                              sprintDistance,
+                                            )}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {formatWeeklyActionCell(
+                                              sprintDistance,
+                                            )}
+                                          </p>
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {formatWeeklyMetricCell(sprints)}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {formatWeeklyActionCell(sprints)}
+                                          </p>
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {formatWeeklyMetricCell(acc)}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {formatWeeklyActionCell(acc)}
+                                          </p>
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {formatWeeklyMetricCell(dec)}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            {formatWeeklyActionCell(dec)}
+                                          </p>
+                                        </td>
+
+                                        <td className="px-4 py-3">
+                                          <p className="font-black">
+                                            {evaluation.referenceSource}
+                                          </p>
+                                          <p className="mt-1 text-xs font-bold text-slate-500">
+                                            Partidos válidos:{" "}
+                                            {
+                                              evaluation.referenceValidMatches
+                                            }
+                                          </p>
+                                        </td>
+                                      </tr>
+                                    );
+                                  },
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div
+                  className={
+                    gpsView === "objectives"
+                      ? "rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6"
+                      : "hidden"
+                  }
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                        Objetivos GPS
+                      </p>
+
+                      <h2 className="mt-2 text-xl font-black text-slate-950">
+                        Referencia de partido y objetivo del microciclo
+                      </h2>
+
+                      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+                        Para cada métrica se compara la carga realizada con una
+                        referencia media de partido y con el rango objetivo
+                        estimado para el día de microciclo seleccionado.
+                      </p>
+
+                      <p className="mt-2 text-sm font-bold text-slate-700">
+                        {selectedObjective.label}:{" "}
+                        {selectedObjective.description}
+                      </p>
+
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                          Origen de la referencia de partido
+                        </p>
+
+                        <p className="mt-2 text-sm font-bold text-slate-800">
+                          {loadingMatchReference
+                            ? "Cargando referencia de partido..."
+                            : matchReference.source === "dynamic"
+                              ? "Referencia propia calculada desde partidos guardados"
+                              : "Referencia fija provisional"}
+                        </p>
+
+                        <p className="mt-1 text-sm leading-6 text-slate-600">
+                          {matchReference.reason}
+                        </p>
+
+                        <p className="mt-2 text-xs font-bold text-slate-500">
+                          Partidos válidos: {matchReference.validMatchSessions}/
+                          {matchReference.minimumMatchesRequired} · Registros
+                          válidos: {matchReference.validRecords}
+                        </p>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
+                    </div>
 
-              <div className={gpsView === "objectives" ? "mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow" : "hidden"}>
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                      Objetivos GPS
-                    </p>
+                    <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                      Métrica
+                      <select
+                        value={selectedMetric}
+                        onChange={(event) =>
+                          setSelectedMetric(event.target.value as GpsMetricKey)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                      >
+                        {gpsMetricOptions.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
 
-                    <h2 className="mt-2 text-xl font-black">
-                      Referencia de partido y objetivo del microciclo
-                    </h2>
+                  <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    <SummaryCard
+                      title="Referencia partido"
+                      value={formatMetricValue(
+                        selectedMetricReference,
+                        selectedMetric,
+                      )}
+                    />
 
-                    <p className="mt-2 max-w-4xl text-sm text-slate-600">
-                      Para cada métrica se compara la carga realizada con una
-                      referencia media de partido y con el rango objetivo
-                      estimado para el día de microciclo seleccionado.
-                    </p>
+                    <SummaryCard
+                      title={`Objetivo ${selectedObjective.label}`}
+                      value={formatPercent(
+                        selectedMetricObjective.targetPercent,
+                      )}
+                    />
 
-                    <p className="mt-2 text-sm font-bold text-slate-700">
-                      {selectedObjective.label}: {selectedObjective.description}
-                    </p>
+                    <SummaryCard
+                      title="Rango adecuado"
+                      value={`${formatPercent(
+                        selectedMetricObjective.minPercent,
+                      )} - ${formatPercent(selectedMetricObjective.maxPercent)}`}
+                    />
 
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Origen de la referencia de partido
+                    <SummaryCard
+                      title="Jugadores en rango"
+                      value={`${objectiveSummary.ok}/${filteredRecords.length}`}
+                    />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-4">
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-xs font-bold text-amber-700">
+                        Por debajo
                       </p>
-
-                      <p className="mt-2 text-sm font-bold text-slate-800">
-                        {loadingMatchReference
-                          ? "Cargando referencia de partido..."
-                          : matchReference.source === "dynamic"
-                            ? "Referencia propia calculada desde partidos guardados"
-                            : "Referencia fija provisional"}
+                      <p className="mt-1 text-2xl font-black text-amber-700">
+                        {objectiveSummary.low}
                       </p>
+                    </div>
 
-                      <p className="mt-1 text-sm text-slate-600">
-                        {matchReference.reason}
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <p className="text-xs font-bold text-emerald-700">
+                        Adecuado
                       </p>
+                      <p className="mt-1 text-2xl font-black text-emerald-700">
+                        {objectiveSummary.ok}
+                      </p>
+                    </div>
 
-                      <p className="mt-2 text-xs font-bold text-slate-500">
-                        Partidos válidos: {matchReference.validMatchSessions}/
-                        {matchReference.minimumMatchesRequired} · Registros
-                        válidos: {matchReference.validRecords}
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                      <p className="text-xs font-bold text-red-700">
+                        Por encima
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-red-700">
+                        {objectiveSummary.high}
                       </p>
                     </div>
                   </div>
 
-                  <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-                    Métrica
-                    <select
-                      value={selectedMetric}
-                      onChange={(event) =>
-                        setSelectedMetric(event.target.value as GpsMetricKey)
-                      }
-                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                    >
-                      {gpsMetricOptions.map((option) => (
-                        <option key={option.key} value={option.key}>
-                          {option.label}
-                        </option>
+                  <div className="mt-6 h-[340px] w-full sm:h-[420px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={chartData}
+                        layout="vertical"
+                        margin={{
+                          top: 10,
+                          right: 12,
+                          left: 40,
+                          bottom: 10,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) =>
+                            Math.round(Number(value)).toLocaleString("es-ES")
+                          }
+                        />
+
+                        <YAxis
+                          type="category"
+                          dataKey="jugador"
+                          width={100}
+                          tick={{
+                            fontSize: 11,
+                          }}
+                        />
+
+                        <Tooltip
+                          formatter={(value) => {
+                            const number = Math.round(
+                              Number(value ?? 0),
+                            ).toLocaleString("es-ES");
+
+                            return [
+                              `${number}${selectedMetricMeta.unit}`,
+                              selectedMetricMeta.label,
+                            ];
+                          }}
+                        />
+
+                        <ReferenceLine
+                          x={selectedMetricObjectiveValue}
+                          strokeDasharray="4 4"
+                          label="Objetivo"
+                        />
+
+                        <Bar dataKey="valor" radius={[0, 8, 8, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+                    <div className="border-b border-slate-200 bg-slate-50 p-4">
+                      <h3 className="text-lg font-black text-slate-950">
+                        Cumplimiento individual del objetivo
+                      </h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        Comparación de cada jugador con el objetivo de{" "}
+                        {selectedMetricMeta.label} para{" "}
+                        {selectedObjective.label}.
+                      </p>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 md:hidden">
+                      {objectiveRows.map((row) => (
+                        <article key={row.id} className="bg-white p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="break-words text-base font-black text-slate-950">
+                                {row.playerName}
+                              </p>
+                              <p className="mt-1 text-xs font-bold text-slate-500">
+                                {selectedMetricMeta.label}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${getObjectiveBadgeClass(
+                                row.status,
+                              )}`}
+                            >
+                              {row.label}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                Realizado
+                              </p>
+                              <p className="mt-1 font-black text-slate-950">
+                                {formatMetricValue(row.value, selectedMetric)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                % partido
+                              </p>
+                              <p className="mt-1 font-black text-slate-950">
+                                {formatPercent(row.percent)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                Objetivo
+                              </p>
+                              <p className="mt-1 font-black text-slate-950">
+                                {formatPercent(row.targetPercent)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                                Diferencia
+                              </p>
+                              <p className="mt-1 font-black text-slate-950">
+                                {formatPercent(row.differenceToTarget)}
+                              </p>
+                            </div>
+                          </div>
+                        </article>
                       ))}
-                    </select>
-                  </label>
-                </div>
+                    </div>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-bold text-slate-500">
-                      Referencia partido
-                    </p>
-                    <p className="mt-2 text-2xl font-black">
-                      {formatMetricValue(
-                        selectedMetricReference,
-                        selectedMetric,
-                      )}
-                    </p>
-                  </div>
+                    <div className="hidden max-h-[420px] overflow-auto md:block">
+                      <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+                        <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3">Jugador</th>
+                            <th className="px-4 py-3">Realizado</th>
+                            <th className="px-4 py-3">% partido</th>
+                            <th className="px-4 py-3">Objetivo</th>
+                            <th className="px-4 py-3">Diferencia</th>
+                            <th className="px-4 py-3">Estado</th>
+                          </tr>
+                        </thead>
 
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-bold text-slate-500">
-                      Objetivo {selectedObjective.label}
-                    </p>
-                    <p className="mt-2 text-2xl font-black">
-                      {formatPercent(selectedMetricObjective.targetPercent)}
-                    </p>
-                  </div>
+                        <tbody>
+                          {objectiveRows.map((row) => (
+                            <tr
+                              key={row.id}
+                              className="border-t border-slate-100"
+                            >
+                              <td className="px-4 py-3 font-black">
+                                {row.playerName}
+                              </td>
 
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-bold text-slate-500">
-                      Rango adecuado
-                    </p>
-                    <p className="mt-2 text-2xl font-black">
-                      {formatPercent(selectedMetricObjective.minPercent)} -{" "}
-                      {formatPercent(selectedMetricObjective.maxPercent)}
-                    </p>
-                  </div>
+                              <td className="px-4 py-3">
+                                {formatMetricValue(row.value, selectedMetric)}
+                              </td>
 
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-bold text-slate-500">
-                      Jugadores en rango
-                    </p>
-                    <p className="mt-2 text-2xl font-black">
-                      {objectiveSummary.ok}/{filteredRecords.length}
-                    </p>
-                  </div>
-                </div>
+                              <td className="px-4 py-3">
+                                {formatPercent(row.percent)}
+                              </td>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-3">
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-xs font-bold text-amber-700">
-                      Por debajo
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-amber-700">
-                      {objectiveSummary.low}
-                    </p>
-                  </div>
+                              <td className="px-4 py-3">
+                                {formatPercent(row.targetPercent)}
+                              </td>
 
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                    <p className="text-xs font-bold text-emerald-700">
-                      Adecuado
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-emerald-700">
-                      {objectiveSummary.ok}
-                    </p>
-                  </div>
+                              <td className="px-4 py-3">
+                                {formatPercent(row.differenceToTarget)}
+                              </td>
 
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                    <p className="text-xs font-bold text-red-700">
-                      Por encima
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-red-700">
-                      {objectiveSummary.high}
-                    </p>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-black ${getObjectiveBadgeClass(
+                                    row.status,
+                                  )}`}
+                                >
+                                  {row.label}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-6 h-[420px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      layout="vertical"
-                      margin={{
-                        top: 10,
-                        right: 30,
-                        left: 80,
-                        bottom: 10,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-
-                      <XAxis
-                        type="number"
-                        tickFormatter={(value) =>
-                          Math.round(Number(value)).toLocaleString("es-ES")
-                        }
-                      />
-
-                      <YAxis
-                        type="category"
-                        dataKey="jugador"
-                        width={120}
-                        tick={{
-                          fontSize: 12,
-                        }}
-                      />
-
-                      <Tooltip
-                        formatter={(value) => {
-                          const number = Math.round(
-                            Number(value ?? 0),
-                          ).toLocaleString("es-ES");
-
-                          return [
-                            `${number}${selectedMetricMeta.unit}`,
-                            selectedMetricMeta.label,
-                          ];
-                        }}
-                      />
-
-                      <ReferenceLine
-                        x={selectedMetricObjectiveValue}
-                        strokeDasharray="4 4"
-                        label="Objetivo"
-                      />
-
-                      <Bar dataKey="valor" radius={[0, 8, 8, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-                  <div className="border-b border-slate-200 bg-slate-50 p-4">
-                    <h3 className="text-lg font-black">
-                      Cumplimiento individual del objetivo
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Comparación de cada jugador con el objetivo de{" "}
-                      {selectedMetricMeta.label} para {selectedObjective.label}.
+                <div
+                  className={
+                    gpsView === "records"
+                      ? "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow"
+                      : "hidden"
+                  }
+                >
+                  <div className="border-b border-slate-200 p-5">
+                    <h2 className="text-xl font-black text-slate-950">
+                      Registros por jugador
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      Tabla completa de la sesión GPS seleccionada.
                     </p>
                   </div>
 
-                  <div className="max-h-[420px] overflow-auto">
-                    <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {filteredRecords.map((row) => (
+                      <article key={row.id} className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="break-words text-base font-black text-slate-950">
+                              {row.player_name}
+                            </p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {row.position ?? "Sin posición"} ·{" "}
+                              {row.is_goalkeeper ? "Portero" : "Campo"}
+                            </p>
+                          </div>
+
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                            {row.gps_status ?? "OK"}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Min
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {row.time_played
+                                ? formatNumber(row.time_played)
+                                : "—"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Distancia
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatMeters(row.total_distance)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              HSR
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatMeters(row.hsr)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Sprint
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatMeters(row.distance_vrange6)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Sprints
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatNumber(row.sprints)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              ACC
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatNumber(row.num_acc)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              DEC
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatNumber(row.num_dec)}
+                            </p>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+
+                    {filteredRecords.length === 0 && (
+                      <div className="p-6 text-center text-sm font-bold text-slate-500">
+                        No hay registros GPS para esta selección.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="hidden max-h-[560px] overflow-auto md:block">
+                    <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
                       <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Jugador</th>
-                          <th className="px-4 py-3">Realizado</th>
-                          <th className="px-4 py-3">% partido</th>
-                          <th className="px-4 py-3">Objetivo</th>
-                          <th className="px-4 py-3">Diferencia</th>
+                          <th className="px-4 py-3">Posición</th>
+                          <th className="px-4 py-3">Portero</th>
+                          <th className="px-4 py-3">Min</th>
+                          <th className="px-4 py-3">Distancia</th>
+                          <th className="px-4 py-3">HSR</th>
+                          <th className="px-4 py-3">Sprint</th>
+                          <th className="px-4 py-3">Sprints</th>
+                          <th className="px-4 py-3">ACC</th>
+                          <th className="px-4 py-3">DEC</th>
                           <th className="px-4 py-3">Estado</th>
                         </tr>
                       </thead>
 
                       <tbody>
-                        {objectiveRows.map((row) => (
+                        {filteredRecords.map((row) => (
                           <tr key={row.id} className="border-t border-slate-100">
                             <td className="px-4 py-3 font-black">
-                              {row.playerName}
+                              {row.player_name}
+                            </td>
+
+                            <td className="px-4 py-3">{row.position ?? "—"}</td>
+
+                            <td className="px-4 py-3">
+                              {row.is_goalkeeper ? "Sí" : "No"}
                             </td>
 
                             <td className="px-4 py-3">
-                              {formatMetricValue(row.value, selectedMetric)}
+                              {row.time_played
+                                ? formatNumber(row.time_played)
+                                : "—"}
                             </td>
 
                             <td className="px-4 py-3">
-                              {formatPercent(row.percent)}
+                              {formatMeters(row.total_distance)}
                             </td>
 
                             <td className="px-4 py-3">
-                              {formatPercent(row.targetPercent)}
+                              {formatMeters(row.hsr)}
                             </td>
 
                             <td className="px-4 py-3">
-                              {formatPercent(row.differenceToTarget)}
+                              {formatMeters(row.distance_vrange6)}
                             </td>
 
                             <td className="px-4 py-3">
-                              <span
-                                className={`rounded-full px-3 py-1 text-xs font-black ${getObjectiveBadgeClass(
-                                  row.status,
-                                )}`}
-                              >
-                                {row.label}
+                              {formatNumber(row.sprints)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatNumber(row.num_acc)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatNumber(row.num_dec)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                                {row.gps_status ?? "OK"}
                               </span>
                             </td>
                           </tr>
                         ))}
+
+                        {filteredRecords.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={11}
+                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                            >
+                              No hay registros GPS para esta selección.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              </div>
-
-              <div className={gpsView === "session" ? "mt-8 grid gap-4 xl:grid-cols-3" : "hidden"}>
-                <RankingCard
-                  title="Ranking distancia"
-                  rows={filteredRecords}
-                  metric="total_distance"
-                  suffix=" m"
-                />
-
-                <RankingCard
-                  title="Ranking HSR"
-                  rows={filteredRecords}
-                  metric="hsr"
-                  suffix=" m"
-                />
-
-                <RankingCard
-                  title="Ranking sprint"
-                  rows={filteredRecords}
-                  metric="distance_vrange6"
-                  suffix=" m"
-                />
-
-                <RankingCard
-                  title="Ranking sprints"
-                  rows={filteredRecords}
-                  metric="sprints"
-                />
-
-                <RankingCard
-                  title="Ranking aceleraciones"
-                  rows={filteredRecords}
-                  metric="num_acc"
-                />
-
-                <RankingCard
-                  title="Ranking deceleraciones"
-                  rows={filteredRecords}
-                  metric="num_dec"
-                />
-              </div>
-
-              <div className={gpsView === "records" ? "mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow" : "hidden"}>
-                <div className="border-b border-slate-200 p-5">
-                  <h2 className="text-xl font-black">Registros por jugador</h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Tabla completa de la sesión GPS seleccionada.
-                  </p>
-                </div>
-
-                <div className="max-h-[560px] overflow-auto">
-                  <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
-                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Jugador</th>
-                        <th className="px-4 py-3">Posición</th>
-                        <th className="px-4 py-3">Portero</th>
-                        <th className="px-4 py-3">Min</th>
-                        <th className="px-4 py-3">Distancia</th>
-                        <th className="px-4 py-3">HSR</th>
-                        <th className="px-4 py-3">Sprint</th>
-                        <th className="px-4 py-3">Sprints</th>
-                        <th className="px-4 py-3">ACC</th>
-                        <th className="px-4 py-3">DEC</th>
-                        <th className="px-4 py-3">Estado</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {filteredRecords.map((row) => (
-                        <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-4 py-3 font-black">
-                            {row.player_name}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {row.position ?? "—"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {row.is_goalkeeper ? "Sí" : "No"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {row.time_played
-                              ? formatNumber(row.time_played)
-                              : "—"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {formatMeters(row.total_distance)}
-                          </td>
-
-                          <td className="px-4 py-3">{formatMeters(row.hsr)}</td>
-
-                          <td className="px-4 py-3">
-                            {formatMeters(row.distance_vrange6)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {formatNumber(row.sprints)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {formatNumber(row.num_acc)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {formatNumber(row.num_dec)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                              {row.gps_status ?? "OK"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-        </section>
-      )}
-    </main>
+              </>
+            )}
+          </section>
+        )}
+      </div>
+    </AppShell>
   );
 }
