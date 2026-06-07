@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AppShell from "@/components/layout/AppShell";
 import {
   Bar,
   BarChart,
@@ -272,6 +273,38 @@ function getLatestPointByPlayer(points: BaseProfilePoint[]) {
   );
 }
 
+function SummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string | number;
+  description?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs font-bold text-slate-500">{description}</p>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ children }: { children: string }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+      {children}
+    </div>
+  );
+}
+
 export default function PerfilFrPage() {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [records, setRecords] = useState<NeuromuscularRecordRow[]>([]);
@@ -467,259 +500,372 @@ export default function PerfilFrPage() {
   }, [selectedPlayer, selectedPlayerPoints]);
 
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="Perfil F-R"
+      subtitle="Análisis del perfil neuromuscular a partir de CMJ, RSI modificado, VMP en sentadilla, carga utilizada y percepción subjetiva de esfuerzo."
+    >
+      <div className="space-y-8">
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Filtros
+              </p>
 
-        <h1 className="mt-3 text-4xl font-black">Perfil F-R</h1>
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Seleccionar análisis
+              </h2>
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Análisis del perfil neuromuscular a partir de CMJ, RSI modificado,
-          VMP en sentadilla, carga utilizada y percepción subjetiva de esfuerzo.
-        </p>
-      </section>
-
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Filtros
-            </p>
-
-            <h2 className="mt-2 text-2xl font-black">
-              Seleccionar análisis
-            </h2>
-
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              Puedes analizar el último perfil disponible de todo el equipo o
-              revisar la evolución individual de un jugador concreto.
-            </p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                Puedes analizar el último perfil disponible de todo el equipo o
+                revisar la evolución individual de un jugador concreto.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-5">
-          <label className="text-sm font-bold text-slate-700 md:col-span-2">
-            Jugador
-            <select
-              value={selectedPlayer}
-              onChange={(event) => setSelectedPlayer(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-            >
-              <option value="all">Todos los jugadores</option>
+          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-5">
+            <label className="text-sm font-bold text-slate-700 lg:col-span-2">
+              Jugador
+              <select
+                value={selectedPlayer}
+                onChange={(event) => setSelectedPlayer(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="all">Todos los jugadores</option>
 
-              {players.map((player) => (
-                <option key={player.id} value={player.normalized_name}>
-                  {player.name} {player.position ? `· ${player.position}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+                {players.map((player) => (
+                  <option key={player.id} value={player.normalized_name}>
+                    {player.name} {player.position ? `· ${player.position}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="text-sm font-bold text-slate-700">
-            Microciclo
-            <select
-              value={selectedMicrocycle}
-              onChange={(event) => setSelectedMicrocycle(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-            >
-              <option value="all">Todos</option>
+            <label className="text-sm font-bold text-slate-700">
+              Microciclo
+              <select
+                value={selectedMicrocycle}
+                onChange={(event) => setSelectedMicrocycle(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="all">Todos</option>
 
-              {microcycleOptions.map((microcycle) => (
-                <option key={microcycle} value={microcycle}>
-                  {microcycle}
-                </option>
-              ))}
-            </select>
-          </label>
+                {microcycleOptions.map((microcycle) => (
+                  <option key={microcycle} value={microcycle}>
+                    {microcycle}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="text-sm font-bold text-slate-700">
-            Desde
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(event) => setFromDate(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-            />
-          </label>
+            <label className="text-sm font-bold text-slate-700">
+              Desde
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </label>
 
-          <label className="text-sm font-bold text-slate-700">
-            Hasta
-            <input
-              type="date"
-              value={toDate}
-              onChange={(event) => setToDate(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-            />
-          </label>
-        </div>
-
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
+            <label className="text-sm font-bold text-slate-700">
+              Hasta
+              <input
+                type="date"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </label>
           </div>
-        )}
 
-        {loading && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-            Cargando perfil F-R...
-          </div>
-        )}
-      </section>
-
-      {!loading && !error && (
-        <>
-          <section className="mt-8 grid gap-4 md:grid-cols-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">Jugadores</p>
-              <p className="mt-2 text-3xl font-black">{summary.players}</p>
+          {error && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {error}
             </div>
+          )}
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">Registros</p>
-              <p className="mt-2 text-3xl font-black">{summary.records}</p>
+          {loading && (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+              Cargando perfil F-R...
             </div>
+          )}
+        </section>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">CMJ medio</p>
-              <p className="mt-2 text-3xl font-black">
-                {formatNumber(summary.cmj, 1, " cm")}
-              </p>
-            </div>
+        {!loading && !error && (
+          <>
+            <section className="grid grid-cols-2 gap-4 lg:grid-cols-6">
+              <SummaryCard title="Jugadores" value={summary.players} />
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                RSI mod medio
-              </p>
-              <p className="mt-2 text-3xl font-black">
-                {formatNumber(summary.rsimod, 2)}
-              </p>
-            </div>
+              <SummaryCard title="Registros" value={summary.records} />
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">VMP media</p>
-              <p className="mt-2 text-3xl font-black">
-                {formatNumber(summary.vmp, 2, " m/s")}
-              </p>
-            </div>
+              <SummaryCard
+                title="CMJ medio"
+                value={formatNumber(summary.cmj, 1, " cm")}
+              />
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">RPE medio</p>
-              <p className="mt-2 text-3xl font-black">
-                {formatNumber(summary.rpe, 1)}
-              </p>
-            </div>
-          </section>
+              <SummaryCard
+                title="RSI mod medio"
+                value={formatNumber(summary.rsimod, 2)}
+              />
 
-          <section className="mt-8 grid gap-6 xl:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow xl:col-span-2">
-              <div className="mb-5">
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                  Mapa de perfil
-                </p>
+              <SummaryCard
+                title="VMP media"
+                value={formatNumber(summary.vmp, 2, " m/s")}
+              />
 
-                <h2 className="mt-2 text-xl font-black">
-                  Relación RSI modificado - VMP
-                </h2>
+              <SummaryCard
+                title="RPE medio"
+                value={formatNumber(summary.rpe, 1)}
+              />
+            </section>
 
-                <p className="mt-2 text-sm text-slate-600">
-                  El gráfico cruza la capacidad reactiva con la velocidad de
-                  ejecución. Si seleccionas un jugador, se muestra su evolución
-                  temporal.
-                </p>
+            <section className="grid gap-6 xl:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6 xl:col-span-2">
+                <div className="mb-5">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                    Mapa de perfil
+                  </p>
+
+                  <h2 className="mt-2 text-xl font-black text-slate-950">
+                    Relación RSI modificado - VMP
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    El gráfico cruza la capacidad reactiva con la velocidad de
+                    ejecución. Si seleccionas un jugador, se muestra su evolución
+                    temporal.
+                  </p>
+                </div>
+
+                {chartPoints.length === 0 ? (
+                  <EmptyState>
+                    No hay registros neuromusculares válidos para los filtros
+                    seleccionados.
+                  </EmptyState>
+                ) : (
+                  <div className="h-[340px] w-full sm:h-[420px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart
+                        margin={{
+                          top: 20,
+                          right: 12,
+                          bottom: 20,
+                          left: 0,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+
+                        <XAxis
+                          type="number"
+                          dataKey="x"
+                          name="RSI mod"
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) =>
+                            formatNumber(Number(value), 2)
+                          }
+                        />
+
+                        <YAxis
+                          type="number"
+                          dataKey="y"
+                          name="VMP"
+                          width={48}
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) =>
+                            formatNumber(Number(value), 2)
+                          }
+                        />
+
+                        <Tooltip
+                          formatter={(value: unknown, name: unknown) => {
+                            const label = String(name);
+                            const number = Number(value);
+
+                            if (label === "VMP") {
+                              return [formatNumber(number, 2, " m/s"), label];
+                            }
+
+                            if (label === "RSI mod") {
+                              return [formatNumber(number, 2), label];
+                            }
+
+                            return [formatNumber(number, 2), label];
+                          }}
+                        />
+
+                        <Scatter
+                          name="Perfil"
+                          data={chartPoints}
+                          fill="#020617"
+                        />
+                      </ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
 
-              {chartPoints.length === 0 ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                  No hay registros neuromusculares válidos para los filtros
-                  seleccionados.
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Lectura rápida
+                </p>
+
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Interpretación
+                </h2>
+
+                <div className="mt-5 space-y-4">
+                  {latestPoints.slice(0, 5).map((point) => {
+                    const status = getProfileStatus(point);
+
+                    return (
+                      <div
+                        key={point.id}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="break-words font-black text-slate-950">
+                              {point.playerName}
+                            </p>
+
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {point.position ?? "Sin posición"} ·{" "}
+                              {formatDate(point.sessionDate)}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${getProfileStatusClass(
+                              status,
+                            )}`}
+                          >
+                            {getProfileStatusLabel(status)}
+                          </span>
+                        </div>
+
+                        <p className="mt-3 text-xs font-bold leading-5 text-slate-600">
+                          {getProfileInterpretation(point)}
+                        </p>
+                      </div>
+                    );
+                  })}
+
+                  {latestPoints.length === 0 && (
+                    <EmptyState>No hay datos disponibles para interpretar.</EmptyState>
+                  )}
                 </div>
-              ) : (
-                <div className="h-[420px] w-full">
+              </div>
+            </section>
+
+            {selectedPlayer !== "all" && evolutionData.length > 0 && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Evolución individual
+                </p>
+
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Evolución del jugador seleccionado
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Evolución de CMJ, RSI modificado y VMP en las sesiones
+                  neuromusculares disponibles.
+                </p>
+
+                <div className="mt-6 h-[320px] w-full sm:h-[360px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart
+                    <BarChart
+                      data={evolutionData}
                       margin={{
-                        top: 20,
-                        right: 30,
-                        bottom: 20,
-                        left: 20,
+                        top: 10,
+                        right: 12,
+                        left: 0,
+                        bottom: 50,
                       }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
 
                       <XAxis
-                        type="number"
-                        dataKey="x"
-                        name="RSI mod"
-                        tickFormatter={(value) => formatNumber(Number(value), 2)}
+                        dataKey="fecha"
+                        tick={{ fontSize: 11 }}
+                        angle={-25}
+                        textAnchor="end"
+                        height={70}
                       />
 
-                      <YAxis
-                        type="number"
-                        dataKey="y"
-                        name="VMP"
-                        tickFormatter={(value) => formatNumber(Number(value), 2)}
-                      />
+                      <YAxis width={48} tick={{ fontSize: 11 }} />
 
-                      <Tooltip
-                        formatter={(value: unknown, name: unknown) => {
-                          const label = String(name);
-                          const number = Number(value);
+                      <Tooltip />
 
-                          if (label === "VMP") {
-                            return [formatNumber(number, 2, " m/s"), label];
-                          }
-
-                          if (label === "RSI mod") {
-                            return [formatNumber(number, 2), label];
-                          }
-
-                          return [formatNumber(number, 2), label];
-                        }}
-                      />
-
-                      <Scatter
-                        name="Perfil"
-                        data={chartPoints}
-                        fill="#020617"
-                      />
-                    </ScatterChart>
+                      <Bar dataKey="CMJ" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="RSI mod" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="VMP" radius={[8, 8, 0, 0]} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
-              )}
-            </div>
+              </section>
+            )}
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                Lectura rápida
-              </p>
+            <section className="grid gap-4 xl:grid-cols-3">
+              <RankingCard
+                title="Top CMJ"
+                rows={rankingCmj}
+                metric="cmj"
+                suffix=" cm"
+                decimals={1}
+              />
 
-              <h2 className="mt-2 text-xl font-black">Interpretación</h2>
+              <RankingCard
+                title="Top RSI mod"
+                rows={rankingRsi}
+                metric="rsimod"
+                suffix=""
+                decimals={2}
+              />
 
-              <div className="mt-5 space-y-4">
-                {latestPoints.slice(0, 5).map((point) => {
+              <RankingCard
+                title="Top VMP"
+                rows={rankingVmp}
+                metric="vmp"
+                suffix=" m/s"
+                decimals={2}
+              />
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+              <div className="border-b border-slate-200 p-5">
+                <h2 className="text-xl font-black text-slate-950">
+                  Registros de perfil F-R
+                </h2>
+
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Tabla completa de los registros neuromusculares utilizados
+                  para el análisis.
+                </p>
+              </div>
+
+              <div className="divide-y divide-slate-100 md:hidden">
+                {filteredPoints.map((point) => {
                   const status = getProfileStatus(point);
 
                   return (
-                    <div
-                      key={point.id}
-                      className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                    >
+                    <article key={point.id} className="p-5">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-slate-950">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-black text-slate-950">
                             {point.playerName}
                           </p>
 
                           <p className="mt-1 text-xs font-bold text-slate-500">
                             {point.position ?? "Sin posición"} ·{" "}
-                            {formatDate(point.sessionDate)}
+                            {formatDate(point.sessionDate)} ·{" "}
+                            {point.microcycle ?? "Sin microciclo"}
                           </p>
                         </div>
 
                         <span
-                          className={`rounded-full border px-3 py-1 text-xs font-black ${getProfileStatusClass(
+                          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${getProfileStatusClass(
                             status,
                           )}`}
                         >
@@ -727,184 +873,160 @@ export default function PerfilFrPage() {
                         </span>
                       </div>
 
-                      <p className="mt-3 text-xs font-bold leading-5 text-slate-600">
-                        {getProfileInterpretation(point)}
-                      </p>
-                    </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            CMJ
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(point.cmj, 1, " cm")}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            RSI mod
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(point.rsimod, 2)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            VMP
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(point.vmp, 2, " m/s")}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Carga sentadilla
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(point.squatLoadKg, 1, " kg")}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            RPE
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(point.rpe, 1)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Fuente
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {point.source}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
                   );
                 })}
 
-                {latestPoints.length === 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                    No hay datos disponibles para interpretar.
+                {filteredPoints.length === 0 && (
+                  <div className="p-6 text-center text-sm font-bold text-slate-500">
+                    No hay registros para los filtros seleccionados.
                   </div>
                 )}
               </div>
-            </div>
-          </section>
 
-          {selectedPlayer !== "all" && evolutionData.length > 0 && (
-            <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                Evolución individual
-              </p>
+              <div className="hidden max-h-[620px] overflow-auto md:block">
+                <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Jugador</th>
+                      <th className="px-4 py-3">Posición</th>
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Microciclo</th>
+                      <th className="px-4 py-3">CMJ</th>
+                      <th className="px-4 py-3">RSI mod</th>
+                      <th className="px-4 py-3">VMP</th>
+                      <th className="px-4 py-3">Carga sentadilla</th>
+                      <th className="px-4 py-3">RPE</th>
+                      <th className="px-4 py-3">Estado</th>
+                    </tr>
+                  </thead>
 
-              <h2 className="mt-2 text-xl font-black">
-                Evolución del jugador seleccionado
-              </h2>
+                  <tbody>
+                    {filteredPoints.map((point) => {
+                      const status = getProfileStatus(point);
 
-              <p className="mt-2 text-sm text-slate-600">
-                Evolución de CMJ, RSI modificado y VMP en las sesiones
-                neuromusculares disponibles.
-              </p>
+                      return (
+                        <tr key={point.id} className="border-t border-slate-100">
+                          <td className="px-4 py-3 font-black">
+                            {point.playerName}
+                          </td>
 
-              <div className="mt-6 h-[360px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evolutionData}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                          <td className="px-4 py-3">{point.position ?? "—"}</td>
 
-                    <XAxis dataKey="fecha" />
+                          <td className="px-4 py-3">
+                            {formatDate(point.sessionDate)}
+                          </td>
 
-                    <YAxis />
+                          <td className="px-4 py-3">
+                            {point.microcycle ?? "—"}
+                          </td>
 
-                    <Tooltip />
+                          <td className="px-4 py-3 font-bold">
+                            {formatNumber(point.cmj, 1, " cm")}
+                          </td>
 
-                    <Bar dataKey="CMJ" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="RSI mod" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="VMP" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
-          )}
+                          <td className="px-4 py-3 font-bold">
+                            {formatNumber(point.rsimod, 2)}
+                          </td>
 
-          <section className="mt-8 grid gap-4 xl:grid-cols-3">
-            <RankingCard
-              title="Top CMJ"
-              rows={rankingCmj}
-              metric="cmj"
-              suffix=" cm"
-              decimals={1}
-            />
+                          <td className="px-4 py-3 font-bold">
+                            {formatNumber(point.vmp, 2, " m/s")}
+                          </td>
 
-            <RankingCard
-              title="Top RSI mod"
-              rows={rankingRsi}
-              metric="rsimod"
-              suffix=""
-              decimals={2}
-            />
+                          <td className="px-4 py-3">
+                            {formatNumber(point.squatLoadKg, 1, " kg")}
+                          </td>
 
-            <RankingCard
-              title="Top VMP"
-              rows={rankingVmp}
-              metric="vmp"
-              suffix=" m/s"
-              decimals={2}
-            />
-          </section>
+                          <td className="px-4 py-3">
+                            {formatNumber(point.rpe, 1)}
+                          </td>
 
-          <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-            <div className="border-b border-slate-200 p-5">
-              <h2 className="text-xl font-black">
-                Registros de perfil F-R
-              </h2>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-black ${getProfileStatusClass(
+                                status,
+                              )}`}
+                            >
+                              {getProfileStatusLabel(status)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
 
-              <p className="mt-1 text-sm text-slate-600">
-                Tabla completa de los registros neuromusculares utilizados para
-                el análisis.
-              </p>
-            </div>
-
-            <div className="max-h-[620px] overflow-auto">
-              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Jugador</th>
-                    <th className="px-4 py-3">Posición</th>
-                    <th className="px-4 py-3">Fecha</th>
-                    <th className="px-4 py-3">Microciclo</th>
-                    <th className="px-4 py-3">CMJ</th>
-                    <th className="px-4 py-3">RSI mod</th>
-                    <th className="px-4 py-3">VMP</th>
-                    <th className="px-4 py-3">Carga sentadilla</th>
-                    <th className="px-4 py-3">RPE</th>
-                    <th className="px-4 py-3">Estado</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredPoints.map((point) => {
-                    const status = getProfileStatus(point);
-
-                    return (
-                      <tr key={point.id} className="border-t border-slate-100">
-                        <td className="px-4 py-3 font-black">
-                          {point.playerName}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {point.position ?? "—"}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatDate(point.sessionDate)}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {point.microcycle ?? "—"}
-                        </td>
-
-                        <td className="px-4 py-3 font-bold">
-                          {formatNumber(point.cmj, 1, " cm")}
-                        </td>
-
-                        <td className="px-4 py-3 font-bold">
-                          {formatNumber(point.rsimod, 2)}
-                        </td>
-
-                        <td className="px-4 py-3 font-bold">
-                          {formatNumber(point.vmp, 2, " m/s")}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatNumber(point.squatLoadKg, 1, " kg")}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatNumber(point.rpe, 1)}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <span
-                            className={`rounded-full border px-3 py-1 text-xs font-black ${getProfileStatusClass(
-                              status,
-                            )}`}
-                          >
-                            {getProfileStatusLabel(status)}
-                          </span>
+                    {filteredPoints.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                        >
+                          No hay registros para los filtros seleccionados.
                         </td>
                       </tr>
-                    );
-                  })}
-
-                  {filteredPoints.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                      >
-                        No hay registros para los filtros seleccionados.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
-    </main>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </AppShell>
   );
 }
 
@@ -938,23 +1060,23 @@ function RankingCard({
               key={`${row.id}-${metric}`}
               className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
                   {index + 1}
                 </div>
 
-                <div>
-                  <p className="text-sm font-bold text-slate-950">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-bold text-slate-950">
                     {row.playerName}
                   </p>
 
-                  <p className="text-xs font-bold text-slate-500">
+                  <p className="break-words text-xs font-bold text-slate-500">
                     {row.position ?? "Sin posición"}
                   </p>
                 </div>
               </div>
 
-              <p className="text-sm font-black text-slate-900">
+              <p className="shrink-0 text-sm font-black text-slate-900">
                 {formatNumber(row[metric], decimals, suffix)}
               </p>
             </div>

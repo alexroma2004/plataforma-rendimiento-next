@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AppShell from "@/components/layout/AppShell";
 import {
   Bar,
   BarChart,
@@ -136,9 +137,7 @@ function getAverage(values: Array<number | null | undefined>) {
     return null;
   }
 
-  return (
-    validValues.reduce((sum, value) => sum + value, 0) / validValues.length
-  );
+  return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
 }
 
 function getDeltaClass(value: number | null | undefined) {
@@ -155,6 +154,32 @@ function getDeltaClass(value: number | null | undefined) {
   }
 
   return "bg-slate-50 text-slate-700";
+}
+
+function SummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string | number;
+  description?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        {title}
+      </p>
+
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs font-bold text-slate-500">{description}</p>
+      )}
+    </div>
+  );
 }
 
 function MetricSummaryCard({
@@ -185,7 +210,7 @@ function MetricSummaryCard({
       : null;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
         {title}
       </p>
@@ -193,14 +218,14 @@ function MetricSummaryCard({
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs font-bold text-slate-500">PRE</p>
-          <p className="mt-1 text-2xl font-black text-slate-950">
+          <p className="mt-1 break-words text-xl font-black text-slate-950 sm:text-2xl">
             {formatVariableValue(preAverage, variable)}
           </p>
         </div>
 
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs font-bold text-slate-500">POST</p>
-          <p className="mt-1 text-2xl font-black text-slate-950">
+          <p className="mt-1 break-words text-xl font-black text-slate-950 sm:text-2xl">
             {formatVariableValue(postAverage, variable)}
           </p>
         </div>
@@ -214,6 +239,14 @@ function MetricSummaryCard({
         Cambio medio: {formatVariableValue(delta, variable)} ·{" "}
         {formatPercent(deltaPercent)}
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ children }: { children: string }) {
+  return (
+    <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-700">
+      {children}
     </div>
   );
 }
@@ -340,444 +373,640 @@ export default function NeuromuscularPage() {
         delta: getDelta(row, selectedVariable),
         deltaPercent: getDeltaPercent(row, selectedVariable),
       }))
-      .sort((a, b) => Number(b.deltaPercent ?? -999) - Number(a.deltaPercent ?? -999));
+      .sort(
+        (a, b) => Number(b.deltaPercent ?? -999) - Number(a.deltaPercent ?? -999),
+      );
   }, [records, selectedVariable]);
 
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="Rendimiento neuromuscular"
+      subtitle="Consulta las sesiones neuromusculares cargadas desde CSV y analiza la respuesta PRE-POST en CMJ, RSI modificado y VMP."
+    >
+      <div className="space-y-8">
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Sesiones guardadas
+              </p>
 
-        <h1 className="mt-3 text-4xl font-black">
-          Rendimiento neuromuscular
-        </h1>
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Seleccionar sesión neuromuscular
+              </h2>
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Consulta las sesiones neuromusculares cargadas desde CSV y analiza la
-          respuesta PRE-POST en CMJ, RSI modificado y VMP.
-        </p>
-      </section>
-
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Sesiones guardadas
-            </p>
-
-            <h2 className="mt-2 text-2xl font-black">
-              Seleccionar sesión neuromuscular
-            </h2>
-
-            <p className="mt-2 text-sm text-slate-600">
-              Selecciona una sesión para visualizar los registros importados.
-            </p>
-          </div>
-
-          <div className="w-full md:w-[440px]">
-            <label className="text-sm font-bold text-slate-700">
-              Sesión
-              <select
-                value={selectedSessionId}
-                onChange={(event) => setSelectedSessionId(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                disabled={loadingSessions || sessions.length === 0}
-              >
-                {sessions.length === 0 && (
-                  <option value="">
-                    No hay sesiones neuromusculares guardadas
-                  </option>
-                )}
-
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.session_date} · {session.microcycle ?? "N/A"} ·{" "}
-                    {session.session_name ?? "Sesión neuromuscular"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
-          </div>
-        )}
-
-        {loadingSessions && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-            Cargando sesiones neuromusculares...
-          </div>
-        )}
-
-        {!loadingSessions && sessions.length === 0 && (
-          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-            Todavía no hay sesiones neuromusculares guardadas. Primero sube una
-            sesión desde la página de carga neuromuscular.
-          </div>
-        )}
-
-        {selectedSession && (
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Fecha</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.session_date}
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Selecciona una sesión para visualizar los registros importados.
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Microciclo</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.microcycle ?? "N/A"}
-              </p>
-            </div>
+            <div className="w-full md:w-[440px]">
+              <label className="text-sm font-bold text-slate-700">
+                Sesión
+                <select
+                  value={selectedSessionId}
+                  onChange={(event) => setSelectedSessionId(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                  disabled={loadingSessions || sessions.length === 0}
+                >
+                  {sessions.length === 0 && (
+                    <option value="">
+                      No hay sesiones neuromusculares guardadas
+                    </option>
+                  )}
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Nombre</p>
-              <p className="mt-2 text-2xl font-black">
-                {selectedSession.session_name ?? "Sesión neuromuscular"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Registros</p>
-              <p className="mt-2 text-2xl font-black">{records.length}</p>
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.session_date} · {session.microcycle ?? "N/A"} ·{" "}
+                      {session.session_name ?? "Sesión neuromuscular"}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
-        )}
-      </section>
 
-      {selectedSessionId && (
-        <section className="mt-8">
-          {loadingRecords ? (
-            <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-              Cargando registros neuromusculares...
+          {error && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {error}
             </div>
-          ) : (
-            <>
-              <div className="grid gap-4 xl:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Jugadores
-                  </p>
-                  <p className="mt-4 text-4xl font-black">{records.length}</p>
-                </div>
+          )}
 
-                <MetricSummaryCard
-                  title="CMJ medio"
-                  variable="cmj"
-                  records={records}
-                />
+          {loadingSessions && (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+              Cargando sesiones neuromusculares...
+            </div>
+          )}
 
-                <MetricSummaryCard
-                  title="RSI modificado medio"
-                  variable="rsimod"
-                  records={records}
-                />
+          {!loadingSessions && sessions.length === 0 && (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+              Todavía no hay sesiones neuromusculares guardadas. Primero sube una
+              sesión desde la página de carga neuromuscular.
+            </div>
+          )}
 
-                <MetricSummaryCard
-                  title="VMP media"
-                  variable="vmp"
-                  records={records}
-                />
+          {selectedSession && (
+            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Fecha</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.session_date}
+                </p>
               </div>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    RPE medio
-                  </p>
-                  <p className="mt-3 text-3xl font-black">
-                    {formatNumber(rpeAverage, 1)}
-                  </p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Microciclo</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.microcycle ?? "N/A"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Nombre</p>
+                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                  {selectedSession.session_name ?? "Sesión neuromuscular"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold text-slate-500">Registros</p>
+                <p className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                  {records.length}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {selectedSessionId && (
+          <section>
+            {loadingRecords ? (
+              <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
+                Cargando registros neuromusculares...
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4 xl:grid-cols-4">
+                  <SummaryCard title="Jugadores" value={records.length} />
+
+                  <MetricSummaryCard
+                    title="CMJ medio"
+                    variable="cmj"
+                    records={records}
+                  />
+
+                  <MetricSummaryCard
+                    title="RSI modificado medio"
+                    variable="rsimod"
+                    records={records}
+                  />
+
+                  <MetricSummaryCard
+                    title="VMP media"
+                    variable="vmp"
+                    records={records}
+                  />
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Registros con CMJ POST
-                  </p>
-                  <p className="mt-3 text-3xl font-black">
-                    {
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <SummaryCard
+                    title="RPE medio"
+                    value={formatNumber(rpeAverage, 1)}
+                  />
+
+                  <SummaryCard
+                    title="Registros con CMJ POST"
+                    value={
                       records.filter((row) => isFiniteNumber(row.cmj_post))
                         .length
                     }
-                  </p>
-                </div>
+                  />
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Registros con VMP POST
-                  </p>
-                  <p className="mt-3 text-3xl font-black">
-                    {
+                  <SummaryCard
+                    title="Registros con VMP POST"
+                    value={
                       records.filter((row) => isFiniteNumber(row.vmp_post))
                         .length
                     }
-                  </p>
+                  />
                 </div>
-              </div>
 
-              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-                      Análisis PRE-POST
-                    </p>
+                <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                        Análisis PRE-POST
+                      </p>
 
-                    <h2 className="mt-2 text-xl font-black">
-                      Comparación por variable
+                      <h2 className="mt-2 text-xl font-black text-slate-950">
+                        Comparación por variable
+                      </h2>
+
+                      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                        Visualiza el valor PRE y POST de cada jugador en la
+                        sesión seleccionada.
+                      </p>
+                    </div>
+
+                    <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+                      Variable
+                      <select
+                        value={selectedVariable}
+                        onChange={(event) =>
+                          setSelectedVariable(
+                            event.target.value as NeuromuscularVariableKey,
+                          )
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                      >
+                        {variableOptions.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="mt-6 h-[340px] w-full sm:h-[440px]">
+                    {chartData.length === 0 ? (
+                      <EmptyState>
+                        No hay datos PRE/POST disponibles para esta variable.
+                      </EmptyState>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={chartData}
+                          layout="vertical"
+                          margin={{
+                            top: 10,
+                            right: 12,
+                            left: 40,
+                            bottom: 10,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+
+                          <XAxis
+                            type="number"
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={(value) =>
+                              Number(value).toLocaleString("es-ES")
+                            }
+                          />
+
+                          <YAxis
+                            type="category"
+                            dataKey="jugador"
+                            width={100}
+                            tick={{
+                              fontSize: 11,
+                            }}
+                          />
+
+                          <Tooltip
+                            formatter={(value, name) => {
+                              const label = name === "pre" ? "PRE" : "POST";
+
+                              return [
+                                formatVariableValue(
+                                  Number(value),
+                                  selectedVariable,
+                                ),
+                                label,
+                              ];
+                            }}
+                          />
+
+                          {isFiniteNumber(postAverage) && (
+                            <ReferenceLine
+                              x={postAverage}
+                              strokeDasharray="4 4"
+                              label="Media POST"
+                            />
+                          )}
+
+                          <Bar dataKey="pre" name="PRE" radius={[0, 8, 8, 0]} />
+                          <Bar
+                            dataKey="post"
+                            name="POST"
+                            radius={[0, 8, 8, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                  <div className="border-b border-slate-200 bg-slate-50 p-5">
+                    <h2 className="text-xl font-black text-slate-950">
+                      Ranking de cambio PRE-POST
                     </h2>
 
-                    <p className="mt-2 max-w-3xl text-sm text-slate-600">
-                      Visualiza el valor PRE y POST de cada jugador en la sesión
-                      seleccionada.
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      Ordenado por el mayor cambio porcentual en{" "}
+                      {selectedVariableMeta.label}.
                     </p>
                   </div>
 
-                  <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
-                    Variable
-                    <select
-                      value={selectedVariable}
-                      onChange={(event) =>
-                        setSelectedVariable(
-                          event.target.value as NeuromuscularVariableKey,
-                        )
-                      }
-                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                    >
-                      {variableOptions.map((option) => (
-                        <option key={option.key} value={option.key}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {deltaRows.map((row) => (
+                      <article key={row.id} className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="break-words text-base font-black text-slate-950">
+                              {row.playerName}
+                            </p>
 
-                <div className="mt-6 h-[440px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      layout="vertical"
-                      margin={{
-                        top: 10,
-                        right: 30,
-                        left: 90,
-                        bottom: 10,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {row.position ?? "Sin posición"} ·{" "}
+                              {selectedVariableMeta.label}
+                            </p>
+                          </div>
 
-                      <XAxis
-                        type="number"
-                        tickFormatter={(value) =>
-                          Number(value).toLocaleString("es-ES")
-                        }
-                      />
+                          <span
+                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
+                              row.deltaPercent,
+                            )}`}
+                          >
+                            {formatPercent(row.deltaPercent)}
+                          </span>
+                        </div>
 
-                      <YAxis
-                        type="category"
-                        dataKey="jugador"
-                        width={130}
-                        tick={{
-                          fontSize: 12,
-                        }}
-                      />
+                        <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              PRE
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.pre, selectedVariable)}
+                            </p>
+                          </div>
 
-                      <Tooltip
-                        formatter={(value, name) => {
-                          const label = name === "pre" ? "PRE" : "POST";
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              POST
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.post, selectedVariable)}
+                            </p>
+                          </div>
 
-                          return [
-                            formatVariableValue(
-                              Number(value),
-                              selectedVariable,
-                            ),
-                            label,
-                          ];
-                        }}
-                      />
-
-                      {isFiniteNumber(postAverage) && (
-                        <ReferenceLine
-                          x={postAverage}
-                          strokeDasharray="4 4"
-                          label="Media POST"
-                        />
-                      )}
-
-                      <Bar dataKey="pre" name="PRE" radius={[0, 8, 8, 0]} />
-                      <Bar dataKey="post" name="POST" radius={[0, 8, 8, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-                <div className="border-b border-slate-200 bg-slate-50 p-5">
-                  <h2 className="text-xl font-black">
-                    Ranking de cambio PRE-POST
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-600">
-                    Ordenado por el mayor cambio porcentual en{" "}
-                    {selectedVariableMeta.label}.
-                  </p>
-                </div>
-
-                <div className="max-h-[440px] overflow-auto">
-                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Jugador</th>
-                        <th className="px-4 py-3">Posición</th>
-                        <th className="px-4 py-3">PRE</th>
-                        <th className="px-4 py-3">POST</th>
-                        <th className="px-4 py-3">Cambio absoluto</th>
-                        <th className="px-4 py-3">Cambio %</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {deltaRows.map((row) => (
-                        <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-4 py-3 font-black">
-                            {row.playerName}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {row.position ?? "—"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.pre, selectedVariable)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.post, selectedVariable)}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Cambio absoluto
+                            </p>
+                            <p
+                              className={`mt-1 w-fit rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
                                 row.delta,
                               )}`}
                             >
-                              {formatVariableValue(
-                                row.delta,
-                                selectedVariable,
-                              )}
-                            </span>
-                          </td>
+                              {formatVariableValue(row.delta, selectedVariable)}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Cambio %
+                            </p>
+                            <p
+                              className={`mt-1 w-fit rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
                                 row.deltaPercent,
                               )}`}
                             >
                               {formatPercent(row.deltaPercent)}
-                            </span>
-                          </td>
+                            </p>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+
+                    {deltaRows.length === 0 && (
+                      <div className="p-6 text-center text-sm font-bold text-slate-500">
+                        No hay registros disponibles para esta variable.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="hidden max-h-[440px] overflow-auto md:block">
+                    <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                      <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Jugador</th>
+                          <th className="px-4 py-3">Posición</th>
+                          <th className="px-4 py-3">PRE</th>
+                          <th className="px-4 py-3">POST</th>
+                          <th className="px-4 py-3">Cambio absoluto</th>
+                          <th className="px-4 py-3">Cambio %</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+
+                      <tbody>
+                        {deltaRows.map((row) => (
+                          <tr key={row.id} className="border-t border-slate-100">
+                            <td className="px-4 py-3 font-black">
+                              {row.playerName}
+                            </td>
+
+                            <td className="px-4 py-3">{row.position ?? "—"}</td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.pre, selectedVariable)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.post, selectedVariable)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
+                                  row.delta,
+                                )}`}
+                              >
+                                {formatVariableValue(row.delta, selectedVariable)}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-black ${getDeltaClass(
+                                  row.deltaPercent,
+                                )}`}
+                              >
+                                {formatPercent(row.deltaPercent)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+
+                        {deltaRows.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={6}
+                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                            >
+                              No hay registros disponibles para esta variable.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-                <div className="border-b border-slate-200 p-5">
-                  <h2 className="text-xl font-black">
-                    Registros neuromusculares por jugador
-                  </h2>
+                <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                  <div className="border-b border-slate-200 p-5">
+                    <h2 className="text-xl font-black text-slate-950">
+                      Registros neuromusculares por jugador
+                    </h2>
 
-                  <p className="mt-1 text-sm text-slate-600">
-                    Tabla completa de la sesión neuromuscular seleccionada.
-                  </p>
-                </div>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      Tabla completa de la sesión neuromuscular seleccionada.
+                    </p>
+                  </div>
 
-                <div className="max-h-[560px] overflow-auto">
-                  <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
-                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Jugador</th>
-                        <th className="px-4 py-3">Posición</th>
-                        <th className="px-4 py-3">CMJ PRE</th>
-                        <th className="px-4 py-3">CMJ POST</th>
-                        <th className="px-4 py-3">RSI PRE</th>
-                        <th className="px-4 py-3">RSI POST</th>
-                        <th className="px-4 py-3">VMP PRE</th>
-                        <th className="px-4 py-3">VMP POST</th>
-                        <th className="px-4 py-3">Carga sentadilla</th>
-                        <th className="px-4 py-3">RPE</th>
-                        <th className="px-4 py-3">Notas</th>
-                      </tr>
-                    </thead>
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {records.map((row) => (
+                      <article key={row.id} className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="break-words text-base font-black text-slate-950">
+                              {row.player_name}
+                            </p>
 
-                    <tbody>
-                      {records.map((row) => (
-                        <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-4 py-3 font-black">
-                            {row.player_name}
-                          </td>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {row.position ?? "Sin posición"}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {row.position ?? "—"}
-                          </td>
+                          <span className="shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                            RPE {formatNumber(row.rpe, 0)}
+                          </span>
+                        </div>
 
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.cmj_pre, "cmj")}
-                          </td>
+                        <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              CMJ PRE
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.cmj_pre, "cmj")}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.cmj_post, "cmj")}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              CMJ POST
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.cmj_post, "cmj")}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.rsimod_pre, "rsimod")}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              RSI PRE
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.rsimod_pre, "rsimod")}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.rsimod_post, "rsimod")}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              RSI POST
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.rsimod_post, "rsimod")}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.vmp_pre, "vmp")}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              VMP PRE
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.vmp_pre, "vmp")}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {formatVariableValue(row.vmp_post, "vmp")}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              VMP POST
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatVariableValue(row.vmp_post, "vmp")}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {isFiniteNumber(row.squat_load_kg)
-                              ? `${formatNumber(row.squat_load_kg, 0)} kg`
-                              : "—"}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Carga sentadilla
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {isFiniteNumber(row.squat_load_kg)
+                                ? `${formatNumber(row.squat_load_kg, 0)} kg`
+                                : "—"}
+                            </p>
+                          </div>
 
-                          <td className="px-4 py-3">
-                            {formatNumber(row.rpe, 0)}
-                          </td>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              RPE
+                            </p>
+                            <p className="mt-1 font-black text-slate-950">
+                              {formatNumber(row.rpe, 0)}
+                            </p>
+                          </div>
+                        </div>
 
-                          <td className="px-4 py-3">
-                            {row.notes ?? "—"}
-                          </td>
+                        {row.notes && (
+                          <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                              Notas
+                            </p>
+
+                            <p className="mt-1 break-words text-sm font-bold text-slate-700">
+                              {row.notes}
+                            </p>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+
+                    {records.length === 0 && (
+                      <div className="p-6 text-center text-sm font-bold text-slate-500">
+                        No hay registros neuromusculares para esta sesión.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="hidden max-h-[560px] overflow-auto md:block">
+                    <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
+                      <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Jugador</th>
+                          <th className="px-4 py-3">Posición</th>
+                          <th className="px-4 py-3">CMJ PRE</th>
+                          <th className="px-4 py-3">CMJ POST</th>
+                          <th className="px-4 py-3">RSI PRE</th>
+                          <th className="px-4 py-3">RSI POST</th>
+                          <th className="px-4 py-3">VMP PRE</th>
+                          <th className="px-4 py-3">VMP POST</th>
+                          <th className="px-4 py-3">Carga sentadilla</th>
+                          <th className="px-4 py-3">RPE</th>
+                          <th className="px-4 py-3">Notas</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+
+                      <tbody>
+                        {records.map((row) => (
+                          <tr key={row.id} className="border-t border-slate-100">
+                            <td className="px-4 py-3 font-black">
+                              {row.player_name}
+                            </td>
+
+                            <td className="px-4 py-3">{row.position ?? "—"}</td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.cmj_pre, "cmj")}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.cmj_post, "cmj")}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.rsimod_pre, "rsimod")}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.rsimod_post, "rsimod")}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.vmp_pre, "vmp")}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatVariableValue(row.vmp_post, "vmp")}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {isFiniteNumber(row.squat_load_kg)
+                                ? `${formatNumber(row.squat_load_kg, 0)} kg`
+                                : "—"}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatNumber(row.rpe, 0)}
+                            </td>
+
+                            <td className="px-4 py-3">{row.notes ?? "—"}</td>
+                          </tr>
+                        ))}
+
+                        {records.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={11}
+                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                            >
+                              No hay registros neuromusculares para esta sesión.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
-        </section>
-      )}
-    </main>
+              </>
+            )}
+          </section>
+        )}
+      </div>
+    </AppShell>
   );
 }

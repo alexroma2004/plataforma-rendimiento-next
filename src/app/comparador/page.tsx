@@ -485,15 +485,19 @@ function StatCard({
   description?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
       </p>
 
-      <p className="mt-2 text-3xl font-black text-slate-950">{value}</p>
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
 
       {description && (
-        <p className="mt-2 text-xs font-bold text-slate-500">{description}</p>
+        <p className="mt-2 break-words text-xs font-bold text-slate-500">
+          {description}
+        </p>
       )}
     </div>
   );
@@ -643,475 +647,654 @@ export default function ComparadorPage() {
       title="Comparador"
       subtitle="Comparación entre jugadores, fechas, microciclos y variables para analizar diferencias individuales y evolución temporal."
     >
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Comparador individual
-            </p>
+      <div className="space-y-8">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Comparador individual
+              </p>
 
-            <h2 className="mt-2 text-2xl font-black text-slate-950">
-              Jugador A vs Jugador B
-            </h2>
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Jugador A vs Jugador B
+              </h2>
 
-            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-              Selecciona dos jugadores y una métrica para comparar GPS, control
-              neuromuscular y puntuaciones de tests físicos desde los datos
-              guardados en Supabase.
-            </p>
-          </div>
+              <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+                Selecciona dos jugadores y una métrica para comparar GPS, control
+                neuromuscular y puntuaciones de tests físicos desde los datos
+                guardados en Supabase.
+              </p>
+            </div>
 
-          <div className="grid w-full gap-3 md:grid-cols-2 xl:w-[760px] xl:grid-cols-4">
-            <label className="text-sm font-bold text-slate-700">
-              Jugador A
-              <select
-                value={selectedPlayerAId}
-                onChange={(event) => setSelectedPlayerAId(event.target.value)}
-                disabled={loading || players.length === 0}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-              >
-                {players.length === 0 && (
-                  <option value="">No hay jugadores</option>
-                )}
+            <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:w-[760px] xl:grid-cols-4">
+              <label className="text-sm font-bold text-slate-700">
+                Jugador A
+                <select
+                  value={selectedPlayerAId}
+                  onChange={(event) => setSelectedPlayerAId(event.target.value)}
+                  disabled={loading || players.length === 0}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                >
+                  {players.length === 0 && (
+                    <option value="">No hay jugadores</option>
+                  )}
 
-                {players.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  {players.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label className="text-sm font-bold text-slate-700">
-              Jugador B
-              <select
-                value={selectedPlayerBId}
-                onChange={(event) => setSelectedPlayerBId(event.target.value)}
-                disabled={loading || players.length === 0}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-              >
-                {players.length === 0 && (
-                  <option value="">No hay jugadores</option>
-                )}
+              <label className="text-sm font-bold text-slate-700">
+                Jugador B
+                <select
+                  value={selectedPlayerBId}
+                  onChange={(event) => setSelectedPlayerBId(event.target.value)}
+                  disabled={loading || players.length === 0}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                >
+                  {players.length === 0 && (
+                    <option value="">No hay jugadores</option>
+                  )}
 
-                {players.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  {players.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label className="text-sm font-bold text-slate-700">
-              Métrica principal
-              <select
-                value={selectedMetricKey}
-                onChange={(event) =>
-                  setSelectedMetricKey(event.target.value as ComparisonMetricKey)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-              >
-                {comparisonMetrics.map((metric) => (
-                  <option key={metric.key} value={metric.key}>
-                    {metric.category} · {metric.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-sm font-bold text-slate-700">
-              Histórico
-              <select
-                value={historyScope}
-                onChange={(event) =>
-                  setHistoryScope(event.target.value as HistoryScope)
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-              >
-                {historyScopeOptions.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-          Criterio actual: {selectedScopeMeta.description}
-        </div>
-
-        {error && (
-          <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
-          </div>
-        )}
-
-        {loading && (
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-            Cargando datos del comparador...
-          </div>
-        )}
-
-        {!loading && players.length === 0 && (
-          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-            Todavía no hay jugadores activos cargados.
-          </div>
-        )}
-      </section>
-
-      {!loading && playerAStats && playerBStats && (
-        <>
-          <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Jugador A"
-              value={playerAStats.player.name}
-              description={playerAStats.player.position ?? "Sin posición"}
-            />
-
-            <StatCard
-              label="Jugador B"
-              value={playerBStats.player.name}
-              description={playerBStats.player.position ?? "Sin posición"}
-            />
-
-            <StatCard
-              label="Registros GPS"
-              value={`${playerAStats.gpsRecords.length} / ${playerBStats.gpsRecords.length}`}
-              description="Jugador A / Jugador B"
-            />
-
-            <StatCard
-              label="Registros neuromusculares"
-              value={`${playerAStats.neuromuscularRecords.length} / ${playerBStats.neuromuscularRecords.length}`}
-              description="Jugador A / Jugador B"
-            />
-          </section>
-
-          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+              <label className="text-sm font-bold text-slate-700">
                 Métrica principal
-              </p>
-
-              <h2 className="text-xl font-black text-slate-950">
-                {selectedMetric.category} · {selectedMetric.label}
-              </h2>
-
-              <p className="text-sm text-slate-600">
-                Comparación directa de la métrica seleccionada entre ambos
-                jugadores.
-              </p>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  {playerAStats.player.name}
-                </p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {formatMetric(
-                    selectedMetric.getValue(playerAStats),
-                    selectedMetric.unit,
-                  )}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  {playerBStats.player.name}
-                </p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {formatMetric(
-                    selectedMetric.getValue(playerBStats),
-                    selectedMetric.unit,
-                  )}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  Diferencia A - B
-                </p>
-                <p
-                  className={`mt-2 text-3xl font-black ${getDifferenceClass(
-                    selectedMetric.getValue(playerAStats),
-                    selectedMetric.getValue(playerBStats),
-                  )}`}
+                <select
+                  value={selectedMetricKey}
+                  onChange={(event) =>
+                    setSelectedMetricKey(event.target.value as ComparisonMetricKey)
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
                 >
-                  {formatDifference(
-                    selectedMetric.getValue(playerAStats),
-                    selectedMetric.getValue(playerBStats),
-                    selectedMetric.unit,
-                  )}
+                  {comparisonMetrics.map((metric) => (
+                    <option key={metric.key} value={metric.key}>
+                      {metric.category} · {metric.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm font-bold text-slate-700">
+                Histórico
+                <select
+                  value={historyScope}
+                  onChange={(event) =>
+                    setHistoryScope(event.target.value as HistoryScope)
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                >
+                  {historyScopeOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+            Criterio actual: {selectedScopeMeta.description}
+          </div>
+
+          {error && (
+            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {error}
+            </div>
+          )}
+
+          {loading && (
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+              Cargando datos del comparador...
+            </div>
+          )}
+
+          {!loading && players.length === 0 && (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+              Todavía no hay jugadores activos cargados.
+            </div>
+          )}
+        </section>
+
+        {!loading && playerAStats && playerBStats && (
+          <>
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Jugador A"
+                value={playerAStats.player.name}
+                description={playerAStats.player.position ?? "Sin posición"}
+              />
+
+              <StatCard
+                label="Jugador B"
+                value={playerBStats.player.name}
+                description={playerBStats.player.position ?? "Sin posición"}
+              />
+
+              <StatCard
+                label="Registros GPS"
+                value={`${playerAStats.gpsRecords.length} / ${playerBStats.gpsRecords.length}`}
+                description="Jugador A / Jugador B"
+              />
+
+              <StatCard
+                label="Registros neuromusculares"
+                value={`${playerAStats.neuromuscularRecords.length} / ${playerBStats.neuromuscularRecords.length}`}
+                description="Jugador A / Jugador B"
+              />
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Métrica principal
+                </p>
+
+                <h2 className="text-xl font-black text-slate-950">
+                  {selectedMetric.category} · {selectedMetric.label}
+                </h2>
+
+                <p className="text-sm leading-6 text-slate-600">
+                  Comparación directa de la métrica seleccionada entre ambos
+                  jugadores.
                 </p>
               </div>
-            </div>
 
-            <div className="mt-6 h-[360px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={selectedMetricChartData}
-                  margin={{
-                    top: 10,
-                    right: 20,
-                    left: 20,
-                    bottom: 10,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="break-words text-xs font-bold text-slate-500">
+                    {playerAStats.player.name}
+                  </p>
+                  <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+                    {formatMetric(
+                      selectedMetric.getValue(playerAStats),
+                      selectedMetric.unit,
+                    )}
+                  </p>
+                </div>
 
-                  <XAxis dataKey="jugador" />
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="break-words text-xs font-bold text-slate-500">
+                    {playerBStats.player.name}
+                  </p>
+                  <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+                    {formatMetric(
+                      selectedMetric.getValue(playerBStats),
+                      selectedMetric.unit,
+                    )}
+                  </p>
+                </div>
 
-                  <YAxis
-                    tickFormatter={(value) =>
-                      Math.round(Number(value)).toLocaleString("es-ES")
-                    }
-                  />
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">
+                    Diferencia A - B
+                  </p>
+                  <p
+                    className={`mt-2 break-words text-2xl font-black sm:text-3xl ${getDifferenceClass(
+                      selectedMetric.getValue(playerAStats),
+                      selectedMetric.getValue(playerBStats),
+                    )}`}
+                  >
+                    {formatDifference(
+                      selectedMetric.getValue(playerAStats),
+                      selectedMetric.getValue(playerBStats),
+                      selectedMetric.unit,
+                    )}
+                  </p>
+                </div>
+              </div>
 
-                  <Tooltip
-                    formatter={(value) => [
-                      formatMetric(Number(value), selectedMetric.unit),
-                      selectedMetric.label,
-                    ]}
-                  />
+              <div className="mt-6 h-[320px] w-full sm:h-[360px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={selectedMetricChartData}
+                    margin={{
+                      top: 10,
+                      right: 12,
+                      left: 0,
+                      bottom: 60,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
 
-                  <Legend />
+                    <XAxis
+                      dataKey="jugador"
+                      tick={{ fontSize: 11 }}
+                      angle={-25}
+                      textAnchor="end"
+                      height={80}
+                    />
 
-                  <Bar dataKey="valor" name={selectedMetric.label} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
+                    <YAxis
+                      width={58}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(value) =>
+                        Math.round(Number(value)).toLocaleString("es-ES")
+                      }
+                    />
 
-          <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-            <div className="border-b border-slate-200 p-5">
-              <h2 className="text-xl font-black text-slate-950">
-                Comparación global por métricas
-              </h2>
+                    <Tooltip
+                      formatter={(value) => [
+                        formatMetric(Number(value), selectedMetric.unit),
+                        selectedMetric.label,
+                      ]}
+                    />
 
-              <p className="mt-1 text-sm text-slate-600">
-                Tabla resumen con GPS, neuromuscular y tests físicos.
-              </p>
-            </div>
+                    <Legend />
 
-            <div className="max-h-[620px] overflow-auto">
-              <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Bloque</th>
-                    <th className="px-4 py-3">Métrica</th>
-                    <th className="px-4 py-3">{playerAStats.player.name}</th>
-                    <th className="px-4 py-3">{playerBStats.player.name}</th>
-                    <th className="px-4 py-3">Diferencia A - B</th>
-                  </tr>
-                </thead>
+                    <Bar dataKey="valor" name={selectedMetric.label} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
 
-                <tbody>
-                  {comparisonMetrics.map((metric) => {
-                    const valueA = metric.getValue(playerAStats);
-                    const valueB = metric.getValue(playerBStats);
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+              <div className="border-b border-slate-200 p-5">
+                <h2 className="text-xl font-black text-slate-950">
+                  Comparación global por métricas
+                </h2>
 
-                    return (
-                      <tr key={metric.key} className="border-t border-slate-100">
-                        <td className="px-4 py-3 font-bold text-slate-700">
-                          {metric.category}
-                        </td>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Tabla resumen con GPS, neuromuscular y tests físicos.
+                </p>
+              </div>
 
-                        <td className="px-4 py-3 font-black text-slate-950">
-                          {metric.label}
-                        </td>
+              <div className="divide-y divide-slate-100 md:hidden">
+                {comparisonMetrics.map((metric) => {
+                  const valueA = metric.getValue(playerAStats);
+                  const valueB = metric.getValue(playerBStats);
 
-                        <td className="px-4 py-3">
-                          {formatMetric(valueA, metric.unit)}
-                        </td>
+                  return (
+                    <article key={metric.key} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+                            {metric.category}
+                          </p>
 
-                        <td className="px-4 py-3">
-                          {formatMetric(valueB, metric.unit)}
-                        </td>
+                          <p className="mt-1 break-words text-base font-black text-slate-950">
+                            {metric.label}
+                          </p>
+                        </div>
 
-                        <td
-                          className={`px-4 py-3 font-black ${getDifferenceClass(
+                        <span
+                          className={`shrink-0 rounded-full bg-slate-50 px-3 py-1 text-xs font-black ${getDifferenceClass(
                             valueA,
                             valueB,
                           )}`}
                         >
                           {formatDifference(valueA, valueB, metric.unit)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                        </span>
+                      </div>
 
-          <section className="mt-8 grid gap-4 xl:grid-cols-2">
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-              <div className="border-b border-slate-200 p-5">
-                <h2 className="text-xl font-black text-slate-950">
-                  Totales GPS
-                </h2>
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="break-words text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            {playerAStats.player.name}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMetric(valueA, metric.unit)}
+                          </p>
+                        </div>
 
-                <p className="mt-1 text-sm text-slate-600">
-                  Suma acumulada dentro del histórico seleccionado.
-                </p>
+                        <div>
+                          <p className="break-words text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            {playerBStats.player.name}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMetric(valueB, metric.unit)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
 
-              <div className="max-h-[420px] overflow-auto">
-                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+              <div className="hidden max-h-[620px] overflow-auto md:block">
+                <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
+                      <th className="px-4 py-3">Bloque</th>
                       <th className="px-4 py-3">Métrica</th>
                       <th className="px-4 py-3">{playerAStats.player.name}</th>
                       <th className="px-4 py-3">{playerBStats.player.name}</th>
+                      <th className="px-4 py-3">Diferencia A - B</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    <tr className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">Distancia total</td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerAStats.gpsTotals.totalDistance, "m")}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerBStats.gpsTotals.totalDistance, "m")}
-                      </td>
-                    </tr>
+                    {comparisonMetrics.map((metric) => {
+                      const valueA = metric.getValue(playerAStats);
+                      const valueB = metric.getValue(playerBStats);
 
-                    <tr className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">HSR total</td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerAStats.gpsTotals.hsr, "m")}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerBStats.gpsTotals.hsr, "m")}
-                      </td>
-                    </tr>
+                      return (
+                        <tr key={metric.key} className="border-t border-slate-100">
+                          <td className="px-4 py-3 font-bold text-slate-700">
+                            {metric.category}
+                          </td>
 
-                    <tr className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">
-                        Distancia sprint total
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(
-                          playerAStats.gpsTotals.sprintDistance,
-                          "m",
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(
-                          playerBStats.gpsTotals.sprintDistance,
-                          "m",
-                        )}
-                      </td>
-                    </tr>
+                          <td className="px-4 py-3 font-black text-slate-950">
+                            {metric.label}
+                          </td>
 
-                    <tr className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">Sprints totales</td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerAStats.gpsTotals.sprints, "")}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerBStats.gpsTotals.sprints, "")}
-                      </td>
-                    </tr>
+                          <td className="px-4 py-3">
+                            {formatMetric(valueA, metric.unit)}
+                          </td>
 
-                    <tr className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">
-                        Aceleraciones totales
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerAStats.gpsTotals.acc, "")}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerBStats.gpsTotals.acc, "")}
-                      </td>
-                    </tr>
+                          <td className="px-4 py-3">
+                            {formatMetric(valueB, metric.unit)}
+                          </td>
 
-                    <tr className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-black">
-                        Deceleraciones totales
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerAStats.gpsTotals.dec, "")}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMetric(playerBStats.gpsTotals.dec, "")}
-                      </td>
-                    </tr>
+                          <td
+                            className={`px-4 py-3 font-black ${getDifferenceClass(
+                              valueA,
+                              valueB,
+                            )}`}
+                          >
+                            {formatDifference(valueA, valueB, metric.unit)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </section>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-              <div className="border-b border-slate-200 p-5">
-                <h2 className="text-xl font-black text-slate-950">
-                  Tests por capacidad
-                </h2>
+            <section className="grid gap-4 xl:grid-cols-2">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                <div className="border-b border-slate-200 p-5">
+                  <h2 className="text-xl font-black text-slate-950">
+                    Totales GPS
+                  </h2>
 
-                <p className="mt-1 text-sm text-slate-600">
-                  Comparación de la puntuación media por capacidad evaluada.
-                </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Suma acumulada dentro del histórico seleccionado.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {[
+                    {
+                      label: "Distancia total",
+                      valueA: playerAStats.gpsTotals.totalDistance,
+                      valueB: playerBStats.gpsTotals.totalDistance,
+                      unit: "m",
+                    },
+                    {
+                      label: "HSR total",
+                      valueA: playerAStats.gpsTotals.hsr,
+                      valueB: playerBStats.gpsTotals.hsr,
+                      unit: "m",
+                    },
+                    {
+                      label: "Distancia sprint total",
+                      valueA: playerAStats.gpsTotals.sprintDistance,
+                      valueB: playerBStats.gpsTotals.sprintDistance,
+                      unit: "m",
+                    },
+                    {
+                      label: "Sprints totales",
+                      valueA: playerAStats.gpsTotals.sprints,
+                      valueB: playerBStats.gpsTotals.sprints,
+                      unit: "",
+                    },
+                    {
+                      label: "Aceleraciones totales",
+                      valueA: playerAStats.gpsTotals.acc,
+                      valueB: playerBStats.gpsTotals.acc,
+                      unit: "",
+                    },
+                    {
+                      label: "Deceleraciones totales",
+                      valueA: playerAStats.gpsTotals.dec,
+                      valueB: playerBStats.gpsTotals.dec,
+                      unit: "",
+                    },
+                  ].map((row) => (
+                    <article key={row.label} className="p-5">
+                      <p className="text-base font-black text-slate-950">
+                        {row.label}
+                      </p>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="break-words text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            {playerAStats.player.name}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMetric(row.valueA, row.unit)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="break-words text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            {playerBStats.player.name}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMetric(row.valueB, row.unit)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden max-h-[420px] overflow-auto md:block">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Métrica</th>
+                        <th className="px-4 py-3">{playerAStats.player.name}</th>
+                        <th className="px-4 py-3">{playerBStats.player.name}</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      <tr className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-black">Distancia total</td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerAStats.gpsTotals.totalDistance, "m")}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerBStats.gpsTotals.totalDistance, "m")}
+                        </td>
+                      </tr>
+
+                      <tr className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-black">HSR total</td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerAStats.gpsTotals.hsr, "m")}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerBStats.gpsTotals.hsr, "m")}
+                        </td>
+                      </tr>
+
+                      <tr className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-black">
+                          Distancia sprint total
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(
+                            playerAStats.gpsTotals.sprintDistance,
+                            "m",
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(
+                            playerBStats.gpsTotals.sprintDistance,
+                            "m",
+                          )}
+                        </td>
+                      </tr>
+
+                      <tr className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-black">Sprints totales</td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerAStats.gpsTotals.sprints, "")}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerBStats.gpsTotals.sprints, "")}
+                        </td>
+                      </tr>
+
+                      <tr className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-black">
+                          Aceleraciones totales
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerAStats.gpsTotals.acc, "")}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerBStats.gpsTotals.acc, "")}
+                        </td>
+                      </tr>
+
+                      <tr className="border-t border-slate-100">
+                        <td className="px-4 py-3 font-black">
+                          Deceleraciones totales
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerAStats.gpsTotals.dec, "")}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatMetric(playerBStats.gpsTotals.dec, "")}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
-              <div className="max-h-[420px] overflow-auto">
-                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Capacidad</th>
-                      <th className="px-4 py-3">{playerAStats.player.name}</th>
-                      <th className="px-4 py-3">{playerBStats.player.name}</th>
-                      <th className="px-4 py-3">Diferencia</th>
-                    </tr>
-                  </thead>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+                <div className="border-b border-slate-200 p-5">
+                  <h2 className="text-xl font-black text-slate-950">
+                    Tests por capacidad
+                  </h2>
 
-                  <tbody>
-                    {capacityComparisonRows.map((row) => (
-                      <tr key={row.capacity} className="border-t border-slate-100">
-                        <td className="px-4 py-3 font-black text-slate-950">
-                          {row.capacity}
-                        </td>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Comparación de la puntuación media por capacidad evaluada.
+                  </p>
+                </div>
 
-                        <td className="px-4 py-3">
-                          {formatMetric(row.playerAValue, "")}
-                        </td>
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {capacityComparisonRows.map((row) => (
+                    <article key={row.capacity} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-black text-slate-950">
+                            {row.capacity}
+                          </p>
+                        </div>
 
-                        <td className="px-4 py-3">
-                          {formatMetric(row.playerBValue, "")}
-                        </td>
-
-                        <td
-                          className={`px-4 py-3 font-black ${getDifferenceClass(
+                        <span
+                          className={`shrink-0 rounded-full bg-slate-50 px-3 py-1 text-xs font-black ${getDifferenceClass(
                             row.playerAValue,
                             row.playerBValue,
                           )}`}
                         >
                           {formatDifference(row.playerAValue, row.playerBValue, "")}
-                        </td>
-                      </tr>
-                    ))}
+                        </span>
+                      </div>
 
-                    {capacityComparisonRows.length === 0 && (
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="break-words text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            {playerAStats.player.name}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMetric(row.playerAValue, "")}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="break-words text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            {playerBStats.player.name}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatMetric(row.playerBValue, "")}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+
+                  {capacityComparisonRows.length === 0 && (
+                    <div className="p-6 text-center text-sm font-bold text-slate-500">
+                      No hay puntuaciones de tests disponibles para estos
+                      jugadores.
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden max-h-[420px] overflow-auto md:block">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay puntuaciones de tests disponibles para estos
-                          jugadores.
-                        </td>
+                        <th className="px-4 py-3">Capacidad</th>
+                        <th className="px-4 py-3">{playerAStats.player.name}</th>
+                        <th className="px-4 py-3">{playerBStats.player.name}</th>
+                        <th className="px-4 py-3">Diferencia</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+
+                    <tbody>
+                      {capacityComparisonRows.map((row) => (
+                        <tr key={row.capacity} className="border-t border-slate-100">
+                          <td className="px-4 py-3 font-black text-slate-950">
+                            {row.capacity}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {formatMetric(row.playerAValue, "")}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {formatMetric(row.playerBValue, "")}
+                          </td>
+
+                          <td
+                            className={`px-4 py-3 font-black ${getDifferenceClass(
+                              row.playerAValue,
+                              row.playerBValue,
+                            )}`}
+                          >
+                            {formatDifference(row.playerAValue, row.playerBValue, "")}
+                          </td>
+                        </tr>
+                      ))}
+
+                      {capacityComparisonRows.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                          >
+                            No hay puntuaciones de tests disponibles para estos
+                            jugadores.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          </section>
-        </>
-      )}
+            </section>
+          </>
+        )}
+      </div>
     </AppShell>
   );
 }

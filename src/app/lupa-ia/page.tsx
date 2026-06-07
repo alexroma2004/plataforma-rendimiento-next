@@ -89,6 +89,24 @@ function buildQuickSummary(insights: PerformanceInsight[]) {
   return "La mayoría de avisos son de baja prioridad. El foco principal debería estar en seguir aumentando la cantidad y calidad de datos disponibles.";
 }
 
+function SummaryCard({
+  title,
+  value,
+  className = "border-slate-200 bg-white text-slate-950",
+}: {
+  title: string;
+  value: number;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${className}`}>
+      <p className="text-xs font-bold">{title}</p>
+
+      <p className="mt-2 text-2xl font-black sm:text-3xl">{value}</p>
+    </div>
+  );
+}
+
 export default function LupaIAPage() {
   const [dashboardData, setDashboardData] =
     useState<PlayerDashboardData | null>(null);
@@ -242,69 +260,58 @@ export default function LupaIAPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          <section className="rounded-2xl bg-slate-950 p-6 text-white shadow">
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
+          <section className="rounded-2xl bg-slate-950 p-5 text-white shadow sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-300 sm:tracking-[0.35em]">
               Resumen automático
             </p>
 
-            <h2 className="mt-3 text-2xl font-black">
+            <h2 className="mt-3 text-xl font-black sm:text-2xl">
               Lectura global de la plantilla
             </h2>
 
-            <p className="mt-3 max-w-5xl text-sm leading-6 text-slate-200">
+            <p className="mt-3 max-w-5xl break-words text-sm leading-6 text-slate-200">
               {buildQuickSummary(insights)}
             </p>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-5">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Insights totales
-              </p>
-              <p className="mt-2 text-3xl font-black text-slate-950">
-                {summary.total}
-              </p>
-            </div>
+          <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <SummaryCard
+              title="Insights totales"
+              value={summary.total}
+              className="border-slate-200 bg-white text-slate-950"
+            />
 
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
-              <p className="text-xs font-bold text-red-700">Alta prioridad</p>
-              <p className="mt-2 text-3xl font-black text-red-800">
-                {summary.high}
-              </p>
-            </div>
+            <SummaryCard
+              title="Alta prioridad"
+              value={summary.high}
+              className="border-red-200 bg-red-50 text-red-800"
+            />
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-              <p className="text-xs font-bold text-amber-700">
-                Prioridad media
-              </p>
-              <p className="mt-2 text-3xl font-black text-amber-800">
-                {summary.medium}
-              </p>
-            </div>
+            <SummaryCard
+              title="Prioridad media"
+              value={summary.medium}
+              className="border-amber-200 bg-amber-50 text-amber-800"
+            />
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
-              <p className="text-xs font-bold text-slate-500">
-                Prioridad baja
-              </p>
-              <p className="mt-2 text-3xl font-black text-slate-950">
-                {summary.low}
-              </p>
-            </div>
+            <SummaryCard
+              title="Prioridad baja"
+              value={summary.low}
+              className="border-slate-200 bg-slate-50 text-slate-950"
+            />
 
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-              <p className="text-xs font-bold text-blue-700">
-                Jugadores señalados
-              </p>
-              <p className="mt-2 text-3xl font-black text-blue-800">
-                {summary.playersWithInsights}
-              </p>
+            <div className="col-span-2 lg:col-span-1">
+              <SummaryCard
+                title="Jugadores señalados"
+                value={summary.playersWithInsights}
+                className="border-blue-200 bg-blue-50 text-blue-800"
+              />
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
                   Filtros
                 </p>
 
@@ -312,13 +319,13 @@ export default function LupaIAPage() {
                   Revisión de alertas automáticas
                 </h2>
 
-                <p className="mt-2 max-w-4xl text-sm text-slate-600">
+                <p className="mt-2 max-w-4xl break-words text-sm leading-6 text-slate-600">
                   Puedes filtrar por área, prioridad o jugador para revisar de
                   forma rápida las conclusiones generadas por la plataforma.
                 </p>
               </div>
 
-              <div className="grid w-full gap-3 md:grid-cols-3 xl:w-[760px]">
+              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-3 xl:w-[760px]">
                 <label className="text-sm font-bold text-slate-700">
                   Área
                   <select
@@ -385,17 +392,17 @@ export default function LupaIAPage() {
                       className="rounded-xl bg-slate-50 p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
                             {index + 1}
                           </div>
 
-                          <p className="text-sm font-black text-slate-950">
+                          <p className="break-words text-sm font-black text-slate-950">
                             {row.playerName}
                           </p>
                         </div>
 
-                        <p className="text-sm font-black text-slate-900">
+                        <p className="shrink-0 text-sm font-black text-slate-900">
                           {row.total}
                         </p>
                       </div>
@@ -431,7 +438,7 @@ export default function LupaIAPage() {
                     className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex flex-wrap gap-2">
                           <span
                             className={`rounded-full border px-3 py-1 text-xs font-black ${getPriorityClass(
@@ -450,19 +457,19 @@ export default function LupaIAPage() {
                           </span>
                         </div>
 
-                        <h3 className="mt-3 text-lg font-black text-slate-950">
+                        <h3 className="mt-3 break-words text-lg font-black text-slate-950">
                           {insight.title}
                         </h3>
 
                         {insight.playerName && (
-                          <p className="mt-1 text-sm font-bold text-slate-500">
+                          <p className="mt-1 break-words text-sm font-bold text-slate-500">
                             {insight.playerName}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <p className="mt-4 text-sm leading-6 text-slate-700">
+                    <p className="mt-4 break-words text-sm leading-6 text-slate-700">
                       {insight.description}
                     </p>
 
@@ -471,7 +478,7 @@ export default function LupaIAPage() {
                         Recomendación
                       </p>
 
-                      <p className="mt-2 text-sm font-bold leading-6 text-slate-800">
+                      <p className="mt-2 break-words text-sm font-bold leading-6 text-slate-800">
                         {insight.recommendation}
                       </p>
                     </div>

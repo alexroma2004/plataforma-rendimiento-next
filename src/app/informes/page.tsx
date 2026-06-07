@@ -81,9 +81,7 @@ function getAverage(values: Array<number | null | undefined>) {
 
   if (validValues.length === 0) return null;
 
-  return (
-    validValues.reduce((sum, value) => sum + value, 0) / validValues.length
-  );
+  return validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
 }
 
 function isSamePlayer(
@@ -599,6 +597,23 @@ function buildPlayerHtmlReport(row: PlayerReportRow, filters: ReportFilters) {
 `;
 }
 
+function SummaryCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default function InformesPage() {
   const [data, setData] = useState<TeamDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -744,328 +759,477 @@ export default function InformesPage() {
       title="Informes"
       subtitle="Generación de informes individuales, informes de sesión, informes semanales y reportes globales para cuerpo técnico."
     >
-      <section className="rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Informes descargables
-            </p>
+      <div className="space-y-8">
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Informes descargables
+              </p>
 
-            <h2 className="mt-2 text-2xl font-black text-slate-950">
-              Generador de informes HTML y CSV
-            </h2>
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Generador de informes HTML y CSV
+              </h2>
 
-            <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
-              Esta sección integra jugadores, GPS, rendimiento neuromuscular y
-              tests físicos para generar informes descargables. El HTML puede
-              abrirse en el navegador y guardarse como PDF desde el botón de
-              impresión.
-            </p>
+              <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
+                Esta sección integra jugadores, GPS, rendimiento neuromuscular y
+                tests físicos para generar informes descargables. El HTML puede
+                abrirse en el navegador y guardarse como PDF desde el botón de
+                impresión.
+              </p>
+            </div>
+
+            <div className="flex w-full flex-col gap-3 md:w-[280px] md:shrink-0">
+              <button
+                type="button"
+                onClick={handleDownloadHtml}
+                disabled={loading || playerRows.length === 0}
+                className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Descargar informe HTML
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                disabled={loading || playerRows.length === 0}
+                className="w-full rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Descargar resumen CSV
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 md:w-[280px]">
-            <button
-              type="button"
-              onClick={handleDownloadHtml}
-              disabled={loading || playerRows.length === 0}
-              className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Descargar informe HTML
-            </button>
+          {error && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {error}
+            </div>
+          )}
 
-            <button
-              type="button"
-              onClick={handleDownloadCsv}
-              disabled={loading || playerRows.length === 0}
-              className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Descargar resumen CSV
-            </button>
-          </div>
-        </div>
+          {loading && (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+              Cargando datos para informes...
+            </div>
+          )}
 
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
-          </div>
-        )}
+          {!loading && !error && (
+            <>
+              <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <SummaryCard title="Jugadores" value={summary.players} />
 
-        {loading && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-            Cargando datos para informes...
-          </div>
+                <SummaryCard title="Con GPS" value={summary.playersWithGps} />
+
+                <SummaryCard
+                  title="Con neuromuscular"
+                  value={summary.playersWithNeuromuscular}
+                />
+
+                <SummaryCard title="Con tests" value={summary.playersWithTests} />
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <label className="text-sm font-bold text-slate-700">
+                    Tipo de informe
+                    <select
+                      value={reportType}
+                      onChange={(event) =>
+                        setReportType(event.target.value as ReportType)
+                      }
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    >
+                      <option value="team">Informe global del equipo</option>
+                      <option value="player">Informe individual</option>
+                    </select>
+                  </label>
+
+                  <label className="text-sm font-bold text-slate-700">
+                    Jugador
+                    <select
+                      value={selectedPlayerId}
+                      onChange={(event) => setSelectedPlayerId(event.target.value)}
+                      disabled={reportType !== "player" || playerRows.length === 0}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      {playerRows.map((row) => (
+                        <option key={row.player.id} value={row.player.id}>
+                          {row.player.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="text-sm font-bold text-slate-700">
+                    Posición
+                    <select
+                      value={positionFilter}
+                      onChange={(event) => setPositionFilter(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    >
+                      <option value="all">Todas las posiciones</option>
+
+                      {positionOptions.map((position) => (
+                        <option key={position} value={position}>
+                          {position}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="text-sm font-bold text-slate-700">
+                    Desde
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(event) => setDateFrom(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </label>
+
+                  <label className="text-sm font-bold text-slate-700">
+                    Hasta
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(event) => setDateTo(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </label>
+                </div>
+
+                <p className="mt-4 text-xs font-bold leading-5 text-slate-500">
+                  Nota: el filtro de fecha se aplica a GPS y registros
+                  neuromusculares. Las puntuaciones de tests se integran de forma
+                  global porque la tabla actual de puntuaciones no incluye fecha
+                  de sesión.
+                </p>
+              </div>
+            </>
+          )}
+        </section>
+
+        {!loading && !error && reportType === "player" && selectedPlayerRow && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Vista previa individual
+              </p>
+
+              <h2 className="break-words text-xl font-black text-slate-950">
+                {selectedPlayerRow.player.name}
+              </h2>
+
+              <p className="text-sm font-bold text-slate-500">
+                {selectedPlayerRow.player.position ?? "Sin posición"}
+              </p>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <SummaryCard
+                title="Distancia GPS"
+                value={formatMeters(selectedPlayerRow.gpsTotalDistance)}
+              />
+
+              <SummaryCard
+                title="CMJ último"
+                value={formatNumber(selectedPlayerRow.cmjPre, 2)}
+              />
+
+              <SummaryCard
+                title="VMP última"
+                value={formatNumber(selectedPlayerRow.vmpPre, 3)}
+              />
+
+              <SummaryCard
+                title="Score tests"
+                value={formatNumber(selectedPlayerRow.averageTestScore, 1)}
+              />
+            </div>
+          </section>
         )}
 
         {!loading && !error && (
-          <>
-            <div className="mt-6 grid gap-4 md:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Jugadores</p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {summary.players}
-                </p>
-              </div>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
+            <div className="border-b border-slate-200 p-5">
+              <h2 className="text-xl font-black text-slate-950">
+                Resumen integrado por jugador
+              </h2>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Con GPS</p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {summary.playersWithGps}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  Con neuromuscular
-                </p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {summary.playersWithNeuromuscular}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Con tests</p>
-                <p className="mt-2 text-3xl font-black text-slate-950">
-                  {summary.playersWithTests}
-                </p>
-              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Vista previa de los datos que se utilizan para generar los
+                informes.
+              </p>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <label className="text-sm font-bold text-slate-700 xl:col-span-1">
-                  Tipo de informe
-                  <select
-                    value={reportType}
-                    onChange={(event) =>
-                      setReportType(event.target.value as ReportType)
-                    }
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                  >
-                    <option value="team">Informe global del equipo</option>
-                    <option value="player">Informe individual</option>
-                  </select>
-                </label>
-
-                <label className="text-sm font-bold text-slate-700 xl:col-span-1">
-                  Jugador
-                  <select
-                    value={selectedPlayerId}
-                    onChange={(event) => setSelectedPlayerId(event.target.value)}
-                    disabled={reportType !== "player" || playerRows.length === 0}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                  >
-                    {playerRows.map((row) => (
-                      <option key={row.player.id} value={row.player.id}>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {playerRows.map((row) => (
+                <article key={row.player.id} className="p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-base font-black text-slate-950">
                         {row.player.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                      </p>
 
-                <label className="text-sm font-bold text-slate-700 xl:col-span-1">
-                  Posición
-                  <select
-                    value={positionFilter}
-                    onChange={(event) => setPositionFilter(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                  >
-                    <option value="all">Todas las posiciones</option>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        {row.player.position ?? "Sin posición"}
+                      </p>
+                    </div>
 
-                    {positionOptions.map((position) => (
-                      <option key={position} value={position}>
-                        {position}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <span className="shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      Informe
+                    </span>
+                  </div>
 
-                <label className="text-sm font-bold text-slate-700 xl:col-span-1">
-                  Desde
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(event) => setDateFrom(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                  />
-                </label>
+                  <div className="mt-4 grid grid-cols-3 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        GPS
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {row.gpsSessions}
+                      </p>
+                    </div>
 
-                <label className="text-sm font-bold text-slate-700 xl:col-span-1">
-                  Hasta
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(event) => setDateTo(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                  />
-                </label>
-              </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Neuro
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {row.neuromuscularSessions}
+                      </p>
+                    </div>
 
-              <p className="mt-4 text-xs font-bold text-slate-500">
-                Nota: el filtro de fecha se aplica a GPS y registros
-                neuromusculares. Las puntuaciones de tests se integran de forma
-                global porque la tabla actual de puntuaciones no incluye fecha
-                de sesión.
-              </p>
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Tests
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {row.testScores}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Últimos registros
+                      </p>
+
+                      <p className="mt-1 font-bold text-slate-700">
+                        GPS: {formatDate(row.latestGpsDate)} · NM:{" "}
+                        {formatDate(row.latestNeuromuscularDate)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Distancia
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatMeters(row.gpsTotalDistance)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        HSR
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatMeters(row.gpsHsr)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Sprint
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatMeters(row.gpsSprintDistance)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Sprints
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.gpsSprints, 0)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        ACC
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.gpsAcc, 0)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        DEC
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.gpsDec, 0)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        CMJ
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.cmjPre, 2)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        RSI mod
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.rsimodPre, 2)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        VMP
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.vmpPre, 3)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        RPE
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.rpe, 1)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        Score tests
+                      </p>
+                      <p className="mt-1 font-black text-slate-950">
+                        {formatNumber(row.averageTestScore, 1)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+
+              {playerRows.length === 0 && (
+                <div className="p-6 text-center text-sm font-bold text-slate-500">
+                  No hay jugadores disponibles para generar informes con los
+                  filtros seleccionados.
+                </div>
+              )}
             </div>
-          </>
-        )}
-      </section>
 
-      {!loading && !error && reportType === "player" && selectedPlayerRow && (
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Vista previa individual
-            </p>
-
-            <h2 className="text-xl font-black text-slate-950">
-              {selectedPlayerRow.player.name}
-            </h2>
-
-            <p className="text-sm font-bold text-slate-500">
-              {selectedPlayerRow.player.position ?? "Sin posición"}
-            </p>
-          </div>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Distancia GPS</p>
-              <p className="mt-2 text-2xl font-black text-slate-950">
-                {formatMeters(selectedPlayerRow.gpsTotalDistance)}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">CMJ último</p>
-              <p className="mt-2 text-2xl font-black text-slate-950">
-                {formatNumber(selectedPlayerRow.cmjPre, 2)}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">VMP última</p>
-              <p className="mt-2 text-2xl font-black text-slate-950">
-                {formatNumber(selectedPlayerRow.vmpPre, 3)}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-bold text-slate-500">Score tests</p>
-              <p className="mt-2 text-2xl font-black text-slate-950">
-                {formatNumber(selectedPlayerRow.averageTestScore, 1)}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {!loading && !error && (
-        <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
-          <div className="border-b border-slate-200 p-5">
-            <h2 className="text-xl font-black text-slate-950">
-              Resumen integrado por jugador
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-600">
-              Vista previa de los datos que se utilizan para generar los
-              informes.
-            </p>
-          </div>
-
-          <div className="max-h-[620px] overflow-auto">
-            <table className="w-full min-w-[1500px] border-collapse text-left text-sm">
-              <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Jugador</th>
-                  <th className="px-4 py-3">Posición</th>
-                  <th className="px-4 py-3">GPS</th>
-                  <th className="px-4 py-3">Neuromuscular</th>
-                  <th className="px-4 py-3">Tests</th>
-                  <th className="px-4 py-3">Último GPS</th>
-                  <th className="px-4 py-3">Último NM</th>
-                  <th className="px-4 py-3">Distancia</th>
-                  <th className="px-4 py-3">HSR</th>
-                  <th className="px-4 py-3">Sprint</th>
-                  <th className="px-4 py-3">Sprints</th>
-                  <th className="px-4 py-3">ACC</th>
-                  <th className="px-4 py-3">DEC</th>
-                  <th className="px-4 py-3">CMJ</th>
-                  <th className="px-4 py-3">RSI mod</th>
-                  <th className="px-4 py-3">VMP</th>
-                  <th className="px-4 py-3">RPE</th>
-                  <th className="px-4 py-3">Score tests</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {playerRows.map((row) => (
-                  <tr key={row.player.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3 font-black text-slate-950">
-                      {row.player.name}
-                    </td>
-
-                    <td className="px-4 py-3">{row.player.position ?? "—"}</td>
-
-                    <td className="px-4 py-3">{row.gpsSessions}</td>
-
-                    <td className="px-4 py-3">{row.neuromuscularSessions}</td>
-
-                    <td className="px-4 py-3">{row.testScores}</td>
-
-                    <td className="px-4 py-3">{formatDate(row.latestGpsDate)}</td>
-
-                    <td className="px-4 py-3">
-                      {formatDate(row.latestNeuromuscularDate)}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {formatMeters(row.gpsTotalDistance)}
-                    </td>
-
-                    <td className="px-4 py-3">{formatMeters(row.gpsHsr)}</td>
-
-                    <td className="px-4 py-3">
-                      {formatMeters(row.gpsSprintDistance)}
-                    </td>
-
-                    <td className="px-4 py-3">{formatNumber(row.gpsSprints, 0)}</td>
-
-                    <td className="px-4 py-3">{formatNumber(row.gpsAcc, 0)}</td>
-
-                    <td className="px-4 py-3">{formatNumber(row.gpsDec, 0)}</td>
-
-                    <td className="px-4 py-3">{formatNumber(row.cmjPre, 2)}</td>
-
-                    <td className="px-4 py-3">
-                      {formatNumber(row.rsimodPre, 2)}
-                    </td>
-
-                    <td className="px-4 py-3">{formatNumber(row.vmpPre, 3)}</td>
-
-                    <td className="px-4 py-3">{formatNumber(row.rpe, 1)}</td>
-
-                    <td className="px-4 py-3">
-                      {formatNumber(row.averageTestScore, 1)}
-                    </td>
-                  </tr>
-                ))}
-
-                {playerRows.length === 0 && (
+            <div className="hidden max-h-[620px] overflow-auto md:block">
+              <table className="w-full min-w-[1500px] border-collapse text-left text-sm">
+                <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <td
-                      colSpan={18}
-                      className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                    >
-                      No hay jugadores disponibles para generar informes con
-                      los filtros seleccionados.
-                    </td>
+                    <th className="px-4 py-3">Jugador</th>
+                    <th className="px-4 py-3">Posición</th>
+                    <th className="px-4 py-3">GPS</th>
+                    <th className="px-4 py-3">Neuromuscular</th>
+                    <th className="px-4 py-3">Tests</th>
+                    <th className="px-4 py-3">Último GPS</th>
+                    <th className="px-4 py-3">Último NM</th>
+                    <th className="px-4 py-3">Distancia</th>
+                    <th className="px-4 py-3">HSR</th>
+                    <th className="px-4 py-3">Sprint</th>
+                    <th className="px-4 py-3">Sprints</th>
+                    <th className="px-4 py-3">ACC</th>
+                    <th className="px-4 py-3">DEC</th>
+                    <th className="px-4 py-3">CMJ</th>
+                    <th className="px-4 py-3">RSI mod</th>
+                    <th className="px-4 py-3">VMP</th>
+                    <th className="px-4 py-3">RPE</th>
+                    <th className="px-4 py-3">Score tests</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                </thead>
+
+                <tbody>
+                  {playerRows.map((row) => (
+                    <tr key={row.player.id} className="border-t border-slate-100">
+                      <td className="px-4 py-3 font-black text-slate-950">
+                        {row.player.name}
+                      </td>
+
+                      <td className="px-4 py-3">{row.player.position ?? "—"}</td>
+
+                      <td className="px-4 py-3">{row.gpsSessions}</td>
+
+                      <td className="px-4 py-3">{row.neuromuscularSessions}</td>
+
+                      <td className="px-4 py-3">{row.testScores}</td>
+
+                      <td className="px-4 py-3">{formatDate(row.latestGpsDate)}</td>
+
+                      <td className="px-4 py-3">
+                        {formatDate(row.latestNeuromuscularDate)}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {formatMeters(row.gpsTotalDistance)}
+                      </td>
+
+                      <td className="px-4 py-3">{formatMeters(row.gpsHsr)}</td>
+
+                      <td className="px-4 py-3">
+                        {formatMeters(row.gpsSprintDistance)}
+                      </td>
+
+                      <td className="px-4 py-3">{formatNumber(row.gpsSprints, 0)}</td>
+
+                      <td className="px-4 py-3">{formatNumber(row.gpsAcc, 0)}</td>
+
+                      <td className="px-4 py-3">{formatNumber(row.gpsDec, 0)}</td>
+
+                      <td className="px-4 py-3">{formatNumber(row.cmjPre, 2)}</td>
+
+                      <td className="px-4 py-3">
+                        {formatNumber(row.rsimodPre, 2)}
+                      </td>
+
+                      <td className="px-4 py-3">{formatNumber(row.vmpPre, 3)}</td>
+
+                      <td className="px-4 py-3">{formatNumber(row.rpe, 1)}</td>
+
+                      <td className="px-4 py-3">
+                        {formatNumber(row.averageTestScore, 1)}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {playerRows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={18}
+                        className="px-4 py-6 text-center text-sm font-bold text-slate-500"
+                      >
+                        No hay jugadores disponibles para generar informes con
+                        los filtros seleccionados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+      </div>
     </AppShell>
   );
 }
