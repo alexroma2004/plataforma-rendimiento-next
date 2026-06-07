@@ -99,15 +99,20 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: "Sistema",
-    items: [
-      {
-        label: "Administración",
-        href: "/admin",
-        allowedRoles: ["admin"],
-      },
-    ],
-  },
+  title: "Sistema",
+  items: [
+    {
+      label: "Administración",
+      href: "/admin",
+      allowedRoles: ["admin"],
+    },
+    {
+      label: "Usuarios",
+      href: "/admin/usuarios",
+      allowedRoles: ["admin"],
+    },
+  ],
+},
 ];
 
 function isItemActive(pathname: string, href: string) {

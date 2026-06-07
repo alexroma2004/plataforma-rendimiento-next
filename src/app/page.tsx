@@ -1,15 +1,33 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import KpiCard from "@/components/ui/KpiCard";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  DEFAULT_ROLE,
+  getRoleLabel,
+  isAppRole,
+  type AppRole,
+} from "@/lib/auth/permissions";
 
-const moduleCards = [
+type ModuleCard = {
+  title: string;
+  description: string;
+  href: string;
+  badge: string;
+  allowedRoles?: AppRole[];
+};
+
+const moduleCards: ModuleCard[] = [
   {
     title: "Cargar datos",
     description:
       "Importa sesiones GPS, neuromusculares y tests físicos desde archivos CSV.",
     href: "/cargar",
     badge: "Carga",
+    allowedRoles: ["admin", "staff"],
   },
   {
     title: "GPS",
@@ -47,6 +65,13 @@ const moduleCards = [
     badge: "Individual",
   },
   {
+    title: "Perfil F-R",
+    description:
+      "Analiza la relación entre RSI modificado, VMP y perfil neuromuscular del jugador.",
+    href: "/perfil-fr",
+    badge: "Perfil",
+  },
+  {
     title: "Comparador",
     description:
       "Compara jugadores, variables, fechas y perfiles de rendimiento.",
@@ -73,10 +98,60 @@ const moduleCards = [
       "Controla equipos, jugadores, sesiones cargadas e integridad de los datos.",
     href: "/admin",
     badge: "Sistema",
+    allowedRoles: ["admin"],
   },
 ];
 
+function canSeeModule(module: ModuleCard, role: AppRole) {
+  if (!module.allowedRoles) return true;
+
+  return module.allowedRoles.includes(role);
+}
+
 export default function Home() {
+  const [role, setRole] = useState<AppRole>(DEFAULT_ROLE);
+  const [email, setEmail] = useState("");
+  const [loadingRole, setLoadingRole] = useState(true);
+
+  useEffect(() => {
+    async function loadRole() {
+      try {
+        setLoadingRole(true);
+
+        const supabase = getSupabaseClient();
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        setEmail(user?.email ?? "");
+
+        if (!user) {
+          setRole(DEFAULT_ROLE);
+          return;
+        }
+
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const userRole = data?.role;
+
+        setRole(isAppRole(userRole) ? userRole : DEFAULT_ROLE);
+      } finally {
+        setLoadingRole(false);
+      }
+    }
+
+    loadRole();
+  }, []);
+
+  const visibleModuleCards = useMemo(() => {
+    return moduleCards.filter((module) => canSeeModule(module, role));
+  }, [role]);
+
   return (
     <AppShell
       title="Rendimiento · Tests · GPS"
@@ -106,14 +181,16 @@ export default function Home() {
           />
 
           <KpiCard
-            title="Supabase"
-            value={isSupabaseConfigured ? "OK" : "Pendiente"}
+            title="Usuario"
+            value={loadingRole ? "Cargando" : getRoleLabel(role)}
             subtitle={
-              isSupabaseConfigured
-                ? "La conexión con la base de datos está configurada."
-                : "Falta configurar las variables de entorno."
+              email
+                ? `Sesión iniciada como ${email}.`
+                : isSupabaseConfigured
+                  ? "Sesión activa en la plataforma."
+                  : "Supabase pendiente de configurar."
             }
-            badge="Base de datos"
+            badge="Rol"
           />
         </section>
 
@@ -124,19 +201,19 @@ export default function Home() {
             </p>
 
             <h2 className="mt-2 text-2xl font-black text-slate-950">
-              Módulos principales de la plataforma
+              Módulos disponibles para tu rol
             </h2>
 
             <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
-              Desde este panel puedes acceder a las áreas principales de la
-              aplicación: carga de datos, análisis GPS, rendimiento
-              neuromuscular, tests físicos, informes, comparadores y control de
-              administración.
+              Esta pantalla muestra únicamente los módulos disponibles para el
+              rol actual. Los usuarios de solo lectura no ven carga de datos ni
+              administración; el staff puede cargar datos; el administrador ve
+              toda la plataforma.
             </p>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {moduleCards.map((module) => (
+            {visibleModuleCards.map((module) => (
               <Link
                 key={module.href}
                 href={module.href}
@@ -173,36 +250,35 @@ export default function Home() {
             </p>
 
             <h2 className="mt-2 text-xl font-black text-slate-950">
-              Aplicación en fase funcional
+              Aplicación en fase funcional y protegida
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              La plataforma ya cuenta con estructura principal, conexión con
-              Supabase, carga de datos GPS, carga neuromuscular, carga de tests,
-              dashboards de jugador y equipo, informes descargables,
-              comparador, Lupa IA y administración.
+              La plataforma ya cuenta con login obligatorio, roles de usuario,
+              RLS activo en Supabase, carga de datos GPS, carga neuromuscular,
+              carga de tests, dashboards de jugador y equipo, informes
+              descargables, comparador, Lupa IA y administración.
             </p>
 
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              El siguiente objetivo será perfeccionar la experiencia visual,
-              mejorar los informes, añadir gráficos más avanzados y preparar la
-              aplicación para un uso real estable durante la temporada.
+              La navegación y los accesos se adaptan al rol del usuario:
+              administrador, staff o solo lectura.
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-              Próximo bloque
+              Seguridad
             </p>
 
             <h2 className="mt-2 text-xl font-black">
-              Pulido final de la plataforma
+              Roles activos
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              A partir de ahora conviene trabajar en estética general, iconos,
-              coherencia visual, navegación, exportaciones, validaciones y
-              preparación para despliegue.
+              Admin puede gestionar todo. Staff puede consultar y cargar datos.
+              Viewer solo puede consultar información y generar análisis de
+              lectura.
             </p>
           </div>
         </section>
