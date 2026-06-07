@@ -1,5 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  canAccessRoute,
+  DEFAULT_ROLE,
+  isAppRole,
+  type AppRole,
+} from "@/lib/auth/permissions";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -10,6 +16,25 @@ function isPublicRoute(pathname: string) {
   return publicRoutes.some((route) => {
     return pathname === route || pathname.startsWith(`${route}/`);
   });
+}
+
+async function getUserRole(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+): Promise<AppRole> {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return DEFAULT_ROLE;
+  }
+
+  const role = data?.role;
+
+  return isAppRole(role) ? role : DEFAULT_ROLE;
 }
 
 export async function proxy(request: NextRequest) {
@@ -68,6 +93,20 @@ export async function proxy(request: NextRequest) {
     redirectUrl.search = "";
 
     return NextResponse.redirect(redirectUrl);
+  }
+
+  if (isLoggedIn && user && pathname !== "/sin-permiso") {
+    const role = await getUserRole(supabase, user.id);
+    const hasAccess = canAccessRoute(role, pathname);
+
+    if (!hasAccess) {
+      const redirectUrl = request.nextUrl.clone();
+
+      redirectUrl.pathname = "/sin-permiso";
+      redirectUrl.searchParams.set("from", pathname);
+
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return response;

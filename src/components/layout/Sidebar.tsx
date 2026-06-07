@@ -1,12 +1,20 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import {
+  DEFAULT_ROLE,
+  getRoleLabel,
+  isAppRole,
+  type AppRole,
+} from "@/lib/auth/permissions";
 
 type NavItem = {
   label: string;
   href: string;
+  allowedRoles?: AppRole[];
 };
 
 type NavGroup = {
@@ -30,18 +38,22 @@ const navGroups: NavGroup[] = [
       {
         label: "Cargar datos",
         href: "/cargar",
+        allowedRoles: ["admin", "staff"],
       },
       {
         label: "Cargar GPS",
         href: "/cargar-gps",
+        allowedRoles: ["admin", "staff"],
       },
       {
         label: "Cargar neuromuscular",
         href: "/cargar-neuromuscular",
+        allowedRoles: ["admin", "staff"],
       },
       {
         label: "Cargar tests",
         href: "/cargar-tests",
+        allowedRoles: ["admin", "staff"],
       },
     ],
   },
@@ -92,6 +104,7 @@ const navGroups: NavGroup[] = [
       {
         label: "Administración",
         href: "/admin",
+        allowedRoles: ["admin"],
       },
     ],
   },
@@ -105,9 +118,63 @@ function isItemActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function canSeeItem(item: NavItem, role: AppRole) {
+  if (!item.allowedRoles) return true;
+
+  return item.allowedRoles.includes(role);
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+
+  const [role, setRole] = useState<AppRole>(DEFAULT_ROLE);
+  const [email, setEmail] = useState("");
+  const [loadingRole, setLoadingRole] = useState(true);
+
+  useEffect(() => {
+    async function loadRole() {
+      try {
+        setLoadingRole(true);
+
+        const supabase = getSupabaseClient();
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        setEmail(user?.email ?? "");
+
+        if (!user) {
+          setRole(DEFAULT_ROLE);
+          return;
+        }
+
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const userRole = data?.role;
+
+        setRole(isAppRole(userRole) ? userRole : DEFAULT_ROLE);
+      } finally {
+        setLoadingRole(false);
+      }
+    }
+
+    loadRole();
+  }, []);
+
+  const visibleGroups = useMemo(() => {
+    return navGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => canSeeItem(item, role)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [role]);
 
   async function handleSignOut() {
     const supabase = getSupabaseClient();
@@ -132,10 +199,24 @@ export default function Sidebar() {
         <p className="mt-1 text-sm font-bold text-slate-500">
           Next.js · Supabase · Vercel
         </p>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+            Usuario
+          </p>
+
+          <p className="mt-1 truncate text-xs font-bold text-slate-700">
+            {email || "Sesión activa"}
+          </p>
+
+          <span className="mt-2 inline-flex rounded-full bg-slate-950 px-3 py-1 text-[11px] font-black text-white">
+            {loadingRole ? "Cargando rol..." : getRoleLabel(role)}
+          </span>
+        </div>
       </div>
 
       <nav className="flex-1 space-y-6">
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.title}>
             <p className="mb-2 px-4 text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
               {group.title}
