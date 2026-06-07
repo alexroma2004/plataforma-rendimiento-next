@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ChangeEvent, useMemo, useState } from "react";
 import Papa from "papaparse";
+import AppShell from "@/components/layout/AppShell";
 import {
   createTestSessionWithResults,
   type RawTestRow,
@@ -71,10 +72,7 @@ function toNumberOrNull(value: unknown): number | null {
     return Number.isFinite(value) ? value : null;
   }
 
-  let text = String(value)
-    .trim()
-    .toLowerCase()
-    .replace(/\s/g, "");
+  let text = String(value).trim().toLowerCase().replace(/\s/g, "");
 
   if (!text || text === "—" || text.toUpperCase() === "N/A") {
     return null;
@@ -303,6 +301,24 @@ function preparePreviewRow(row: RawTestRow): TestPreviewRow | null {
   };
 }
 
+function SummaryCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default function CargarTestsPage() {
   const [rawRows, setRawRows] = useState<RawTestRow[]>([]);
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
@@ -335,7 +351,7 @@ export default function CargarTestsPage() {
     };
   }, [previewRows]);
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     setSaveMessage(null);
@@ -423,213 +439,268 @@ export default function CargarTestsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="Cargar tests físicos"
+      subtitle="Importación de resultados de tests físicos desde CSV. La aplicación detecta jugador, bloque de test, variable, resultado y puntuación para guardar la sesión en Supabase."
+    >
+      <div className="space-y-8">
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Tests
+              </p>
 
-        <h1 className="mt-3 text-4xl font-black">Cargar tests físicos</h1>
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Carga y previsualización de archivo
+              </h2>
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Importación de resultados de tests físicos desde CSV. La aplicación
-          detecta jugador, bloque de test, variable, resultado y puntuación para
-          guardar la sesión en Supabase.
-        </p>
-      </section>
+              <p className="mt-3 max-w-4xl break-words text-sm leading-6 text-slate-600">
+                El CSV debe incluir, como mínimo, jugador, bloque/capacidad,
+                variable/prueba y valor. Si incluye puntuación de variable, la
+                app calculará automáticamente la puntuación final por capacidad.
+              </p>
+            </div>
 
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Tests
-            </p>
-
-            <h2 className="mt-2 text-2xl font-black">
-              Carga y previsualización de archivo
-            </h2>
-
-            <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
-              El CSV debe incluir, como mínimo, jugador, bloque/capacidad,
-              variable/prueba y valor. Si incluye puntuación de variable, la app
-              calculará automáticamente la puntuación final por capacidad.
-            </p>
+            <label className="w-full cursor-pointer rounded-xl bg-slate-950 px-5 py-3 text-center text-sm font-bold text-white shadow hover:bg-slate-800 md:w-auto md:shrink-0">
+              Seleccionar CSV tests
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </label>
           </div>
 
-          <label className="cursor-pointer rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow hover:bg-slate-800">
-            Seleccionar CSV tests
-            <input
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-          </label>
-        </div>
-
-        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          Archivo seleccionado:{" "}
-          <span className="font-bold">{selectedFilename ?? "ninguno"}</span>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">
-              Registros válidos
-            </p>
-            <p className="mt-2 text-3xl font-black">{summary.rows}</p>
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            Archivo seleccionado:{" "}
+            <span className="break-all font-bold">
+              {selectedFilename ?? "ninguno"}
+            </span>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">
-              Jugadores detectados
-            </p>
-            <p className="mt-2 text-3xl font-black">{summary.players}</p>
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <SummaryCard title="Registros válidos" value={summary.rows} />
+            <SummaryCard title="Jugadores detectados" value={summary.players} />
+            <SummaryCard title="Bloques/capacidades" value={summary.blocks} />
+            <SummaryCard title="Variables" value={summary.variables} />
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">
-              Bloques/capacidades
-            </p>
-            <p className="mt-2 text-3xl font-black">{summary.blocks}</p>
-          </div>
+          {rawRows.length > 0 && previewRows.length === 0 && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              El archivo se ha leído, pero no se ha detectado ningún registro
+              válido. Revisa que existan columnas equivalentes a jugador,
+              bloque/capacidad y variable/prueba.
+            </div>
+          )}
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">Variables</p>
-            <p className="mt-2 text-3xl font-black">{summary.variables}</p>
-          </div>
-        </div>
+          {previewRows.length > 0 && (
+            <>
+              <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+                <h3 className="text-lg font-black text-slate-950">
+                  Datos de la sesión
+                </h3>
 
-        {rawRows.length > 0 && previewRows.length === 0 && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            El archivo se ha leído, pero no se ha detectado ningún registro
-            válido. Revisa que existan columnas equivalentes a jugador,
-            bloque/capacidad y variable/prueba.
-          </div>
-        )}
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <label className="text-sm font-bold text-slate-700">
+                    Fecha de sesión
+                    <input
+                      type="date"
+                      value={sessionDate}
+                      onChange={(event) => setSessionDate(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </label>
 
-        {previewRows.length > 0 && (
-          <>
-            <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="text-lg font-black">Datos de la sesión</h3>
+                  <label className="text-sm font-bold text-slate-700">
+                    Nombre de sesión
+                    <input
+                      type="text"
+                      value={sessionName}
+                      onChange={(event) => setSessionName(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                      placeholder="Ej. Tests pretemporada"
+                    />
+                  </label>
 
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <label className="text-sm font-bold text-slate-700">
-                  Fecha de sesión
-                  <input
-                    type="date"
-                    value={sessionDate}
-                    onChange={(event) => setSessionDate(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  />
-                </label>
-
-                <label className="text-sm font-bold text-slate-700">
-                  Nombre de sesión
-                  <input
-                    type="text"
-                    value={sessionName}
-                    onChange={(event) => setSessionName(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    placeholder="Ej. Tests pretemporada"
-                  />
-                </label>
-
-                <label className="text-sm font-bold text-slate-700">
-                  Contexto
-                  <input
-                    type="text"
-                    value={context}
-                    onChange={(event) => setContext(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    placeholder="Ej. PRETEMPORADA"
-                  />
-                </label>
-              </div>
-
-              <label className="mt-4 block text-sm font-bold text-slate-700">
-                Notas
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  className="mt-2 min-h-20 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  placeholder="Notas opcionales sobre la sesión..."
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={handleSaveSession}
-                disabled={isSaving}
-                className="mt-5 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSaving
-                  ? "Guardando sesión de tests..."
-                  : "Guardar sesión de tests en Supabase"}
-              </button>
-
-              {saveMessage && (
-                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                  {saveMessage}
+                  <label className="text-sm font-bold text-slate-700">
+                    Contexto
+                    <input
+                      type="text"
+                      value={context}
+                      onChange={(event) => setContext(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                      placeholder="Ej. PRETEMPORADA"
+                    />
+                  </label>
                 </div>
-              )}
 
-              {saveError && (
-                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-                  {saveError}
+                <label className="mt-4 block text-sm font-bold text-slate-700">
+                  Notas
+                  <textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    placeholder="Notas opcionales sobre la sesión..."
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleSaveSession}
+                  disabled={isSaving}
+                  className="mt-5 w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  {isSaving
+                    ? "Guardando sesión de tests..."
+                    : "Guardar sesión de tests en Supabase"}
+                </button>
+
+                {saveMessage && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                    {saveMessage}
+                  </div>
+                )}
+
+                {saveError && (
+                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+                    {saveError}
+                  </div>
+                )}
+              </section>
+
+              <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 bg-slate-50 p-5">
+                  <h3 className="text-lg font-black text-slate-950">
+                    Previsualización de tests
+                  </h3>
+
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Revisa que los jugadores, bloques, variables y puntuaciones
+                    se hayan leído correctamente antes de guardar.
+                  </p>
                 </div>
-              )}
-            </section>
 
-            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-              <div className="max-h-[520px] overflow-auto">
-                <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Jugador</th>
-                      <th className="px-4 py-3">Posición</th>
-                      <th className="px-4 py-3">Bloque</th>
-                      <th className="px-4 py-3">Variable</th>
-                      <th className="px-4 py-3">Valor</th>
-                      <th className="px-4 py-3">Unidad</th>
-                      <th className="px-4 py-3">Puntuación</th>
-                      <th className="px-4 py-3">Clasificación</th>
-                    </tr>
-                  </thead>
+                <div className="divide-y divide-slate-100 md:hidden">
+                  {previewRows.map((row, index) => (
+                    <article key={`${row.player_name}-${index}`} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-base font-black text-slate-950">
+                            {row.player_name}
+                          </p>
 
-                  <tbody>
-                    {previewRows.map((row, index) => (
-                      <tr key={index} className="border-t border-slate-100">
-                        <td className="px-4 py-3 font-black">
-                          {row.player_name}
-                        </td>
-                        <td className="px-4 py-3">{row.position ?? "—"}</td>
-                        <td className="px-4 py-3">{row.test_block}</td>
-                        <td className="px-4 py-3">{row.variable}</td>
-                        <td className="px-4 py-3">
-                          {formatNumber(row.value)}
-                        </td>
-                        <td className="px-4 py-3">{row.unit ?? "—"}</td>
-                        <td className="px-4 py-3">
-                          {formatNumber(row.variable_score)}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.classification ?? "—"}
-                        </td>
+                          <p className="mt-1 break-words text-xs font-bold text-slate-500">
+                            {row.position ?? "Sin posición"} · {row.test_block}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                          Test
+                        </span>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          Variable
+                        </p>
+
+                        <p className="mt-1 break-words text-sm font-black text-slate-950">
+                          {row.variable}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Valor
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(row.value)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Unidad
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {row.unit ?? "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Puntuación
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {formatNumber(row.variable_score)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                            Clasificación
+                          </p>
+                          <p className="mt-1 break-words font-black text-slate-950">
+                            {row.classification ?? "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden max-h-[520px] overflow-auto md:block">
+                  <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Jugador</th>
+                        <th className="px-4 py-3">Posición</th>
+                        <th className="px-4 py-3">Bloque</th>
+                        <th className="px-4 py-3">Variable</th>
+                        <th className="px-4 py-3">Valor</th>
+                        <th className="px-4 py-3">Unidad</th>
+                        <th className="px-4 py-3">Puntuación</th>
+                        <th className="px-4 py-3">Clasificación</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    </thead>
 
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-              Archivo de tests leído correctamente. Revisa la fecha, el contexto
-              y el nombre de sesión antes de guardar en Supabase.
-            </div>
-          </>
-        )}
-      </section>
-    </main>
+                    <tbody>
+                      {previewRows.map((row, index) => (
+                        <tr key={index} className="border-t border-slate-100">
+                          <td className="px-4 py-3 font-black">
+                            {row.player_name}
+                          </td>
+                          <td className="px-4 py-3">{row.position ?? "—"}</td>
+                          <td className="px-4 py-3">{row.test_block}</td>
+                          <td className="px-4 py-3">{row.variable}</td>
+                          <td className="px-4 py-3">
+                            {formatNumber(row.value)}
+                          </td>
+                          <td className="px-4 py-3">{row.unit ?? "—"}</td>
+                          <td className="px-4 py-3">
+                            {formatNumber(row.variable_score)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.classification ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
+                Archivo de tests leído correctamente. Revisa la fecha, el
+                contexto y el nombre de sesión antes de guardar en Supabase.
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </AppShell>
   );
 }

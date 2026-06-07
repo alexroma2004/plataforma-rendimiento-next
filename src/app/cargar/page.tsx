@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AppShell from "@/components/layout/AppShell";
 
 const uploadSections = [
   {
@@ -27,92 +28,98 @@ const uploadSections = [
   },
 ];
 
+const workflowSteps = [
+  {
+    title: "1. Importar",
+    description:
+      "Cargar archivos GPS, neuromusculares o de tests desde sus páginas específicas.",
+  },
+  {
+    title: "2. Revisar",
+    description:
+      "Comprobar jugadores detectados, variables leídas y posibles registros incompletos antes de guardar.",
+  },
+  {
+    title: "3. Guardar",
+    description:
+      "Insertar la sesión en Supabase para que después pueda analizarse desde los módulos de rendimiento.",
+  },
+];
+
 export default function CargarDatosPage() {
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="Cargar datos"
+      subtitle="Selecciona el tipo de información que quieres importar a la plataforma. Cada bloque tiene su propio flujo de carga, previsualización y guardado en Supabase."
+    >
+      <div className="space-y-8">
+        <section className="grid gap-6 lg:grid-cols-3">
+          {uploadSections.map((section) => (
+            <Link
+              key={section.href}
+              href={section.href}
+              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg sm:p-6"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.3em]">
+                    {section.subtitle}
+                  </p>
 
-        <h1 className="mt-3 text-4xl font-black">Cargar datos</h1>
+                  <h2 className="mt-3 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                    {section.title}
+                  </h2>
+                </div>
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Selecciona el tipo de información que quieres importar a la
-          plataforma. Cada bloque tiene su propio flujo de carga,
-          previsualización y guardado en Supabase.
-        </p>
-      </section>
-
-      <section className="mt-8 grid gap-6 lg:grid-cols-3">
-        {uploadSections.map((section) => (
-          <Link
-            key={section.href}
-            href={section.href}
-            className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-600">
-                  {section.subtitle}
-                </p>
-
-                <h2 className="mt-3 text-2xl font-black text-slate-950">
-                  {section.title}
-                </h2>
+                <span className="w-fit shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                  {section.tag}
+                </span>
               </div>
 
-              <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
-                {section.tag}
-              </span>
-            </div>
+              <p className="mt-4 break-words text-sm leading-6 text-slate-600">
+                {section.description}
+              </p>
 
-            <p className="mt-4 text-sm leading-6 text-slate-600">
-              {section.description}
-            </p>
+              <div className="mt-6 inline-flex w-full justify-center rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition group-hover:bg-blue-700 sm:w-auto">
+                Entrar
+              </div>
+            </Link>
+          ))}
+        </section>
 
-            <div className="mt-6 inline-flex rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition group-hover:bg-blue-700">
-              Entrar
-            </div>
-          </Link>
-        ))}
-      </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+            Flujo recomendado
+          </p>
 
-      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-          Flujo recomendado
-        </p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">
+            Orden de trabajo dentro de la plataforma
+          </h2>
 
-        <h2 className="mt-2 text-xl font-black text-slate-950">
-          Orden de trabajo dentro de la plataforma
-        </h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+            Este flujo ayuda a evitar errores antes de guardar datos en la base
+            de datos y facilita que los módulos de análisis trabajen con
+            información limpia.
+          </p>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-950">1. Importar</p>
-            <p className="mt-2 text-sm text-slate-600">
-              Cargar archivos GPS, neuromusculares o de tests desde sus páginas
-              específicas.
-            </p>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {workflowSteps.map((step) => (
+              <div
+                key={step.title}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <p className="text-sm font-black text-slate-950">
+                  {step.title}
+                </p>
+
+                <p className="mt-2 break-words text-sm leading-6 text-slate-600">
+                  {step.description}
+                </p>
+              </div>
+            ))}
           </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-950">2. Revisar</p>
-            <p className="mt-2 text-sm text-slate-600">
-              Comprobar jugadores detectados, variables leídas y posibles
-              registros incompletos antes de guardar.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-950">3. Guardar</p>
-            <p className="mt-2 text-sm text-slate-600">
-              Insertar la sesión en Supabase para que después pueda analizarse
-              desde los módulos de rendimiento.
-            </p>
-          </div>
-        </div>
-      </section>
-    </main>
+        </section>
+      </div>
+    </AppShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import AppShell from "@/components/layout/AppShell";
 import {
   createNeuromuscularSessionWithRecords,
   type NeuromuscularRecordInput,
@@ -149,12 +150,7 @@ const headerAliases = {
     "velocidad_pre",
     "velocidad_inicial",
   ],
-  cmj_post: [
-    "cmj_post",
-    "cmj_final",
-    "cmj_fin",
-    "cmj_post_cm",
-  ],
+  cmj_post: ["cmj_post", "cmj_final", "cmj_fin", "cmj_post_cm"],
   rsimod_post: [
     "rsimod_post",
     "rsi_post",
@@ -189,10 +185,7 @@ const headerAliases = {
   notes: ["notes", "nota", "notas", "observaciones"],
 };
 
-function getValueFromRow(
-  row: Record<string, string>,
-  aliases: string[],
-) {
+function getValueFromRow(row: Record<string, string>, aliases: string[]) {
   for (const alias of aliases) {
     const normalizedAlias = normalizeHeader(alias);
 
@@ -256,9 +249,7 @@ function parseNeuromuscularCsv(text: string): NeuromuscularRecordInput[] {
   }
 
   if (records.length === 0) {
-    throw new Error(
-      "No se ha encontrado ningún jugador válido en el archivo.",
-    );
+    throw new Error("No se ha encontrado ningún jugador válido en el archivo.");
   }
 
   return records;
@@ -359,9 +350,6 @@ function splitCsvLine(line: string, delimiter: string) {
 
   result.push(current.trim());
 
-  // Algunos CSV exportados desde Excel/Sheets llegan con cada fila completa
-  // entrecomillada: "jugador;posicion;cmj_pre;...".
-  // En ese caso, la primera pasada devuelve una sola celda con separadores dentro.
   if (result.length === 1 && result[0].includes(delimiter)) {
     return splitCsvLine(result[0], delimiter);
   }
@@ -564,7 +552,8 @@ async function parseNeuromuscularCsvFile(
 
       if (playerNameFromRow) {
         currentPlayerName = playerNameFromRow;
-        currentPosition = positionColumn !== -1 ? getCell(row, positionColumn) : null;
+        currentPosition =
+          positionColumn !== -1 ? getCell(row, positionColumn) : null;
       }
 
       if (!currentPlayerName) continue;
@@ -644,12 +633,7 @@ async function parseNeuromuscularCsvFile(
 
   const rsimodSingleColumn =
     rsimodPreColumn === -1 && rsimodPostColumn === -1
-      ? findColumn(headers, [
-          "rsi",
-          "rsimod",
-          "rsi mod",
-          "rsi modificado",
-        ])
+      ? findColumn(headers, ["rsi", "rsimod", "rsi mod", "rsi modificado"])
       : -1;
 
   const vmpPreColumn = findColumn(headers, [
@@ -732,6 +716,24 @@ async function parseNeuromuscularCsvFile(
 
   return Array.from(recordsMap.values()).filter(
     (record) => record.player_name && hasAnyNeuromuscularValue(record),
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+
+      <p className="mt-2 break-words text-2xl font-black text-slate-950 sm:text-3xl">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -873,414 +875,498 @@ export default function CargarNeuromuscularPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-8 text-slate-950">
-      <section className="rounded-2xl bg-slate-950 p-8 text-white shadow">
-        <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-300">
-          Plataforma de rendimiento
-        </p>
+    <AppShell
+      title="Cargar control neuromuscular"
+      subtitle="Importa o introduce manualmente los datos de CMJ, RSI modificado, VMP, carga de sentadilla y RPE. Al guardar, la sesión se vincula automáticamente con el equipo y los jugadores existentes."
+    >
+      <div className="space-y-8">
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <label className="text-sm font-bold text-slate-700">
+              Fecha
+              <input
+                type="date"
+                value={sessionDate}
+                onChange={(event) => setSessionDate(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </label>
 
-        <h1 className="mt-3 text-4xl font-black">
-          Cargar control neuromuscular
-        </h1>
+            <label className="text-sm font-bold text-slate-700">
+              Microciclo
+              <select
+                value={microcycle}
+                onChange={(event) => setMicrocycle(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+              >
+                {microcycleOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-200">
-          Importa o introduce manualmente los datos de CMJ, RSI modificado, VMP,
-          carga de sentadilla y RPE. Al guardar, la sesión se vincula
-          automáticamente con el equipo y los jugadores existentes.
-        </p>
-      </section>
-
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <div className="grid gap-4 md:grid-cols-4">
-          <label className="text-sm font-bold text-slate-700">
-            Fecha
-            <input
-              type="date"
-              value={sessionDate}
-              onChange={(event) => setSessionDate(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-            />
-          </label>
-
-          <label className="text-sm font-bold text-slate-700">
-            Microciclo
-            <select
-              value={microcycle}
-              onChange={(event) => setMicrocycle(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-            >
-              {microcycleOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm font-bold text-slate-700 md:col-span-2">
-            Nombre de la sesión
-            <input
-              type="text"
-              value={sessionName}
-              onChange={(event) => setSessionName(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="Control neuromuscular"
-            />
-          </label>
-        </div>
-
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
+            <label className="text-sm font-bold text-slate-700 md:col-span-2">
+              Nombre de la sesión
+              <input
+                type="text"
+                value={sessionName}
+                onChange={(event) => setSessionName(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="Control neuromuscular"
+              />
+            </label>
           </div>
-        )}
 
-        {successMessage && (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-            {successMessage}
-          </div>
-        )}
-      </section>
-
-      <section className="mt-8 grid gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-            Importación
-          </p>
-
-          <h2 className="mt-2 text-2xl font-black">Cargar archivo CSV</h2>
-
-          <p className="mt-2 text-sm text-slate-600">
-            Sube un CSV separado por punto y coma. La app reconoce columnas como
-            Jugador, Posición, CMJ pre, CMJ post, RSI mod pre, RSI mod post, VMP
-            pre, VMP post, Carga y RPE.
-          </p>
-
-          <label className="mt-5 block rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-            <span className="text-sm font-black text-slate-700">
-              Seleccionar CSV
-            </span>
-
-            <input
-              type="file"
-              accept=".csv,.txt"
-              onChange={(event) =>
-                handleFileUpload(event.target.files?.[0] ?? null)
-              }
-              className="mt-4 block w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-            />
-          </label>
-
-          {sourceFilename && (
-            <p className="mt-4 text-sm font-bold text-slate-600">
-              Archivo cargado: {sourceFilename}
-            </p>
+          {error && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {error}
+            </div>
           )}
-        </div>
 
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-            Entrada manual
-          </p>
+          {successMessage && (
+            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+              {successMessage}
+            </div>
+          )}
+        </section>
 
-          <h2 className="mt-2 text-2xl font-black">Añadir jugador</h2>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <input
-              type="text"
-              value={manualForm.player_name}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  player_name: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="Jugador"
-            />
-
-            <input
-              type="text"
-              value={manualForm.position}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  position: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="Posición"
-            />
-
-            <input
-              type="text"
-              value={manualForm.cmj_pre}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  cmj_pre: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="CMJ pre"
-            />
-
-            <input
-              type="text"
-              value={manualForm.cmj_post}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  cmj_post: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="CMJ post"
-            />
-
-            <input
-              type="text"
-              value={manualForm.rsimod_pre}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  rsimod_pre: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="RSI mod pre"
-            />
-
-            <input
-              type="text"
-              value={manualForm.rsimod_post}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  rsimod_post: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="RSI mod post"
-            />
-
-            <input
-              type="text"
-              value={manualForm.vmp_pre}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  vmp_pre: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="VMP pre"
-            />
-
-            <input
-              type="text"
-              value={manualForm.vmp_post}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  vmp_post: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="VMP post"
-            />
-
-            <input
-              type="text"
-              value={manualForm.squat_load_kg}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  squat_load_kg: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="Carga sentadilla kg"
-            />
-
-            <input
-              type="text"
-              value={manualForm.rpe}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  rpe: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
-              placeholder="RPE"
-            />
-
-            <input
-              type="text"
-              value={manualForm.notes}
-              onChange={(event) =>
-                setManualForm((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-              className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2"
-              placeholder="Observaciones"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleAddManualRecord}
-            className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow hover:bg-slate-800"
-          >
-            Añadir registro
-          </button>
-        </div>
-      </section>
-
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-blue-600">
-              Registros preparados
+        <section className="grid gap-6 xl:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+              Importación
             </p>
 
-            <h2 className="mt-2 text-2xl font-black">
-              Vista previa antes de guardar
+            <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+              Cargar archivo CSV
             </h2>
 
-            <p className="mt-2 text-sm text-slate-600">
-              Comprueba que los datos son correctos antes de insertarlos en
-              Supabase.
+            <p className="mt-2 break-words text-sm leading-6 text-slate-600">
+              Sube un CSV separado por punto y coma. La app reconoce columnas
+              como Jugador, Posición, CMJ pre, CMJ post, RSI mod pre, RSI mod
+              post, VMP pre, VMP post, Carga y RPE.
             </p>
+
+            <label className="mt-5 block rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center sm:p-6">
+              <span className="text-sm font-black text-slate-700">
+                Seleccionar CSV
+              </span>
+
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={(event) =>
+                  handleFileUpload(event.target.files?.[0] ?? null)
+                }
+                className="mt-4 block w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+              />
+            </label>
+
+            {sourceFilename && (
+              <p className="mt-4 break-all text-sm font-bold text-slate-600">
+                Archivo cargado: {sourceFilename}
+              </p>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleSaveSession}
-            disabled={loading || records.length === 0}
-            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {loading ? "Guardando..." : "Guardar sesión"}
-          </button>
-        </div>
+          <div className="rounded-2xl bg-white p-5 shadow sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+              Entrada manual
+            </p>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-5">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">Registros</p>
-            <p className="mt-2 text-3xl font-black">{summary.total}</p>
-          </div>
+            <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+              Añadir jugador
+            </h2>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">Con CMJ</p>
-            <p className="mt-2 text-3xl font-black">{summary.withCmj}</p>
-          </div>
+            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <input
+                type="text"
+                value={manualForm.player_name}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    player_name: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="Jugador"
+              />
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">Con RSI mod</p>
-            <p className="mt-2 text-3xl font-black">{summary.withRsimod}</p>
-          </div>
+              <input
+                type="text"
+                value={manualForm.position}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    position: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="Posición"
+              />
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">Con VMP</p>
-            <p className="mt-2 text-3xl font-black">{summary.withVmp}</p>
-          </div>
+              <input
+                type="text"
+                value={manualForm.cmj_pre}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    cmj_pre: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="CMJ pre"
+              />
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold text-slate-500">Con RPE</p>
-            <p className="mt-2 text-3xl font-black">{summary.withRpe}</p>
-          </div>
-        </div>
+              <input
+                type="text"
+                value={manualForm.cmj_post}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    cmj_post: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="CMJ post"
+              />
 
-        {records.length === 0 ? (
-          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-            Todavía no hay registros preparados.
-          </div>
-        ) : (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-            <div className="max-h-[520px] overflow-auto">
-              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Jugador</th>
-                    <th className="px-4 py-3">Posición</th>
-                    <th className="px-4 py-3">CMJ pre</th>
-                    <th className="px-4 py-3">CMJ post</th>
-                    <th className="px-4 py-3">RSI pre</th>
-                    <th className="px-4 py-3">RSI post</th>
-                    <th className="px-4 py-3">VMP pre</th>
-                    <th className="px-4 py-3">VMP post</th>
-                    <th className="px-4 py-3">Carga</th>
-                    <th className="px-4 py-3">RPE</th>
-                    <th className="px-4 py-3">Acción</th>
-                  </tr>
-                </thead>
+              <input
+                type="text"
+                value={manualForm.rsimod_pre}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    rsimod_pre: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="RSI mod pre"
+              />
 
-                <tbody>
-                  {records.map((record, index) => (
-                    <tr
-                      key={`${record.player_name}-${index}`}
-                      className="border-t border-slate-100"
-                    >
-                      <td className="px-4 py-3 font-black">
-                        {record.player_name}
-                      </td>
+              <input
+                type="text"
+                value={manualForm.rsimod_post}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    rsimod_post: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="RSI mod post"
+              />
 
-                      <td className="px-4 py-3">
-                        {record.position ?? "—"}
-                      </td>
+              <input
+                type="text"
+                value={manualForm.vmp_pre}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    vmp_pre: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="VMP pre"
+              />
 
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.cmj_pre)}
-                      </td>
+              <input
+                type="text"
+                value={manualForm.vmp_post}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    vmp_post: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="VMP post"
+              />
 
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.cmj_post)}
-                      </td>
+              <input
+                type="text"
+                value={manualForm.squat_load_kg}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    squat_load_kg: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="Carga sentadilla kg"
+              />
 
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.rsimod_pre)}
-                      </td>
+              <input
+                type="text"
+                value={manualForm.rpe}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    rpe: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                placeholder="RPE"
+              />
 
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.rsimod_post)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.vmp_pre)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.vmp_post)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.squat_load_kg)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {formatCellNumber(record.rpe)}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRecord(index)}
-                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100"
-                        >
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <input
+                type="text"
+                value={manualForm.notes}
+                onChange={(event) =>
+                  setManualForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2"
+                placeholder="Observaciones"
+              />
             </div>
+
+            <button
+              type="button"
+              onClick={handleAddManualRecord}
+              className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow hover:bg-slate-800"
+            >
+              Añadir registro
+            </button>
           </div>
-        )}
-      </section>
-    </main>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Registros preparados
+              </p>
+
+              <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                Vista previa antes de guardar
+              </h2>
+
+              <p className="mt-2 break-words text-sm leading-6 text-slate-600">
+                Comprueba que los datos son correctos antes de insertarlos en
+                Supabase.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveSession}
+              disabled={loading || records.length === 0}
+              className="w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto md:shrink-0"
+            >
+              {loading ? "Guardando..." : "Guardar sesión"}
+            </button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <SummaryCard title="Registros" value={summary.total} />
+            <SummaryCard title="Con CMJ" value={summary.withCmj} />
+            <SummaryCard title="Con RSI mod" value={summary.withRsimod} />
+            <SummaryCard title="Con VMP" value={summary.withVmp} />
+            <SummaryCard title="Con RPE" value={summary.withRpe} />
+          </div>
+
+          {records.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+              Todavía no hay registros preparados.
+            </div>
+          ) : (
+            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
+              <div className="divide-y divide-slate-100 md:hidden">
+                {records.map((record, index) => (
+                  <article key={`${record.player_name}-${index}`} className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-base font-black text-slate-950">
+                          {record.player_name}
+                        </p>
+
+                        <p className="mt-1 break-words text-xs font-bold text-slate-500">
+                          {record.position ?? "Sin posición"}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRecord(index)}
+                        className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          CMJ pre
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.cmj_pre)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          CMJ post
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.cmj_post)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          RSI pre
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.rsimod_pre)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          RSI post
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.rsimod_post)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          VMP pre
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.vmp_pre)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          VMP post
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.vmp_post)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          Carga
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.squat_load_kg)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          RPE
+                        </p>
+                        <p className="mt-1 font-black text-slate-950">
+                          {formatCellNumber(record.rpe)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {record.notes && (
+                      <div className="mt-3 rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          Observaciones
+                        </p>
+
+                        <p className="mt-1 break-words text-sm font-bold text-slate-700">
+                          {record.notes}
+                        </p>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+
+              <div className="hidden max-h-[520px] overflow-auto md:block">
+                <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Jugador</th>
+                      <th className="px-4 py-3">Posición</th>
+                      <th className="px-4 py-3">CMJ pre</th>
+                      <th className="px-4 py-3">CMJ post</th>
+                      <th className="px-4 py-3">RSI pre</th>
+                      <th className="px-4 py-3">RSI post</th>
+                      <th className="px-4 py-3">VMP pre</th>
+                      <th className="px-4 py-3">VMP post</th>
+                      <th className="px-4 py-3">Carga</th>
+                      <th className="px-4 py-3">RPE</th>
+                      <th className="px-4 py-3">Acción</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {records.map((record, index) => (
+                      <tr
+                        key={`${record.player_name}-${index}`}
+                        className="border-t border-slate-100"
+                      >
+                        <td className="px-4 py-3 font-black">
+                          {record.player_name}
+                        </td>
+
+                        <td className="px-4 py-3">{record.position ?? "—"}</td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.cmj_pre)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.cmj_post)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.rsimod_pre)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.rsimod_post)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.vmp_pre)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.vmp_post)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.squat_load_kg)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatCellNumber(record.rpe)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRecord(index)}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    </AppShell>
   );
 }
