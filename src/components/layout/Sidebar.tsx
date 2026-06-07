@@ -22,6 +22,11 @@ type NavGroup = {
   items: NavItem[];
 };
 
+type SidebarProps = {
+  onClose?: () => void;
+  onNavigate?: () => void;
+};
+
 const navGroups: NavGroup[] = [
   {
     title: "Inicio",
@@ -99,20 +104,20 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-  title: "Sistema",
-  items: [
-    {
-      label: "Administración",
-      href: "/admin",
-      allowedRoles: ["admin"],
-    },
-    {
-      label: "Usuarios",
-      href: "/admin/usuarios",
-      allowedRoles: ["admin"],
-    },
-  ],
-},
+    title: "Sistema",
+    items: [
+      {
+        label: "Administración",
+        href: "/admin",
+        allowedRoles: ["admin"],
+      },
+      {
+        label: "Usuarios",
+        href: "/admin/usuarios",
+        allowedRoles: ["admin"],
+      },
+    ],
+  },
 ];
 
 function isItemActive(pathname: string, href: string) {
@@ -129,7 +134,7 @@ function canSeeItem(item: NavItem, role: AppRole) {
   return item.allowedRoles.includes(role);
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onClose, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -191,15 +196,29 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex min-h-screen w-72 shrink-0 flex-col border-r border-slate-200 bg-white px-5 py-6">
+    <aside className="flex h-full min-h-screen w-72 shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white px-5 py-6">
       <div className="mb-8">
-        <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">
-          Plataforma
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">
+              Plataforma
+            </p>
 
-        <h1 className="mt-2 text-xl font-black tracking-tight text-slate-950">
-          Rendimiento
-        </h1>
+            <h1 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+              Rendimiento
+            </h1>
+          </div>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 lg:hidden"
+            >
+              Cerrar
+            </button>
+          )}
+        </div>
 
         <p className="mt-1 text-sm font-bold text-slate-500">
           Next.js · Supabase · Vercel
@@ -235,6 +254,7 @@ export default function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={onNavigate}
                     className={[
                       "block rounded-xl px-4 py-3 text-sm font-bold transition",
                       active
