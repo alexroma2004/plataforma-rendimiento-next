@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getGpsMatchReferenceRecordsFromSupabase,
   getGpsRecordsBySessionId,
@@ -788,10 +789,10 @@ function RankingCard({
         ))}
 
         {ranking.length === 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-            No hay registros disponibles.
-          </div>
-        )}
+  <StatusMessage variant="warning" title="Sin registros">
+    No hay registros disponibles.
+  </StatusMessage>
+)}
       </div>
     </div>
   );
@@ -1248,23 +1249,29 @@ export default function GpsPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
-            </div>
-          )}
+  <div className="mt-6">
+    <StatusMessage variant="error" title="No se ha podido cargar GPS">
+      {error}
+    </StatusMessage>
+  </div>
+)}
 
-          {loadingSessions && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando sesiones GPS...
-            </div>
-          )}
+{loadingSessions && (
+  <div className="mt-6">
+    <StatusMessage variant="info" title="Cargando sesiones GPS">
+      Cargando sesiones GPS guardadas en Supabase.
+    </StatusMessage>
+  </div>
+)}
 
-          {!loadingSessions && sessions.length === 0 && (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-              Todavía no hay sesiones GPS guardadas. Primero sube una sesión
-              desde la página Cargar datos.
-            </div>
-          )}
+{!loadingSessions && sessions.length === 0 && (
+  <div className="mt-6">
+    <StatusMessage variant="warning" title="Sin sesiones GPS">
+      Todavía no hay sesiones GPS guardadas. Primero sube una sesión desde la
+      página Cargar datos.
+    </StatusMessage>
+  </div>
+)}
 
           {selectedSession && (
             <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -1383,10 +1390,10 @@ export default function GpsPage() {
             </div>
 
             {loadingRecords ? (
-              <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-                Cargando registros de la sesión...
-              </div>
-            ) : (
+  <StatusMessage variant="info" title="Cargando registros GPS">
+    Cargando registros de la sesión seleccionada.
+  </StatusMessage>
+) : (
               <>
                 <div
                   className={
@@ -1549,16 +1556,21 @@ export default function GpsPage() {
                   </div>
 
                   {weeklyError && (
-                    <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-                      {weeklyError}
-                    </div>
-                  )}
+  <div className="mt-6">
+    <StatusMessage variant="error" title="No se ha podido calcular la semana GPS">
+      {weeklyError}
+    </StatusMessage>
+  </div>
+)}
 
-                  {loadingWeeklyEvaluation && (
-                    <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-                      Calculando carga semanal GPS...
-                    </div>
-                  )}
+{loadingWeeklyEvaluation && (
+  <div className="mt-6">
+    <StatusMessage variant="info" title="Calculando carga semanal GPS">
+      Calculando la carga acumulada de lunes a domingo y comparándola con la
+      referencia disponible.
+    </StatusMessage>
+  </div>
+)}
 
                   {!loadingWeeklyEvaluation && weeklyEvaluation && (
                     <>
@@ -1611,11 +1623,12 @@ export default function GpsPage() {
                         </div>
 
                         {weeklyInterventionRows.length === 0 ? (
-                          <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                            Todos los jugadores se encuentran dentro del rango
-                            semanal previsto.
-                          </div>
-                        ) : (
+  <div className="mt-5">
+    <StatusMessage variant="success" title="Semana dentro de rango">
+      Todos los jugadores se encuentran dentro del rango semanal previsto.
+    </StatusMessage>
+  </div>
+) : (
                           <div className="mt-5 grid gap-4 lg:grid-cols-2">
                             {weeklyInterventionRows.map(
                               ({ evaluation, priority, problemMetrics }) => (
@@ -1843,11 +1856,12 @@ export default function GpsPage() {
                       )}
 
                       {weeklyEvaluation.evaluations.length === 0 ? (
-                        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                          No hay registros GPS de entrenamiento para la semana
-                          seleccionada.
-                        </div>
-                      ) : (
+  <div className="mt-6">
+    <StatusMessage variant="warning" title="Sin registros semanales">
+      No hay registros GPS de entrenamiento para la semana seleccionada.
+    </StatusMessage>
+  </div>
+) : (
                         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
                           <div className="divide-y divide-slate-100 md:hidden">
                             {weeklyEvaluation.evaluations.map((evaluation) => {
@@ -2220,7 +2234,14 @@ export default function GpsPage() {
                   </div>
 
                   <div className="mt-6 h-[340px] w-full sm:h-[420px]">
-                    <ResponsiveContainer width="100%" height="100%">
+  {chartData.length === 0 ? (
+    <div className="flex h-full items-center justify-center">
+      <StatusMessage variant="warning" title="Sin datos para el gráfico">
+        No hay registros GPS para representar con la métrica seleccionada.
+      </StatusMessage>
+    </div>
+  ) : (
+    <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={chartData}
                         layout="vertical"
@@ -2272,7 +2293,9 @@ export default function GpsPage() {
                         <Bar dataKey="valor" radius={[0, 8, 8, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
+                  )}
                   </div>
+
 
                   <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
                     <div className="border-b border-slate-200 bg-slate-50 p-4">
@@ -2347,6 +2370,14 @@ export default function GpsPage() {
                           </div>
                         </article>
                       ))}
+                      {objectiveRows.length === 0 && (
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin objetivos individuales">
+      No hay registros GPS para calcular objetivos individuales con esta
+      selección.
+    </StatusMessage>
+  </div>
+)}
                     </div>
 
                     <div className="hidden max-h-[420px] overflow-auto md:block">
@@ -2399,6 +2430,16 @@ export default function GpsPage() {
                               </td>
                             </tr>
                           ))}
+                          {objectiveRows.length === 0 && (
+  <tr>
+    <td colSpan={6} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin objetivos individuales">
+        No hay registros GPS para calcular objetivos individuales con esta
+        selección.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                         </tbody>
                       </table>
                     </div>
@@ -2510,10 +2551,12 @@ export default function GpsPage() {
                     ))}
 
                     {filteredRecords.length === 0 && (
-                      <div className="p-6 text-center text-sm font-bold text-slate-500">
-                        No hay registros GPS para esta selección.
-                      </div>
-                    )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin registros GPS">
+      No hay registros GPS para esta selección.
+    </StatusMessage>
+  </div>
+)}
                   </div>
 
                   <div className="hidden max-h-[560px] overflow-auto md:block">
@@ -2586,15 +2629,14 @@ export default function GpsPage() {
                         ))}
 
                         {filteredRecords.length === 0 && (
-                          <tr>
-                            <td
-                              colSpan={11}
-                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                            >
-                              No hay registros GPS para esta selección.
-                            </td>
-                          </tr>
-                        )}
+  <tr>
+    <td colSpan={11} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin registros GPS">
+        No hay registros GPS para esta selección.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                       </tbody>
                     </table>
                   </div>
