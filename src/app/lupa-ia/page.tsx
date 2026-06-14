@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getPlayerDashboardData,
   type PlayerDashboardData,
@@ -251,14 +252,15 @@ export default function LupaIAPage() {
       subtitle="Análisis automático de alertas, patrones y recomendaciones a partir de GPS, rendimiento neuromuscular y tests físicos."
     >
       {loading ? (
-        <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-          Cargando análisis automático...
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-bold text-red-700 shadow">
-          {error}
-        </div>
-      ) : (
+  <StatusMessage variant="info" title="Cargando Lupa IA">
+    Cargando análisis automático a partir de GPS, rendimiento neuromuscular y
+    tests físicos.
+  </StatusMessage>
+) : error ? (
+  <StatusMessage variant="error" title="No se ha podido cargar la Lupa IA">
+    {error}
+  </StatusMessage>
+) : (
         <div className="space-y-8">
           <section className="rounded-2xl bg-slate-950 p-5 text-white shadow sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-300 sm:tracking-[0.35em]">
@@ -428,10 +430,10 @@ export default function LupaIAPage() {
 
             <div className="space-y-4 xl:col-span-2">
               {sortedFilteredInsights.length === 0 ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-sm font-bold text-emerald-700 shadow">
-                  No hay alertas que coincidan con los filtros seleccionados.
-                </div>
-              ) : (
+  <StatusMessage variant="success" title="Sin alertas para estos filtros">
+    No hay alertas que coincidan con los filtros seleccionados.
+  </StatusMessage>
+) : (
                 sortedFilteredInsights.map((insight) => (
                   <article
                     key={insight.id}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getTeamDashboardData,
   type TeamDashboardData,
@@ -205,8 +206,12 @@ function SummaryCard({
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-700">
-      {children}
+    <div className="flex h-full min-h-[220px] items-center justify-center">
+      <div className="w-full">
+        <StatusMessage variant="warning" title="Sin datos disponibles">
+          {children}
+        </StatusMessage>
+      </div>
     </div>
   );
 }
@@ -436,16 +441,17 @@ export default function EquipoPage() {
     >
       <div className="space-y-8">
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-            {error}
-          </div>
-        )}
+  <StatusMessage variant="error" title="No se ha podido cargar el equipo">
+    {error}
+  </StatusMessage>
+)}
 
-        {loading ? (
-          <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-            Cargando dashboard del equipo...
-          </div>
-        ) : (
+{loading ? (
+  <StatusMessage variant="info" title="Cargando dashboard del equipo">
+    Cargando jugadores, registros GPS, controles neuromusculares y
+    puntuaciones de tests físicos.
+  </StatusMessage>
+) : (
           <>
             <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <SummaryCard title="Jugadores activos" value={summary.players} />
@@ -708,10 +714,12 @@ export default function EquipoPage() {
                   ))}
 
                   {gpsPlayerSummary.length === 0 && (
-                    <div className="p-6 text-center text-sm font-bold text-slate-500">
-                      No hay datos GPS disponibles.
-                    </div>
-                  )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin datos GPS">
+      No hay datos GPS disponibles.
+    </StatusMessage>
+  </div>
+)}
                 </div>
 
                 <div className="hidden max-h-[520px] overflow-auto md:block">
@@ -753,15 +761,14 @@ export default function EquipoPage() {
                       ))}
 
                       {gpsPlayerSummary.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                          >
-                            No hay datos GPS disponibles.
-                          </td>
-                        </tr>
-                      )}
+  <tr>
+    <td colSpan={7} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin datos GPS">
+        No hay datos GPS disponibles.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                     </tbody>
                   </table>
                 </div>
@@ -848,10 +855,12 @@ export default function EquipoPage() {
                   ))}
 
                   {neuromuscularPlayerSummary.length === 0 && (
-                    <div className="p-6 text-center text-sm font-bold text-slate-500">
-                      No hay datos neuromusculares disponibles.
-                    </div>
-                  )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin datos neuromusculares">
+      No hay datos neuromusculares disponibles.
+    </StatusMessage>
+  </div>
+)}
                 </div>
 
                 <div className="hidden max-h-[520px] overflow-auto md:block">
@@ -907,15 +916,14 @@ export default function EquipoPage() {
                       ))}
 
                       {neuromuscularPlayerSummary.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                          >
-                            No hay datos neuromusculares disponibles.
-                          </td>
-                        </tr>
-                      )}
+  <tr>
+    <td colSpan={7} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin datos neuromusculares">
+        No hay datos neuromusculares disponibles.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                     </tbody>
                   </table>
                 </div>
@@ -979,10 +987,12 @@ export default function EquipoPage() {
                 ))}
 
                 {testPlayerSummary.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay puntuaciones de tests disponibles.
-                  </div>
-                )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin puntuaciones de tests">
+      No hay puntuaciones de tests disponibles.
+    </StatusMessage>
+  </div>
+)}
               </div>
 
               <div className="hidden max-h-[520px] overflow-auto md:block">
@@ -1031,15 +1041,14 @@ export default function EquipoPage() {
                     ))}
 
                     {testPlayerSummary.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay puntuaciones de tests disponibles.
-                        </td>
-                      </tr>
-                    )}
+  <tr>
+    <td colSpan={6} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin puntuaciones de tests">
+        No hay puntuaciones de tests disponibles.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                   </tbody>
                 </table>
               </div>

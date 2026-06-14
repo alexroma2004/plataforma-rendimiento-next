@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getPlayerDashboardData,
   type PlayerDashboardData,
@@ -189,8 +190,12 @@ function SummaryCard({
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-700">
-      {children}
+    <div className="flex h-full min-h-[220px] items-center justify-center">
+      <div className="w-full">
+        <StatusMessage variant="warning" title="Sin datos disponibles">
+          {children}
+        </StatusMessage>
+      </div>
     </div>
   );
 }
@@ -405,16 +410,28 @@ export default function JugadorPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
-            </div>
-          )}
+  <div className="mt-6">
+    <StatusMessage variant="error" title="No se ha podido cargar el jugador">
+      {error}
+    </StatusMessage>
+  </div>
+)}
 
-          {loading && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando panel individual...
-            </div>
-          )}
+{loading && (
+  <div className="mt-6">
+    <StatusMessage variant="info" title="Cargando panel individual">
+      Cargando jugadores, registros GPS, controles neuromusculares, tests y
+      resultados por variable.
+    </StatusMessage>
+  </div>
+)}
+{!loading && !error && !selectedPlayer && (
+  <div className="mt-6">
+    <StatusMessage variant="warning" title="Sin jugador seleccionado">
+      No hay ningún jugador disponible para mostrar en el panel individual.
+    </StatusMessage>
+  </div>
+)}
 
           {!loading && selectedPlayer && (
             <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -825,10 +842,12 @@ export default function JugadorPage() {
                 ))}
 
                 {playerGpsRecords.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay registros GPS para este jugador.
-                  </div>
-                )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin registros GPS">
+      No hay registros GPS para este jugador.
+    </StatusMessage>
+  </div>
+)}
               </div>
 
               <div className="hidden max-h-[520px] overflow-auto md:block">
@@ -873,15 +892,14 @@ export default function JugadorPage() {
                     ))}
 
                     {playerGpsRecords.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay registros GPS para este jugador.
-                        </td>
-                      </tr>
-                    )}
+  <tr>
+    <td colSpan={8} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin registros GPS">
+        No hay registros GPS para este jugador.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                   </tbody>
                 </table>
               </div>
@@ -994,10 +1012,12 @@ export default function JugadorPage() {
                 ))}
 
                 {playerNeuromuscularRecords.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay registros neuromusculares para este jugador.
-                  </div>
-                )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin registros neuromusculares">
+      No hay registros neuromusculares para este jugador.
+    </StatusMessage>
+  </div>
+)}
               </div>
 
               <div className="hidden max-h-[520px] overflow-auto md:block">
@@ -1052,15 +1072,14 @@ export default function JugadorPage() {
                     ))}
 
                     {playerNeuromuscularRecords.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={10}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay registros neuromusculares para este jugador.
-                        </td>
-                      </tr>
-                    )}
+  <tr>
+    <td colSpan={10} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin registros neuromusculares">
+        No hay registros neuromusculares para este jugador.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                   </tbody>
                 </table>
               </div>
@@ -1114,10 +1133,12 @@ export default function JugadorPage() {
                 ))}
 
                 {playerTestScores.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay puntuaciones de tests para este jugador.
-                  </div>
-                )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin puntuaciones de tests">
+      No hay puntuaciones de tests para este jugador.
+    </StatusMessage>
+  </div>
+)}
               </div>
 
               <div className="hidden max-h-[520px] overflow-auto md:block">
@@ -1157,15 +1178,14 @@ export default function JugadorPage() {
                     ))}
 
                     {playerTestScores.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay puntuaciones de tests para este jugador.
-                        </td>
-                      </tr>
-                    )}
+  <tr>
+    <td colSpan={4} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin puntuaciones de tests">
+        No hay puntuaciones de tests para este jugador.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                   </tbody>
                 </table>
               </div>
@@ -1255,10 +1275,12 @@ export default function JugadorPage() {
                 ))}
 
                 {playerTestResults.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay resultados por variable para este jugador.
-                  </div>
-                )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin resultados por variable">
+      No hay resultados por variable para este jugador.
+    </StatusMessage>
+  </div>
+)}
               </div>
 
               <div className="hidden max-h-[620px] overflow-auto md:block">
@@ -1311,15 +1333,14 @@ export default function JugadorPage() {
                     ))}
 
                     {playerTestResults.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay resultados por variable para este jugador.
-                        </td>
-                      </tr>
-                    )}
+  <tr>
+    <td colSpan={8} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin resultados por variable">
+        No hay resultados por variable para este jugador.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                   </tbody>
                 </table>
               </div>

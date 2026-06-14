@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getTeamDashboardData,
   type TeamDashboardData,
@@ -801,16 +802,21 @@ export default function InformesPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
-            </div>
-          )}
+  <div className="mt-6">
+    <StatusMessage variant="error" title="No se han podido cargar los informes">
+      {error}
+    </StatusMessage>
+  </div>
+)}
 
-          {loading && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando datos para informes...
-            </div>
-          )}
+{loading && (
+  <div className="mt-6">
+    <StatusMessage variant="info" title="Cargando datos para informes">
+      Cargando jugadores, registros GPS, controles neuromusculares y
+      puntuaciones de tests.
+    </StatusMessage>
+  </div>
+)}
 
           {!loading && !error && (
             <>
@@ -897,12 +903,13 @@ export default function InformesPage() {
                   </label>
                 </div>
 
-                <p className="mt-4 text-xs font-bold leading-5 text-slate-500">
-                  Nota: el filtro de fecha se aplica a GPS y registros
-                  neuromusculares. Las puntuaciones de tests se integran de forma
-                  global porque la tabla actual de puntuaciones no incluye fecha
-                  de sesión.
-                </p>
+                <div className="mt-4">
+  <StatusMessage variant="info" title="Criterio de filtrado">
+    El filtro de fecha se aplica a GPS y registros neuromusculares. Las
+    puntuaciones de tests se integran de forma global porque la tabla actual de
+    puntuaciones no incluye fecha de sesión.
+  </StatusMessage>
+</div>
               </div>
             </>
           )}
@@ -1128,11 +1135,13 @@ export default function InformesPage() {
               ))}
 
               {playerRows.length === 0 && (
-                <div className="p-6 text-center text-sm font-bold text-slate-500">
-                  No hay jugadores disponibles para generar informes con los
-                  filtros seleccionados.
-                </div>
-              )}
+  <div className="p-5">
+    <StatusMessage variant="warning" title="Sin jugadores disponibles">
+      No hay jugadores disponibles para generar informes con los filtros
+      seleccionados.
+    </StatusMessage>
+  </div>
+)}
             </div>
 
             <div className="hidden max-h-[620px] overflow-auto md:block">
@@ -1214,16 +1223,15 @@ export default function InformesPage() {
                   ))}
 
                   {playerRows.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={18}
-                        className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                      >
-                        No hay jugadores disponibles para generar informes con
-                        los filtros seleccionados.
-                      </td>
-                    </tr>
-                  )}
+  <tr>
+    <td colSpan={18} className="px-4 py-6">
+      <StatusMessage variant="warning" title="Sin jugadores disponibles">
+        No hay jugadores disponibles para generar informes con los filtros
+        seleccionados.
+      </StatusMessage>
+    </td>
+  </tr>
+)}
                 </tbody>
               </table>
             </div>
