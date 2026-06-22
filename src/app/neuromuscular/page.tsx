@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   Bar,
   BarChart,
@@ -245,8 +246,12 @@ function MetricSummaryCard({
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-700">
-      {children}
+    <div className="flex h-full min-h-[220px] items-center justify-center">
+      <div className="w-full">
+        <StatusMessage variant="warning" title="Sin datos disponibles">
+          {children}
+        </StatusMessage>
+      </div>
     </div>
   );
 }
@@ -427,21 +432,33 @@ export default function NeuromuscularPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
+            <div className="mt-6">
+              <StatusMessage
+                variant="error"
+                title="No se ha podido cargar rendimiento neuromuscular"
+              >
+                {error}
+              </StatusMessage>
             </div>
           )}
 
           {loadingSessions && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando sesiones neuromusculares...
+            <div className="mt-6">
+              <StatusMessage
+                variant="info"
+                title="Cargando sesiones neuromusculares"
+              >
+                Cargando sesiones neuromusculares guardadas en Supabase.
+              </StatusMessage>
             </div>
           )}
 
           {!loadingSessions && sessions.length === 0 && (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-              Todavía no hay sesiones neuromusculares guardadas. Primero sube una
-              sesión desde la página de carga neuromuscular.
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Sin sesiones neuromusculares">
+                Todavía no hay sesiones neuromusculares guardadas. Primero sube una
+                sesión desde la página de carga neuromuscular.
+              </StatusMessage>
             </div>
           )}
 
@@ -481,9 +498,12 @@ export default function NeuromuscularPage() {
         {selectedSessionId && (
           <section>
             {loadingRecords ? (
-              <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-                Cargando registros neuromusculares...
-              </div>
+              <StatusMessage
+                variant="info"
+                title="Cargando registros neuromusculares"
+              >
+                Cargando registros de la sesión seleccionada.
+              </StatusMessage>
             ) : (
               <>
                 <div className="grid gap-4 xl:grid-cols-4">
@@ -723,8 +743,10 @@ export default function NeuromuscularPage() {
                     ))}
 
                     {deltaRows.length === 0 && (
-                      <div className="p-6 text-center text-sm font-bold text-slate-500">
-                        No hay registros disponibles para esta variable.
+                      <div className="p-5">
+                        <StatusMessage variant="warning" title="Sin registros PRE-POST">
+                          No hay registros disponibles para esta variable.
+                        </StatusMessage>
                       </div>
                     )}
                   </div>
@@ -783,11 +805,13 @@ export default function NeuromuscularPage() {
 
                         {deltaRows.length === 0 && (
                           <tr>
-                            <td
-                              colSpan={6}
-                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                            >
-                              No hay registros disponibles para esta variable.
+                            <td colSpan={6} className="px-4 py-6">
+                              <StatusMessage
+                                variant="warning"
+                                title="Sin registros PRE-POST"
+                              >
+                                No hay registros disponibles para esta variable.
+                              </StatusMessage>
                             </td>
                           </tr>
                         )}
@@ -917,8 +941,13 @@ export default function NeuromuscularPage() {
                     ))}
 
                     {records.length === 0 && (
-                      <div className="p-6 text-center text-sm font-bold text-slate-500">
-                        No hay registros neuromusculares para esta sesión.
+                      <div className="p-5">
+                        <StatusMessage
+                          variant="warning"
+                          title="Sin registros neuromusculares"
+                        >
+                          No hay registros neuromusculares para esta sesión.
+                        </StatusMessage>
                       </div>
                     )}
                   </div>
@@ -990,11 +1019,13 @@ export default function NeuromuscularPage() {
 
                         {records.length === 0 && (
                           <tr>
-                            <td
-                              colSpan={11}
-                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                            >
-                              No hay registros neuromusculares para esta sesión.
+                            <td colSpan={11} className="px-4 py-6">
+                              <StatusMessage
+                                variant="warning"
+                                title="Sin registros neuromusculares"
+                              >
+                                No hay registros neuromusculares para esta sesión.
+                              </StatusMessage>
                             </td>
                           </tr>
                         )}
