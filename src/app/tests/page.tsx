@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getTestResultsBySessionId,
   getTestScoresBySessionId,
@@ -358,21 +359,27 @@ export default function TestsPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se han podido cargar los tests">
+                {error}
+              </StatusMessage>
             </div>
           )}
 
           {loadingSessions && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando sesiones de tests...
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando sesiones de tests">
+                Cargando sesiones de tests guardadas en Supabase.
+              </StatusMessage>
             </div>
           )}
 
           {!loadingSessions && sessions.length === 0 && (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-              Todavía no hay sesiones de tests guardadas. Primero carga una
-              sesión desde el apartado de carga de tests.
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Sin sesiones de tests">
+                Todavía no hay sesiones de tests guardadas. Primero carga una
+                sesión desde el apartado de carga de tests.
+              </StatusMessage>
             </div>
           )}
 
@@ -405,9 +412,10 @@ export default function TestsPage() {
         {selectedSessionId && (
           <section>
             {loadingData ? (
-              <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow">
-                Cargando resultados de tests...
-              </div>
+              <StatusMessage variant="info" title="Cargando resultados de tests">
+                Cargando puntuaciones por capacidad y resultados por variable de
+                la sesión seleccionada.
+              </StatusMessage>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -468,8 +476,10 @@ export default function TestsPage() {
                     </h3>
 
                     {rankingRows.length === 0 ? (
-                      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                        No hay puntuaciones disponibles para generar ranking.
+                      <div className="mt-4">
+                        <StatusMessage variant="warning" title="Sin ranking disponible">
+                          No hay puntuaciones disponibles para generar ranking.
+                        </StatusMessage>
                       </div>
                     ) : (
                       <div className="mt-4 space-y-3">
@@ -557,8 +567,10 @@ export default function TestsPage() {
                       ))}
 
                       {filteredScores.length === 0 && (
-                        <div className="p-6 text-center text-sm font-bold text-slate-500">
-                          No hay puntuaciones para esta selección.
+                        <div className="p-5">
+                          <StatusMessage variant="warning" title="Sin puntuaciones">
+                            No hay puntuaciones para esta selección.
+                          </StatusMessage>
                         </div>
                       )}
                     </div>
@@ -613,11 +625,10 @@ export default function TestsPage() {
 
                           {filteredScores.length === 0 && (
                             <tr>
-                              <td
-                                colSpan={6}
-                                className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                              >
-                                No hay puntuaciones para esta selección.
+                              <td colSpan={6} className="px-4 py-6">
+                                <StatusMessage variant="warning" title="Sin puntuaciones">
+                                  No hay puntuaciones para esta selección.
+                                </StatusMessage>
                               </td>
                             </tr>
                           )}
@@ -718,8 +729,10 @@ export default function TestsPage() {
                     ))}
 
                     {filteredResults.length === 0 && (
-                      <div className="p-6 text-center text-sm font-bold text-slate-500">
-                        No hay resultados por variable para esta selección.
+                      <div className="p-5">
+                        <StatusMessage variant="warning" title="Sin resultados por variable">
+                          No hay resultados por variable para esta selección.
+                        </StatusMessage>
                       </div>
                     )}
                   </div>
@@ -791,11 +804,10 @@ export default function TestsPage() {
 
                         {filteredResults.length === 0 && (
                           <tr>
-                            <td
-                              colSpan={10}
-                              className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                            >
-                              No hay resultados por variable para esta selección.
+                            <td colSpan={10} className="px-4 py-6">
+                              <StatusMessage variant="warning" title="Sin resultados por variable">
+                                No hay resultados por variable para esta selección.
+                              </StatusMessage>
                             </td>
                           </tr>
                         )}
