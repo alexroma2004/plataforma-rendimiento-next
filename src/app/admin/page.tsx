@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getAdminDashboardData,
   type AdminDashboardData,
@@ -556,30 +557,44 @@ export default function AdminPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se ha podido cargar administración">
+                {error}
+              </StatusMessage>
             </div>
           )}
 
           {loading && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando panel de administración...
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando panel de administración">
+                Revisando equipos, jugadores, sesiones e integridad de datos.
+              </StatusMessage>
             </div>
           )}
 
-          {data && !loading && (
-            <div
-              className={`mt-6 rounded-xl border p-4 text-sm font-black ${
-                totalIssues > 0
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              {totalIssues > 0
-                ? `Estado global: revisar ${formatNumber(
-                    totalIssues,
-                  )} incidencias de vinculación.`
-                : "Estado global: todos los datos principales están correctamente vinculados."}
+          {data && !loading && totalIssues > 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="error" title="Estado global: revisar incidencias">
+                Hay {formatNumber(totalIssues)} incidencias de vinculación en la
+                base de datos.
+              </StatusMessage>
+            </div>
+          )}
+
+          {data && !loading && totalIssues === 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="success" title="Estado global correcto">
+                Todos los datos principales están correctamente vinculados.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loading && !error && !data && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Sin datos de administración">
+                No se han encontrado datos para construir el panel de
+                administración.
+              </StatusMessage>
             </div>
           )}
         </section>
@@ -688,8 +703,10 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                    No hay ningún equipo creado.
+                  <div className="mt-5">
+                    <StatusMessage variant="warning" title="Sin equipo principal">
+                      No hay ningún equipo creado.
+                    </StatusMessage>
                   </div>
                 )}
               </div>
@@ -775,8 +792,10 @@ export default function AdminPage() {
                   ))}
 
                   {data.players.length === 0 && (
-                    <div className="p-6 text-center text-sm font-bold text-slate-500">
-                      No hay jugadores registrados.
+                    <div className="p-5">
+                      <StatusMessage variant="warning" title="Sin jugadores registrados">
+                        No hay jugadores registrados en la base de datos.
+                      </StatusMessage>
                     </div>
                   )}
                 </div>
@@ -879,9 +898,9 @@ export default function AdminPage() {
                   ))}
 
                   {data.latestGpsSessions.length === 0 && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+                    <StatusMessage variant="warning" title="Sin sesiones GPS">
                       No hay sesiones GPS cargadas.
-                    </div>
+                    </StatusMessage>
                   )}
                 </div>
               </div>
@@ -913,9 +932,12 @@ export default function AdminPage() {
                   ))}
 
                   {data.latestNeuromuscularSessions.length === 0 && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+                    <StatusMessage
+                      variant="warning"
+                      title="Sin sesiones neuromusculares"
+                    >
                       No hay sesiones neuromusculares cargadas.
-                    </div>
+                    </StatusMessage>
                   )}
                 </div>
               </div>
@@ -946,9 +968,9 @@ export default function AdminPage() {
                   ))}
 
                   {data.latestTestSessions.length === 0 && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+                    <StatusMessage variant="warning" title="Sin sesiones de tests">
                       No hay sesiones de tests cargadas.
-                    </div>
+                    </StatusMessage>
                   )}
                 </div>
               </div>

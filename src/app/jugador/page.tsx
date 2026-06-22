@@ -410,30 +410,31 @@ export default function JugadorPage() {
           </div>
 
           {error && (
-  <div className="mt-6">
-    <StatusMessage variant="error" title="No se ha podido cargar el jugador">
-      {error}
-    </StatusMessage>
-  </div>
-)}
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se ha podido cargar el jugador">
+                {error}
+              </StatusMessage>
+            </div>
+          )}
 
-{loading && (
-  <div className="mt-6">
-    <StatusMessage variant="info" title="Cargando panel individual">
-      Cargando jugadores, registros GPS, controles neuromusculares, tests y
-      resultados por variable.
-    </StatusMessage>
-  </div>
-)}
-{!loading && !error && !selectedPlayer && (
-  <div className="mt-6">
-    <StatusMessage variant="warning" title="Sin jugador seleccionado">
-      No hay ningún jugador disponible para mostrar en el panel individual.
-    </StatusMessage>
-  </div>
-)}
+          {loading && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando panel individual">
+                Cargando jugadores, registros GPS, controles neuromusculares, tests y
+                resultados por variable.
+              </StatusMessage>
+            </div>
+          )}
 
-          {!loading && selectedPlayer && (
+          {!loading && !error && !selectedPlayer && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Sin jugador seleccionado">
+                No hay ningún jugador disponible para mostrar en el panel individual.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loading && !error && selectedPlayer && (
             <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-bold text-slate-500">Jugador</p>
@@ -468,7 +469,7 @@ export default function JugadorPage() {
           )}
         </section>
 
-        {!loading && selectedPlayer && (
+        {!loading && !error && selectedPlayer && (
           <>
             <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <SummaryCard

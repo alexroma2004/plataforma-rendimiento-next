@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getUserRolesFromSupabase,
   upsertUserRoleByEmail,
@@ -124,6 +125,10 @@ export default function AdminUsuariosPage() {
     };
   }, [rows]);
 
+  const emptyUsersMessage = search.trim()
+    ? "No hay usuarios para esta búsqueda."
+    : "Todavía no hay usuarios con rol registrado.";
+
   return (
     <AppShell
       title="Gestión de usuarios"
@@ -226,14 +231,18 @@ export default function AdminUsuariosPage() {
           </form>
 
           {message && (
-            <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-              {message}
+            <div className="mt-5">
+              <StatusMessage variant="success" title="Rol actualizado">
+                {message}
+              </StatusMessage>
             </div>
           )}
 
           {error && (
-            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
+            <div className="mt-5">
+              <StatusMessage variant="error" title="No se ha podido completar la acción">
+                {error}
+              </StatusMessage>
             </div>
           )}
         </section>
@@ -267,8 +276,10 @@ export default function AdminUsuariosPage() {
           </div>
 
           {loading ? (
-            <div className="p-6 text-sm font-bold text-slate-600">
-              Cargando usuarios...
+            <div className="p-6">
+              <StatusMessage variant="info" title="Cargando usuarios">
+                Cargando usuarios y roles registrados.
+              </StatusMessage>
             </div>
           ) : (
             <>
@@ -317,8 +328,10 @@ export default function AdminUsuariosPage() {
                 ))}
 
                 {filteredRows.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay usuarios para esta búsqueda.
+                  <div className="p-5">
+                    <StatusMessage variant="warning" title="Sin usuarios visibles">
+                      {emptyUsersMessage}
+                    </StatusMessage>
                   </div>
                 )}
               </div>
@@ -363,11 +376,10 @@ export default function AdminUsuariosPage() {
 
                     {filteredRows.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay usuarios para esta búsqueda.
+                        <td colSpan={4} className="px-4 py-6">
+                          <StatusMessage variant="warning" title="Sin usuarios visibles">
+                            {emptyUsersMessage}
+                          </StatusMessage>
                         </td>
                       </tr>
                     )}

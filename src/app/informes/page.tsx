@@ -646,6 +646,7 @@ export default function InformesPage() {
             : "Error desconocido al cargar los datos para informes.";
 
         setError(message);
+        setData(null);
       } finally {
         setLoading(false);
       }
@@ -784,7 +785,7 @@ export default function InformesPage() {
               <button
                 type="button"
                 onClick={handleDownloadHtml}
-                disabled={loading || playerRows.length === 0}
+                disabled={loading || Boolean(error) || playerRows.length === 0}
                 className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Descargar informe HTML
@@ -793,7 +794,7 @@ export default function InformesPage() {
               <button
                 type="button"
                 onClick={handleDownloadCsv}
-                disabled={loading || playerRows.length === 0}
+                disabled={loading || Boolean(error) || playerRows.length === 0}
                 className="w-full rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-950 shadow transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Descargar resumen CSV
@@ -802,23 +803,35 @@ export default function InformesPage() {
           </div>
 
           {error && (
-  <div className="mt-6">
-    <StatusMessage variant="error" title="No se han podido cargar los informes">
-      {error}
-    </StatusMessage>
-  </div>
-)}
+            <div className="mt-6">
+              <StatusMessage
+                variant="error"
+                title="No se han podido cargar los informes"
+              >
+                {error}
+              </StatusMessage>
+            </div>
+          )}
 
-{loading && (
-  <div className="mt-6">
-    <StatusMessage variant="info" title="Cargando datos para informes">
-      Cargando jugadores, registros GPS, controles neuromusculares y
-      puntuaciones de tests.
-    </StatusMessage>
-  </div>
-)}
+          {loading && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando datos para informes">
+                Cargando jugadores, registros GPS, controles neuromusculares y
+                puntuaciones de tests.
+              </StatusMessage>
+            </div>
+          )}
 
-          {!loading && !error && (
+          {!loading && !error && !data && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Sin datos disponibles">
+                No se han encontrado datos para generar informes. Revisa que haya
+                jugadores y registros cargados en la plataforma.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loading && !error && data && (
             <>
               <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <SummaryCard title="Jugadores" value={summary.players} />
@@ -904,18 +917,39 @@ export default function InformesPage() {
                 </div>
 
                 <div className="mt-4">
-  <StatusMessage variant="info" title="Criterio de filtrado">
-    El filtro de fecha se aplica a GPS y registros neuromusculares. Las
-    puntuaciones de tests se integran de forma global porque la tabla actual de
-    puntuaciones no incluye fecha de sesión.
-  </StatusMessage>
-</div>
+                  <StatusMessage variant="info" title="Criterio de filtrado">
+                    El filtro de fecha se aplica a GPS y registros
+                    neuromusculares. Las puntuaciones de tests se integran de
+                    forma global porque la tabla actual de puntuaciones no
+                    incluye fecha de sesión.
+                  </StatusMessage>
+                </div>
+
+                {playerRows.length === 0 && (
+                  <div className="mt-4">
+                    <StatusMessage
+                      variant="warning"
+                      title="Sin jugadores para el informe"
+                    >
+                      No hay jugadores disponibles con los filtros seleccionados.
+                      Cambia la posición o el rango de fechas para ampliar la
+                      búsqueda.
+                    </StatusMessage>
+                  </div>
+                )}
               </div>
             </>
           )}
         </section>
 
-        {!loading && !error && reportType === "player" && selectedPlayerRow && (
+        {!loading && !error && data && reportType === "player" && !selectedPlayerRow && (
+          <StatusMessage variant="warning" title="Sin jugador seleccionado">
+            No hay ningún jugador disponible para generar el informe individual
+            con los filtros actuales.
+          </StatusMessage>
+        )}
+
+        {!loading && !error && data && reportType === "player" && selectedPlayerRow && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
             <div className="flex flex-col gap-2">
               <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
@@ -955,7 +989,7 @@ export default function InformesPage() {
           </section>
         )}
 
-        {!loading && !error && (
+        {!loading && !error && data && (
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow">
             <div className="border-b border-slate-200 p-5">
               <h2 className="text-xl font-black text-slate-950">
@@ -1135,13 +1169,16 @@ export default function InformesPage() {
               ))}
 
               {playerRows.length === 0 && (
-  <div className="p-5">
-    <StatusMessage variant="warning" title="Sin jugadores disponibles">
-      No hay jugadores disponibles para generar informes con los filtros
-      seleccionados.
-    </StatusMessage>
-  </div>
-)}
+                <div className="p-5">
+                  <StatusMessage
+                    variant="warning"
+                    title="Sin jugadores disponibles"
+                  >
+                    No hay jugadores disponibles para generar informes con los
+                    filtros seleccionados.
+                  </StatusMessage>
+                </div>
+              )}
             </div>
 
             <div className="hidden max-h-[620px] overflow-auto md:block">
@@ -1223,15 +1260,18 @@ export default function InformesPage() {
                   ))}
 
                   {playerRows.length === 0 && (
-  <tr>
-    <td colSpan={18} className="px-4 py-6">
-      <StatusMessage variant="warning" title="Sin jugadores disponibles">
-        No hay jugadores disponibles para generar informes con los filtros
-        seleccionados.
-      </StatusMessage>
-    </td>
-  </tr>
-)}
+                    <tr>
+                      <td colSpan={18} className="px-4 py-6">
+                        <StatusMessage
+                          variant="warning"
+                          title="Sin jugadores disponibles"
+                        >
+                          No hay jugadores disponibles para generar informes con
+                          los filtros seleccionados.
+                        </StatusMessage>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
