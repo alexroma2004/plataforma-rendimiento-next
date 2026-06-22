@@ -358,12 +358,25 @@ export default function CargarGpsPage() {
     );
   }, [previewRows]);
 
+  const rowsWithoutPlayer = useMemo(() => {
+    return previewRows.filter((row) => row.jugador === "—").length;
+  }, [previewRows]);
+
+  const rowsWithoutMainMetrics = useMemo(() => {
+    return previewRows.filter((row) => {
+      return row.distancia === null && row.hsr === null && row.sprint === null;
+    }).length;
+  }, [previewRows]);
+
+  const hasSelectedFileWithoutPreview = Boolean(selectedFilename) && previewRows.length === 0;
+
   function handleGpsFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     setSaveMessage(null);
     setSaveError(null);
     setGpsRows([]);
+    setSelectedFilename(null);
 
     if (!file) return;
 
@@ -484,12 +497,50 @@ export default function CargarGpsPage() {
             </label>
           </div>
 
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            Archivo seleccionado:{" "}
-            <span className="break-all font-bold">
-              {selectedFilename ?? "ninguno"}
-            </span>
+          <div className="mt-6">
+            <StatusMessage variant="info" title="Archivo seleccionado">
+              {selectedFilename ? (
+                <span className="break-all">{selectedFilename}</span>
+              ) : (
+                "Todavía no se ha seleccionado ningún CSV GPS."
+              )}
+            </StatusMessage>
           </div>
+
+          {saveMessage && (
+            <div className="mt-4">
+              <StatusMessage variant="success" title="Sesión GPS guardada">
+                {saveMessage}
+              </StatusMessage>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="mt-4">
+              <StatusMessage variant="error" title="No se ha podido completar la acción">
+                {saveError}
+              </StatusMessage>
+            </div>
+          )}
+
+          {hasSelectedFileWithoutPreview && !saveError && (
+            <div className="mt-4">
+              <StatusMessage variant="warning" title="Previsualización vacía">
+                El archivo se ha seleccionado, pero no se han detectado filas válidas.
+                Revisa que sea un CSV separado por punto y coma y que tenga cabeceras.
+              </StatusMessage>
+            </div>
+          )}
+
+          {previewRows.length === 0 && !selectedFilename && (
+            <div className="mt-4">
+              <StatusMessage variant="info" title="Instrucciones de uso">
+                Selecciona un CSV GPS, comprueba la previsualización, completa los
+                datos de sesión y guarda solo cuando los nombres y métricas sean
+                correctos.
+              </StatusMessage>
+            </div>
+          )}
 
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <SummaryCard
@@ -512,10 +563,42 @@ export default function CargarGpsPage() {
 
           {previewRows.length > 0 && (
             <>
+              <div className="mt-6 space-y-4">
+                <StatusMessage variant="success" title="Archivo leído correctamente">
+                  Se han detectado {previewRows.length} filas de jugadores. Revisa la
+                  fecha, el microciclo, el nombre de sesión y la vinculación de
+                  jugadores antes de guardar en Supabase.
+                </StatusMessage>
+
+                {rowsWithoutPlayer > 0 && (
+                  <StatusMessage variant="warning" title="Jugadores sin nombre detectado">
+                    Hay {rowsWithoutPlayer} fila(s) en las que no se ha podido detectar
+                    el nombre del jugador. Esas filas pueden quedar sin vincular si no
+                    corriges el CSV antes de guardar.
+                  </StatusMessage>
+                )}
+
+                {rowsWithoutMainMetrics > 0 && (
+                  <StatusMessage variant="warning" title="Métricas GPS no detectadas">
+                    Hay {rowsWithoutMainMetrics} fila(s) sin distancia, HSR ni sprint
+                    detectados. Revisa que las cabeceras del CSV coincidan con las
+                    columnas esperadas.
+                  </StatusMessage>
+                )}
+              </div>
+
               <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
                 <h3 className="text-lg font-black text-slate-950">
                   Datos de la sesión
                 </h3>
+
+                <div className="mt-4">
+                  <StatusMessage variant="info" title="Antes de guardar">
+                    Comprueba que la fecha, el día de microciclo y el nombre de sesión
+                    corresponden al archivo cargado. Una vez guardado, estos datos
+                    alimentarán Equipo, Jugador, GPS, Comparador, Informes y Lupa IA.
+                  </StatusMessage>
+                </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <label className="text-sm font-bold text-slate-700">
@@ -587,21 +670,6 @@ export default function CargarGpsPage() {
                     : "Guardar sesión GPS en Supabase"}
                 </button>
 
-                {saveMessage && (
-                  <div className="mt-4">
-                    <StatusMessage variant="success" title="Sesión guardada">
-                      {saveMessage}
-                    </StatusMessage>
-                  </div>
-                )}
-
-                {saveError && (
-                  <div className="mt-4">
-                    <StatusMessage variant="error" title="No se ha podido guardar">
-                      {saveError}
-                    </StatusMessage>
-                  </div>
-                )}
               </section>
 
               <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -757,13 +825,6 @@ export default function CargarGpsPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-
-              <div className="mt-4">
-                <StatusMessage variant="success" title="Archivo leído correctamente">
-                  Archivo GPS leído correctamente. Revisa la fecha, el
-                  microciclo y el nombre de sesión antes de guardar en Supabase.
-                </StatusMessage>
               </div>
             </>
           )}

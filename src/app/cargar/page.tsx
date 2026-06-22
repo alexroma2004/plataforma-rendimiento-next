@@ -94,6 +94,13 @@ export default function CargarDatosPage() {
           ))}
         </section>
 
+        <StatusMessage variant="warning" title="Antes de guardar una sesión">
+          Revisa especialmente que el nombre del jugador coincida con la
+          plantilla, que la fecha sea correcta y que el microciclo esté bien
+          asignado. Así evitarás registros huérfanos o datos difíciles de
+          comparar después.
+        </StatusMessage>
+
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
             Flujo recomendado
@@ -126,6 +133,12 @@ export default function CargarDatosPage() {
             ))}
           </div>
         </section>
+
+        <StatusMessage variant="success" title="Después de guardar">
+          Los datos cargados aparecerán automáticamente en Equipo, Jugador,
+          GPS, Neuromuscular, Tests, Perfil F-R, Comparador, Informes y Lupa IA,
+          siempre que estén correctamente vinculados.
+        </StatusMessage>
       </div>
     </AppShell>
   );

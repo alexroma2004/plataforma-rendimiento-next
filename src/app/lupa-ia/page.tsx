@@ -235,6 +235,16 @@ export default function LupaIAPage() {
       .slice(0, 8);
   }, [insights]);
 
+  const hasSourceData = useMemo(() => {
+    if (!dashboardData) return false;
+
+    return (
+      dashboardData.gpsRecords.length > 0 ||
+      dashboardData.neuromuscularRecords.length > 0 ||
+      dashboardData.testScores.length > 0
+    );
+  }, [dashboardData]);
+
   const sortedFilteredInsights = useMemo(() => {
     return [...filteredInsights].sort((a, b) => {
       const priorityDifference =
@@ -252,15 +262,20 @@ export default function LupaIAPage() {
       subtitle="Análisis automático de alertas, patrones y recomendaciones a partir de GPS, rendimiento neuromuscular y tests físicos."
     >
       {loading ? (
-  <StatusMessage variant="info" title="Cargando Lupa IA">
-    Cargando análisis automático a partir de GPS, rendimiento neuromuscular y
-    tests físicos.
-  </StatusMessage>
-) : error ? (
-  <StatusMessage variant="error" title="No se ha podido cargar la Lupa IA">
-    {error}
-  </StatusMessage>
-) : (
+        <StatusMessage variant="info" title="Cargando Lupa IA">
+          Cargando análisis automático a partir de GPS, rendimiento
+          neuromuscular y tests físicos.
+        </StatusMessage>
+      ) : error ? (
+        <StatusMessage variant="error" title="No se ha podido cargar la Lupa IA">
+          {error}
+        </StatusMessage>
+      ) : !dashboardData ? (
+        <StatusMessage variant="warning" title="Sin datos cargados">
+          No se han recibido datos suficientes para ejecutar el análisis
+          automático.
+        </StatusMessage>
+      ) : (
         <div className="space-y-8">
           <section className="rounded-2xl bg-slate-950 p-5 text-white shadow sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-300 sm:tracking-[0.35em]">
@@ -275,6 +290,21 @@ export default function LupaIAPage() {
               {buildQuickSummary(insights)}
             </p>
           </section>
+
+          {!hasSourceData && (
+            <StatusMessage variant="warning" title="Sin datos para analizar">
+              Todavía no hay registros GPS, controles neuromusculares ni
+              puntuaciones de tests suficientes para que la Lupa IA genere
+              conclusiones útiles.
+            </StatusMessage>
+          )}
+
+          {hasSourceData && insights.length === 0 && (
+            <StatusMessage variant="success" title="Sin alertas automáticas">
+              Hay datos cargados, pero actualmente no se han generado alertas
+              automáticas con los criterios de análisis disponibles.
+            </StatusMessage>
+          )}
 
           <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <SummaryCard
@@ -374,6 +404,15 @@ export default function LupaIAPage() {
                 </label>
               </div>
             </div>
+
+            <div className="mt-5">
+              <StatusMessage variant="info" title="Lectura automática">
+                La Lupa IA no sustituye la decisión del cuerpo técnico. Sirve
+                para ordenar prioridades y detectar patrones que conviene revisar
+                con el contexto de entrenamiento, partido, lesiones y minutos de
+                juego.
+              </StatusMessage>
+            </div>
           </section>
 
           <section className="grid gap-6 xl:grid-cols-3">
@@ -383,8 +422,10 @@ export default function LupaIAPage() {
               </h3>
 
               {topPlayerRows.length === 0 ? (
-                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-                  No hay jugadores señalados por ahora.
+                <div className="mt-4">
+                  <StatusMessage variant="warning" title="Sin jugadores señalados">
+                    No hay jugadores con avisos automáticos por ahora.
+                  </StatusMessage>
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
@@ -430,10 +471,19 @@ export default function LupaIAPage() {
 
             <div className="space-y-4 xl:col-span-2">
               {sortedFilteredInsights.length === 0 ? (
-  <StatusMessage variant="success" title="Sin alertas para estos filtros">
-    No hay alertas que coincidan con los filtros seleccionados.
-  </StatusMessage>
-) : (
+                <StatusMessage
+                  variant={insights.length === 0 ? "success" : "warning"}
+                  title={
+                    insights.length === 0
+                      ? "Sin alertas generadas"
+                      : "Sin alertas para estos filtros"
+                  }
+                >
+                  {insights.length === 0
+                    ? "No hay alertas automáticas con los datos actuales."
+                    : "No hay alertas que coincidan con el área, la prioridad o la búsqueda seleccionada."}
+                </StatusMessage>
+              ) : (
                 sortedFilteredInsights.map((insight) => (
                   <article
                     key={insight.id}
