@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getPlayerDashboardData,
   type PlayerDashboardData,
@@ -613,6 +614,15 @@ export default function ComparadorPage() {
     ];
   }, [playerAStats, playerBStats, selectedMetric]);
 
+  const selectedMetricHasData = useMemo(() => {
+    if (!playerAStats || !playerBStats) return false;
+
+    return (
+      selectedMetric.getValue(playerAStats) !== null ||
+      selectedMetric.getValue(playerBStats) !== null
+    );
+  }, [playerAStats, playerBStats, selectedMetric]);
+
   const capacityComparisonRows = useMemo(() => {
     if (!playerAStats || !playerBStats) return [];
 
@@ -743,28 +753,43 @@ export default function ComparadorPage() {
             </div>
           </div>
 
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-            Criterio actual: {selectedScopeMeta.description}
+          <div className="mt-5">
+            <StatusMessage variant="info" title="Criterio de histórico">
+              Criterio actual: {selectedScopeMeta.description}
+            </StatusMessage>
           </div>
 
           {error && (
-            <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
+            <div className="mt-5">
+              <StatusMessage variant="error" title="No se ha podido cargar el comparador">
+                {error}
+              </StatusMessage>
             </div>
           )}
 
           {loading && (
-            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando datos del comparador...
+            <div className="mt-5">
+              <StatusMessage variant="info" title="Cargando comparador">
+                Cargando jugadores, registros GPS, controles neuromusculares y
+                puntuaciones de tests físicos.
+              </StatusMessage>
             </div>
           )}
 
           {!loading && players.length === 0 && (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-              Todavía no hay jugadores activos cargados.
+            <div className="mt-5">
+              <StatusMessage variant="warning" title="Sin jugadores disponibles">
+                Todavía no hay jugadores activos cargados.
+              </StatusMessage>
             </div>
           )}
         </section>
+
+        {!loading && !error && players.length > 0 && (!playerAStats || !playerBStats) && (
+          <StatusMessage variant="warning" title="Selecciona dos jugadores">
+            Selecciona dos jugadores válidos para poder generar la comparación.
+          </StatusMessage>
+        )}
 
         {!loading && playerAStats && playerBStats && (
           <>
@@ -855,46 +880,55 @@ export default function ComparadorPage() {
               </div>
 
               <div className="mt-6 h-[320px] w-full sm:h-[360px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={selectedMetricChartData}
-                    margin={{
-                      top: 10,
-                      right: 12,
-                      left: 0,
-                      bottom: 60,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
+                {!selectedMetricHasData ? (
+                  <div className="flex h-full items-center justify-center">
+                    <StatusMessage variant="warning" title="Sin datos para el gráfico">
+                      No hay datos disponibles para representar la métrica
+                      seleccionada con estos jugadores.
+                    </StatusMessage>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={selectedMetricChartData}
+                      margin={{
+                        top: 10,
+                        right: 12,
+                        left: 0,
+                        bottom: 60,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
 
-                    <XAxis
-                      dataKey="jugador"
-                      tick={{ fontSize: 11 }}
-                      angle={-25}
-                      textAnchor="end"
-                      height={80}
-                    />
+                      <XAxis
+                        dataKey="jugador"
+                        tick={{ fontSize: 11 }}
+                        angle={-25}
+                        textAnchor="end"
+                        height={80}
+                      />
 
-                    <YAxis
-                      width={58}
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(value) =>
-                        Math.round(Number(value)).toLocaleString("es-ES")
-                      }
-                    />
+                      <YAxis
+                        width={58}
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(value) =>
+                          Math.round(Number(value)).toLocaleString("es-ES")
+                        }
+                      />
 
-                    <Tooltip
-                      formatter={(value) => [
-                        formatMetric(Number(value), selectedMetric.unit),
-                        selectedMetric.label,
-                      ]}
-                    />
+                      <Tooltip
+                        formatter={(value) => [
+                          formatMetric(Number(value), selectedMetric.unit),
+                          selectedMetric.label,
+                        ]}
+                      />
 
-                    <Legend />
+                      <Legend />
 
-                    <Bar dataKey="valor" name={selectedMetric.label} />
-                  </BarChart>
-                </ResponsiveContainer>
+                      <Bar dataKey="valor" name={selectedMetric.label} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </section>
 
@@ -1232,9 +1266,11 @@ export default function ComparadorPage() {
                   ))}
 
                   {capacityComparisonRows.length === 0 && (
-                    <div className="p-6 text-center text-sm font-bold text-slate-500">
-                      No hay puntuaciones de tests disponibles para estos
-                      jugadores.
+                    <div className="p-5">
+                      <StatusMessage variant="warning" title="Sin puntuaciones de tests">
+                        No hay puntuaciones de tests disponibles para estos
+                        jugadores.
+                      </StatusMessage>
                     </div>
                   )}
                 </div>
@@ -1278,12 +1314,11 @@ export default function ComparadorPage() {
 
                       {capacityComparisonRows.length === 0 && (
                         <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                          >
-                            No hay puntuaciones de tests disponibles para estos
-                            jugadores.
+                          <td colSpan={4} className="px-4 py-6">
+                            <StatusMessage variant="warning" title="Sin puntuaciones de tests">
+                              No hay puntuaciones de tests disponibles para estos
+                              jugadores.
+                            </StatusMessage>
                           </td>
                         </tr>
                       )}

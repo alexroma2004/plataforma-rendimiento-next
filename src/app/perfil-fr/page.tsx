@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import StatusMessage from "@/components/ui/StatusMessage";
 import {
   Bar,
   BarChart,
@@ -299,9 +300,9 @@ function SummaryCard({
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
+    <StatusMessage variant="warning" title="Sin datos disponibles">
       {children}
-    </div>
+    </StatusMessage>
   );
 }
 
@@ -580,14 +581,19 @@ export default function PerfilFrPage() {
           </div>
 
           {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {error}
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se ha podido cargar el perfil F-R">
+                {error}
+              </StatusMessage>
             </div>
           )}
 
           {loading && (
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Cargando perfil F-R...
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando perfil F-R">
+                Cargando jugadores activos y registros neuromusculares para
+                construir el perfil F-R.
+              </StatusMessage>
             </div>
           )}
         </section>
@@ -933,8 +939,10 @@ export default function PerfilFrPage() {
                 })}
 
                 {filteredPoints.length === 0 && (
-                  <div className="p-6 text-center text-sm font-bold text-slate-500">
-                    No hay registros para los filtros seleccionados.
+                  <div className="p-5">
+                    <StatusMessage variant="warning" title="Sin registros F-R">
+                      No hay registros para los filtros seleccionados.
+                    </StatusMessage>
                   </div>
                 )}
               </div>
@@ -1011,11 +1019,10 @@ export default function PerfilFrPage() {
 
                     {filteredPoints.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={10}
-                          className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                        >
-                          No hay registros para los filtros seleccionados.
+                        <td colSpan={10} className="px-4 py-6">
+                          <StatusMessage variant="warning" title="Sin registros F-R">
+                            No hay registros para los filtros seleccionados.
+                          </StatusMessage>
                         </td>
                       </tr>
                     )}
@@ -1050,8 +1057,10 @@ function RankingCard({
       </h3>
 
       {rows.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">
-          No hay datos suficientes.
+        <div className="mt-4">
+          <StatusMessage variant="warning" title="Sin datos suficientes">
+            No hay datos suficientes.
+          </StatusMessage>
         </div>
       ) : (
         <div className="mt-4 space-y-3">
