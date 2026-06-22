@@ -331,6 +331,7 @@ export default function CargarTestsPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const previewRows = useMemo(() => {
@@ -352,12 +353,27 @@ export default function CargarTestsPage() {
     };
   }, [previewRows]);
 
+  const invalidRowsCount = useMemo(() => {
+    return Math.max(rawRows.length - previewRows.length, 0);
+  }, [rawRows.length, previewRows.length]);
+
+  const dataQualitySummary = useMemo(() => {
+    return {
+      withoutValue: previewRows.filter((row) => row.value === null).length,
+      withoutScore: previewRows.filter((row) => row.variable_score === null).length,
+      withoutClassification: previewRows.filter((row) => !row.classification).length,
+      unavailable: previewRows.filter((row) => row.available === false).length,
+    };
+  }, [previewRows]);
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     setSaveMessage(null);
+    setSaveWarning(null);
     setSaveError(null);
     setRawRows([]);
+    setSelectedFilename(null);
 
     if (!file) return;
 
@@ -381,9 +397,16 @@ export default function CargarTestsPage() {
         });
 
         setRawRows(rows);
+
+        if (rows.length === 0) {
+          setSaveWarning(
+            "El archivo se ha leído, pero no contiene filas con datos.",
+          );
+        }
       },
       error: (error) => {
         setRawRows([]);
+        setSaveWarning(null);
         setSaveError(`No se ha podido leer el archivo de tests: ${error.message}`);
       },
     });
@@ -391,6 +414,7 @@ export default function CargarTestsPage() {
 
   async function handleSaveSession() {
     setSaveMessage(null);
+    setSaveWarning(null);
     setSaveError(null);
 
     if (previewRows.length === 0) {
@@ -427,6 +451,12 @@ export default function CargarTestsPage() {
       setSaveMessage(
         `Sesión de tests guardada correctamente. Resultados: ${result.insertedResults}. Puntuaciones: ${result.insertedScores}. Jugadores vinculados: ${result.matchedPlayers}. Sin vincular: ${result.unmatchedPlayers}.`,
       );
+
+      if (result.unmatchedPlayers > 0) {
+        setSaveWarning(
+          `Hay ${result.unmatchedPlayers} jugador(es) sin vincular. Revisa que el nombre del CSV coincida con el nombre registrado en la plantilla.`,
+        );
+      }
     } catch (error) {
       const message =
         error instanceof Error
@@ -474,11 +504,29 @@ export default function CargarTestsPage() {
             </label>
           </div>
 
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            Archivo seleccionado:{" "}
-            <span className="break-all font-bold">
-              {selectedFilename ?? "ninguno"}
-            </span>
+          <div className="mt-6">
+            <StatusMessage variant="info" title="Formato mínimo del CSV">
+              El archivo debe incluir, como mínimo, columnas equivalentes a
+              jugador, bloque o capacidad, variable o prueba y valor. Si incluye
+              puntuación de variable, peso y clasificación, se guardarán junto al
+              resultado.
+            </StatusMessage>
+          </div>
+
+          <div className="mt-4">
+            <StatusMessage
+              variant={selectedFilename ? "success" : "warning"}
+              title={
+                selectedFilename
+                  ? "Archivo seleccionado"
+                  : "Sin archivo seleccionado"
+              }
+            >
+              <span className="break-all font-bold">
+                {selectedFilename ??
+                  "Selecciona un CSV de tests para generar la previsualización."}
+              </span>
+            </StatusMessage>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -488,21 +536,78 @@ export default function CargarTestsPage() {
             <SummaryCard title="Variables" value={summary.variables} />
           </div>
 
+          {saveMessage && (
+            <div className="mt-6">
+              <StatusMessage variant="success" title="Sesión guardada">
+                {saveMessage}
+              </StatusMessage>
+            </div>
+          )}
+
+          {saveWarning && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Revisión recomendada">
+                {saveWarning}
+              </StatusMessage>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se ha podido continuar">
+                {saveError}
+              </StatusMessage>
+            </div>
+          )}
+
           {rawRows.length > 0 && previewRows.length === 0 && (
-  <div className="mt-6">
-    <StatusMessage
-      variant="error"
-      title="Archivo leído sin registros válidos"
-    >
-      El archivo se ha leído, pero no se ha detectado ningún registro
-      válido. Revisa que existan columnas equivalentes a jugador,
-      bloque/capacidad y variable/prueba.
-    </StatusMessage>
-  </div>
-)}
+            <div className="mt-6">
+              <StatusMessage
+                variant="error"
+                title="Archivo leído sin registros válidos"
+              >
+                El archivo se ha leído, pero no se ha detectado ningún registro
+                válido. Revisa que existan columnas equivalentes a jugador,
+                bloque/capacidad y variable/prueba.
+              </StatusMessage>
+            </div>
+          )}
+
+          {invalidRowsCount > 0 && previewRows.length > 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Filas descartadas">
+                Se han descartado {invalidRowsCount} fila(s) porque no tenían
+                jugador, bloque/capacidad o variable/prueba válidos.
+              </StatusMessage>
+            </div>
+          )}
+
+          {previewRows.length > 0 && (
+            dataQualitySummary.withoutScore > 0 ||
+            dataQualitySummary.withoutValue > 0 ||
+            dataQualitySummary.withoutClassification > 0 ||
+            dataQualitySummary.unavailable > 0
+          ) && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Datos incompletos detectados">
+                Revisa la previsualización: {dataQualitySummary.withoutValue}
+                fila(s) sin valor, {dataQualitySummary.withoutScore} fila(s) sin
+                puntuación, {dataQualitySummary.withoutClassification} fila(s)
+                sin clasificación y {dataQualitySummary.unavailable} fila(s)
+                marcadas como no disponibles.
+              </StatusMessage>
+            </div>
+          )}
 
           {previewRows.length > 0 && (
             <>
+              <div className="mt-6">
+                <StatusMessage variant="success" title="Archivo leído correctamente">
+                  Archivo de tests leído correctamente. Revisa la fecha, el
+                  contexto y el nombre de sesión antes de guardar en Supabase.
+                </StatusMessage>
+              </div>
+
               <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
                 <h3 className="text-lg font-black text-slate-950">
                   Datos de la sesión
@@ -563,21 +668,22 @@ export default function CargarTestsPage() {
                     : "Guardar sesión de tests en Supabase"}
                 </button>
 
-                {saveMessage && (
-  <div className="mt-4">
-    <StatusMessage variant="success" title="Sesión guardada">
-      {saveMessage}
-    </StatusMessage>
-  </div>
-)}
+                <div className="mt-4">
+                  <StatusMessage variant="info" title="Antes de guardar">
+                    Comprueba que la fecha, el contexto, los nombres de los
+                    jugadores y las puntuaciones son correctos. Después se
+                    crearán la sesión, los resultados por variable y las
+                    puntuaciones por capacidad.
+                  </StatusMessage>
+                </div>
 
-{saveError && (
-  <div className="mt-4">
-    <StatusMessage variant="error" title="No se ha podido guardar">
-      {saveError}
-    </StatusMessage>
-  </div>
-)}
+                {isSaving && (
+                  <div className="mt-4">
+                    <StatusMessage variant="info" title="Guardando sesión">
+                      Insertando resultados y puntuaciones de tests en Supabase.
+                    </StatusMessage>
+                  </div>
+                )}
               </section>
 
               <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -702,13 +808,6 @@ export default function CargarTestsPage() {
                   </table>
                 </div>
               </div>
-
-              <div className="mt-4">
-  <StatusMessage variant="success" title="Archivo leído correctamente">
-    Archivo de tests leído correctamente. Revisa la fecha, el contexto y el
-    nombre de sesión antes de guardar en Supabase.
-  </StatusMessage>
-</div>
             </>
           )}
         </section>
