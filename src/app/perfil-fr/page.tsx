@@ -63,6 +63,12 @@ type BaseProfilePoint = {
 
 type ProfileStatus = "MUY_BUENO" | "BUENO" | "CONTROL" | "BAJO";
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 function getSupabaseClient() {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
@@ -494,6 +500,116 @@ export default function PerfilFrPage() {
     }));
   }, [selectedPlayer, selectedPlayerPoints]);
 
+  const quickProfileCards = useMemo<QuickReadingCard[]>(() => {
+    const completePoints = latestPoints.filter(
+      (point) =>
+        point.cmj !== null &&
+        point.rsimod !== null &&
+        point.vmp !== null,
+    );
+    const incompletePoints = latestPoints.filter(
+      (point) =>
+        point.cmj === null ||
+        point.rsimod === null ||
+        point.vmp === null,
+    );
+    const statusCounts: Record<ProfileStatus, number> = {
+      MUY_BUENO: 0,
+      BUENO: 0,
+      CONTROL: 0,
+      BAJO: 0,
+    };
+
+    completePoints.forEach((point) => {
+      statusCounts[getProfileStatus(point)] += 1;
+    });
+
+    const maximumStatusCount = Math.max(...Object.values(statusCounts));
+    const dominantStatuses = (
+      Object.entries(statusCounts) as Array<[ProfileStatus, number]>
+    )
+      .filter(([, count]) => count > 0 && count === maximumStatusCount)
+      .map(([status]) => status);
+    const dominantMessage =
+      completePoints.length === 0
+        ? "No hay perfiles completos suficientes para identificar una tendencia dominante."
+        : dominantStatuses.length === 1
+          ? `La tendencia más frecuente es “${getProfileStatusLabel(
+              dominantStatuses[0],
+            )}” en ${maximumStatusCount} de ${
+              completePoints.length
+            } perfiles completos. Resume los datos filtrados y no define rendimiento absoluto.`
+          : `No hay una tendencia dominante única: ${dominantStatuses
+              .map(getProfileStatusLabel)
+              .join(
+                ", ",
+              )} comparten la mayor frecuencia dentro de los perfiles completos.`;
+    const metricParts = [
+      summary.cmj === null
+        ? null
+        : `CMJ medio ${formatNumber(summary.cmj, 1, " cm")}`,
+      summary.rsimod === null
+        ? null
+        : `RSI mod medio ${formatNumber(summary.rsimod, 2)}`,
+      summary.vmp === null
+        ? null
+        : `VMP media ${formatNumber(summary.vmp, 2, " m/s")}`,
+    ].filter((value): value is string => Boolean(value));
+    const strengthsMessage =
+      metricParts.length > 0
+        ? metricParts.join(", ") +
+          ". Estas medias describen la muestra disponible; para hablar de fortalezas o áreas de mejora deben compararse con el historial individual, la posición y el microciclo."
+        : "No hay valores suficientes de CMJ, RSI modificado o VMP para describir fortalezas y áreas de mejora.";
+    const controlPoints = completePoints.filter(
+      (point) => getProfileStatus(point) === "CONTROL",
+    );
+    const lowPoints = completePoints.filter(
+      (point) => getProfileStatus(point) === "BAJO",
+    );
+    const reviewPoints = [...controlPoints, ...lowPoints, ...incompletePoints];
+    const reviewNames = Array.from(
+      new Set(reviewPoints.map((point) => point.playerName)),
+    ).slice(0, 4);
+    const hasReviewPoints = reviewPoints.length > 0;
+    const reviewMessage = hasReviewPoints
+      ? `Hay ${controlPoints.length} perfiles en control, ${
+          lowPoints.length
+        } en nivel bajo y ${
+          incompletePoints.length
+        } incompletos según los datos y umbrales actuales. ${
+          reviewNames.length > 0
+            ? "Conviene revisar: " + reviewNames.join(", ") + "."
+            : ""
+        }`
+      : "No aparecen perfiles completos en control o nivel bajo, ni perfiles incompletos, dentro de los filtros actuales.";
+    const recommendationMessage = hasReviewPoints
+      ? "Revisar primero los perfiles en control, nivel bajo o incompletos y contrastarlos con historial individual, posición, microciclo, GPS y RPE; esta lectura no diagnostica fatiga, lesión ni riesgo."
+      : "Mantener seguimiento individual y contrastar CMJ, RSI modificado y VMP con posición, microciclo, GPS y RPE antes de ajustar contenidos.";
+
+    return [
+      {
+        title: "Perfil dominante",
+        variant: "info",
+        message: dominantMessage,
+      },
+      {
+        title: "Fortalezas y áreas de mejora",
+        variant: "info",
+        message: strengthsMessage,
+      },
+      {
+        title: "Jugadores a revisar",
+        variant: hasReviewPoints ? "warning" : "info",
+        message: reviewMessage,
+      },
+      {
+        title: "Recomendación para el staff",
+        variant: hasReviewPoints ? "warning" : "info",
+        message: recommendationMessage,
+      },
+    ];
+  }, [latestPoints, summary]);
+
   return (
     <AppShell
       title="Perfil F-R"
@@ -640,6 +756,35 @@ export default function PerfilFrPage() {
                 value={formatNumber(summary.rpe, 1)}
               />
             </section>
+
+            {latestPoints.length > 0 && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Interpretación del perfil
+                </p>
+
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Lectura rápida perfil F-R
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Señales orientativas construidas con los datos disponibles y
+                  los filtros aplicados.
+                </p>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {quickProfileCards.map((card) => (
+                    <StatusMessage
+                      key={card.title}
+                      variant={card.variant}
+                      title={card.title}
+                    >
+                      {card.message}
+                    </StatusMessage>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="grid gap-6 xl:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6 xl:col-span-2">
