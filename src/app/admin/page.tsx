@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   getAdminDashboardData,
   type AdminDashboardData,
@@ -591,10 +592,10 @@ export default function AdminPage() {
 
           {!loading && !error && !data && (
             <div className="mt-6">
-              <StatusMessage variant="warning" title="Sin datos de administración">
-                No se han encontrado datos para construir el panel de
-                administración.
-              </StatusMessage>
+              <EmptyState
+                title="Sin datos de administración"
+                description="No se han encontrado datos para construir el panel de administración."
+              />
             </div>
           )}
         </section>
@@ -704,9 +705,10 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="mt-5">
-                    <StatusMessage variant="warning" title="Sin equipo principal">
-                      No hay ningún equipo creado.
-                    </StatusMessage>
+                    <EmptyState
+                      title="Sin equipo principal"
+                      description="No hay ningún equipo creado."
+                    />
                   </div>
                 )}
               </div>
@@ -793,9 +795,10 @@ export default function AdminPage() {
 
                   {data.players.length === 0 && (
                     <div className="p-5">
-                      <StatusMessage variant="warning" title="Sin jugadores registrados">
-                        No hay jugadores registrados en la base de datos.
-                      </StatusMessage>
+                      <EmptyState
+                        title="Sin jugadores registrados"
+                        description="No hay jugadores registrados en la base de datos."
+                      />
                     </div>
                   )}
                 </div>
@@ -855,11 +858,11 @@ export default function AdminPage() {
 
                       {data.players.length === 0 && (
                         <tr>
-                          <td
-                            colSpan={6}
-                            className="px-4 py-6 text-center text-sm font-bold text-slate-500"
-                          >
-                            No hay jugadores registrados.
+                          <td colSpan={6} className="px-4 py-6">
+                            <EmptyState
+                              title="Sin jugadores registrados"
+                              description="No hay jugadores registrados en la base de datos."
+                            />
                           </td>
                         </tr>
                       )}
@@ -898,9 +901,10 @@ export default function AdminPage() {
                   ))}
 
                   {data.latestGpsSessions.length === 0 && (
-                    <StatusMessage variant="warning" title="Sin sesiones GPS">
-                      No hay sesiones GPS cargadas.
-                    </StatusMessage>
+                    <EmptyState
+                      title="Sin sesiones GPS"
+                      description="No hay sesiones GPS cargadas."
+                    />
                   )}
                 </div>
               </div>
@@ -932,12 +936,10 @@ export default function AdminPage() {
                   ))}
 
                   {data.latestNeuromuscularSessions.length === 0 && (
-                    <StatusMessage
-                      variant="warning"
+                    <EmptyState
                       title="Sin sesiones neuromusculares"
-                    >
-                      No hay sesiones neuromusculares cargadas.
-                    </StatusMessage>
+                      description="No hay sesiones neuromusculares cargadas."
+                    />
                   )}
                 </div>
               </div>
@@ -968,9 +970,10 @@ export default function AdminPage() {
                   ))}
 
                   {data.latestTestSessions.length === 0 && (
-                    <StatusMessage variant="warning" title="Sin sesiones de tests">
-                      No hay sesiones de tests cargadas.
-                    </StatusMessage>
+                    <EmptyState
+                      title="Sin sesiones de tests"
+                      description="No hay sesiones de tests cargadas."
+                    />
                   )}
                 </div>
               </div>
@@ -981,3 +984,4 @@ export default function AdminPage() {
     </AppShell>
   );
 }
+

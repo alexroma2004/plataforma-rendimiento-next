@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   getTeamDashboardData,
   type TeamDashboardData,
@@ -824,10 +825,10 @@ export default function InformesPage() {
 
           {!loading && !error && !data && (
             <div className="mt-6">
-              <StatusMessage variant="warning" title="Sin datos disponibles">
-                No se han encontrado datos para generar informes. Revisa que haya
-                jugadores y registros cargados en la plataforma.
-              </StatusMessage>
+              <EmptyState
+                title="Sin datos disponibles"
+                description="No se han encontrado datos para generar informes. Revisa que haya jugadores y registros cargados en la plataforma."
+              />
             </div>
           )}
 
@@ -927,14 +928,10 @@ export default function InformesPage() {
 
                 {playerRows.length === 0 && (
                   <div className="mt-4">
-                    <StatusMessage
-                      variant="warning"
+                    <EmptyState
                       title="Sin jugadores para el informe"
-                    >
-                      No hay jugadores disponibles con los filtros seleccionados.
-                      Cambia la posición o el rango de fechas para ampliar la
-                      búsqueda.
-                    </StatusMessage>
+                      description="No hay jugadores disponibles con los filtros seleccionados. Cambia la posición o el rango de fechas para ampliar la búsqueda."
+                    />
                   </div>
                 )}
               </div>
@@ -943,10 +940,10 @@ export default function InformesPage() {
         </section>
 
         {!loading && !error && data && reportType === "player" && !selectedPlayerRow && (
-          <StatusMessage variant="warning" title="Sin jugador seleccionado">
-            No hay ningún jugador disponible para generar el informe individual
-            con los filtros actuales.
-          </StatusMessage>
+          <EmptyState
+            title="Sin jugador seleccionado"
+            description="No hay ningún jugador disponible para generar el informe individual con los filtros actuales."
+          />
         )}
 
         {!loading && !error && data && reportType === "player" && selectedPlayerRow && (
@@ -1170,13 +1167,10 @@ export default function InformesPage() {
 
               {playerRows.length === 0 && (
                 <div className="p-5">
-                  <StatusMessage
-                    variant="warning"
+                  <EmptyState
                     title="Sin jugadores disponibles"
-                  >
-                    No hay jugadores disponibles para generar informes con los
-                    filtros seleccionados.
-                  </StatusMessage>
+                    description="No hay jugadores disponibles para generar informes con los filtros seleccionados."
+                  />
                 </div>
               )}
             </div>
@@ -1262,13 +1256,10 @@ export default function InformesPage() {
                   {playerRows.length === 0 && (
                     <tr>
                       <td colSpan={18} className="px-4 py-6">
-                        <StatusMessage
-                          variant="warning"
+                        <EmptyState
                           title="Sin jugadores disponibles"
-                        >
-                          No hay jugadores disponibles para generar informes con
-                          los filtros seleccionados.
-                        </StatusMessage>
+                          description="No hay jugadores disponibles para generar informes con los filtros seleccionados."
+                        />
                       </td>
                     </tr>
                   )}

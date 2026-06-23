@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import EmptyState from "@/components/ui/EmptyState";
 import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getPlayerDashboardData,
@@ -271,10 +272,10 @@ export default function LupaIAPage() {
           {error}
         </StatusMessage>
       ) : !dashboardData ? (
-        <StatusMessage variant="warning" title="Sin datos cargados">
-          No se han recibido datos suficientes para ejecutar el análisis
-          automático.
-        </StatusMessage>
+        <EmptyState
+          title="Sin datos cargados"
+          description="No se han recibido datos suficientes para ejecutar el análisis automático."
+        />
       ) : (
         <div className="space-y-8">
           <section className="rounded-2xl bg-slate-950 p-5 text-white shadow sm:p-6">
@@ -292,18 +293,17 @@ export default function LupaIAPage() {
           </section>
 
           {!hasSourceData && (
-            <StatusMessage variant="warning" title="Sin datos para analizar">
-              Todavía no hay registros GPS, controles neuromusculares ni
-              puntuaciones de tests suficientes para que la Lupa IA genere
-              conclusiones útiles.
-            </StatusMessage>
+            <EmptyState
+              title="Sin datos para analizar"
+              description="Todavía no hay registros GPS, controles neuromusculares ni puntuaciones de tests suficientes para que la Lupa IA genere conclusiones útiles."
+            />
           )}
 
           {hasSourceData && insights.length === 0 && (
-            <StatusMessage variant="success" title="Sin alertas automáticas">
-              Hay datos cargados, pero actualmente no se han generado alertas
-              automáticas con los criterios de análisis disponibles.
-            </StatusMessage>
+            <EmptyState
+              title="Sin alertas automáticas"
+              description="Hay datos cargados, pero actualmente no se han generado alertas automáticas con los criterios de análisis disponibles."
+            />
           )}
 
           <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -423,9 +423,10 @@ export default function LupaIAPage() {
 
               {topPlayerRows.length === 0 ? (
                 <div className="mt-4">
-                  <StatusMessage variant="warning" title="Sin jugadores señalados">
-                    No hay jugadores con avisos automáticos por ahora.
-                  </StatusMessage>
+                  <EmptyState
+                    title="Sin jugadores señalados"
+                    description="No hay jugadores con avisos automáticos por ahora."
+                  />
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
@@ -471,18 +472,18 @@ export default function LupaIAPage() {
 
             <div className="space-y-4 xl:col-span-2">
               {sortedFilteredInsights.length === 0 ? (
-                <StatusMessage
-                  variant={insights.length === 0 ? "success" : "warning"}
+                <EmptyState
                   title={
                     insights.length === 0
                       ? "Sin alertas generadas"
                       : "Sin alertas para estos filtros"
                   }
-                >
-                  {insights.length === 0
-                    ? "No hay alertas automáticas con los datos actuales."
-                    : "No hay alertas que coincidan con el área, la prioridad o la búsqueda seleccionada."}
-                </StatusMessage>
+                  description={
+                    insights.length === 0
+                      ? "No hay alertas automáticas con los datos actuales."
+                      : "No hay alertas que coincidan con el área, la prioridad o la búsqueda seleccionada."
+                  }
+                />
               ) : (
                 sortedFilteredInsights.map((insight) => (
                   <article

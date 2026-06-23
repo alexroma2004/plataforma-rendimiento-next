@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   getPlayerDashboardData,
   type PlayerDashboardData,
@@ -778,17 +779,19 @@ export default function ComparadorPage() {
 
           {!loading && players.length === 0 && (
             <div className="mt-5">
-              <StatusMessage variant="warning" title="Sin jugadores disponibles">
-                Todavía no hay jugadores activos cargados.
-              </StatusMessage>
+              <EmptyState
+                title="Sin jugadores disponibles"
+                description="Todavía no hay jugadores activos cargados. Carga jugadores antes de utilizar el comparador."
+              />
             </div>
           )}
         </section>
 
         {!loading && !error && players.length > 0 && (!playerAStats || !playerBStats) && (
-          <StatusMessage variant="warning" title="Selecciona dos jugadores">
-            Selecciona dos jugadores válidos para poder generar la comparación.
-          </StatusMessage>
+          <EmptyState
+            title="Selecciona dos jugadores"
+            description="Selecciona dos jugadores válidos para poder generar la comparación."
+          />
         )}
 
         {!loading && playerAStats && playerBStats && (
@@ -882,10 +885,10 @@ export default function ComparadorPage() {
               <div className="mt-6 h-[320px] w-full sm:h-[360px]">
                 {!selectedMetricHasData ? (
                   <div className="flex h-full items-center justify-center">
-                    <StatusMessage variant="warning" title="Sin datos para el gráfico">
-                      No hay datos disponibles para representar la métrica
-                      seleccionada con estos jugadores.
-                    </StatusMessage>
+                    <EmptyState
+                      title="Sin datos para el gráfico"
+                      description="No hay datos disponibles para representar la métrica seleccionada con estos jugadores."
+                    />
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -1267,10 +1270,10 @@ export default function ComparadorPage() {
 
                   {capacityComparisonRows.length === 0 && (
                     <div className="p-5">
-                      <StatusMessage variant="warning" title="Sin puntuaciones de tests">
-                        No hay puntuaciones de tests disponibles para estos
-                        jugadores.
-                      </StatusMessage>
+                      <EmptyState
+                        title="Sin puntuaciones de tests"
+                        description="No hay puntuaciones de tests disponibles para estos jugadores."
+                      />
                     </div>
                   )}
                 </div>
@@ -1315,10 +1318,10 @@ export default function ComparadorPage() {
                       {capacityComparisonRows.length === 0 && (
                         <tr>
                           <td colSpan={4} className="px-4 py-6">
-                            <StatusMessage variant="warning" title="Sin puntuaciones de tests">
-                              No hay puntuaciones de tests disponibles para estos
-                              jugadores.
-                            </StatusMessage>
+                            <EmptyState
+                              title="Sin puntuaciones de tests"
+                              description="No hay puntuaciones de tests disponibles para estos jugadores."
+                            />
                           </td>
                         </tr>
                       )}
@@ -1333,3 +1336,4 @@ export default function ComparadorPage() {
     </AppShell>
   );
 }
+

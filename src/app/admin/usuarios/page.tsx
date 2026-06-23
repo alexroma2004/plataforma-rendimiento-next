@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import EmptyState from "@/components/ui/EmptyState";
 import StatusMessage from "@/components/ui/StatusMessage";
 import {
   getUserRolesFromSupabase,
@@ -125,9 +126,13 @@ export default function AdminUsuariosPage() {
     };
   }, [rows]);
 
+  const emptyUsersTitle = search.trim()
+    ? "Sin resultados para esta búsqueda"
+    : "Sin usuarios registrados";
+
   const emptyUsersMessage = search.trim()
-    ? "No hay usuarios para esta búsqueda."
-    : "Todavía no hay usuarios con rol registrado.";
+    ? "No hay usuarios que coincidan con el email o rol introducido. Prueba con otra búsqueda."
+    : "Todavía no hay usuarios con rol registrado. Añade un email existente en Supabase Auth y asígnale un rol desde el formulario superior.";
 
   return (
     <AppShell
@@ -329,9 +334,7 @@ export default function AdminUsuariosPage() {
 
                 {filteredRows.length === 0 && (
                   <div className="p-5">
-                    <StatusMessage variant="warning" title="Sin usuarios visibles">
-                      {emptyUsersMessage}
-                    </StatusMessage>
+                    <EmptyState title={emptyUsersTitle} description={emptyUsersMessage} />
                   </div>
                 )}
               </div>
@@ -377,9 +380,10 @@ export default function AdminUsuariosPage() {
                     {filteredRows.length === 0 && (
                       <tr>
                         <td colSpan={4} className="px-4 py-6">
-                          <StatusMessage variant="warning" title="Sin usuarios visibles">
-                            {emptyUsersMessage}
-                          </StatusMessage>
+                          <EmptyState
+                            title={emptyUsersTitle}
+                            description={emptyUsersMessage}
+                          />
                         </td>
                       </tr>
                     )}
