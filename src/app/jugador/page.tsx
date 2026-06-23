@@ -165,6 +165,12 @@ function getClassificationClass(classification: string | null | undefined) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 function SummaryCard({
   title,
   value,
@@ -356,6 +362,111 @@ export default function JugadorPage() {
     }));
   }, [playerTestScores]);
 
+  const quickPlayerReadingCards = useMemo<QuickReadingCard[]>(() => {
+    const latestGpsSession = gpsChartData[gpsChartData.length - 1] ?? null;
+    const previousGpsSession = gpsChartData[gpsChartData.length - 2] ?? null;
+    const gpsDifference = getDifferencePercent(
+      latestGpsSession?.distancia,
+      previousGpsSession?.distancia,
+    );
+    const gpsComparisonMessage = !previousGpsSession
+      ? "Todavía no hay una sesión anterior para realizar una comparación prudente."
+      : gpsDifference === null
+        ? "No se puede calcular una variación válida frente a la sesión anterior."
+        : gpsDifference === 0
+          ? "La distancia fue igual a la sesión anterior."
+          : `La distancia fue un ${formatPercent(
+              Math.abs(gpsDifference),
+            )} ${gpsDifference > 0 ? "mayor" : "menor"} que en la sesión anterior.`;
+    const gpsMessage = latestGpsSession
+      ? `En la última sesión GPS registrada (${
+          latestGpsSession.fecha
+        }) acumuló ${formatMeters(
+          latestGpsSession.distancia,
+        )}, con ${formatMeters(latestGpsSession.hsr)} de HSR y ${formatMeters(
+          latestGpsSession.sprint,
+        )} de sprint. ${gpsComparisonMessage} La lectura puede variar por minutos, composición de la sesión y exposición real.`
+      : "No hay registros GPS disponibles para realizar una lectura reciente.";
+    const neuromuscularValues = [
+      summary.latestCmj === null
+        ? null
+        : `CMJ ${formatNumber(summary.latestCmj, 2)}`,
+      summary.latestRsimod === null
+        ? null
+        : `RSI mod ${formatNumber(summary.latestRsimod, 2)}`,
+      summary.latestVmp === null
+        ? null
+        : `VMP ${formatNumber(summary.latestVmp, 3)}`,
+      summary.latestRpe === null
+        ? null
+        : `RPE ${formatNumber(summary.latestRpe, 1)}`,
+    ].filter((value): value is string => Boolean(value));
+    const cmjMessage =
+      summary.cmjDifference === null
+        ? "El CMJ no dispone de una referencia individual válida."
+        : summary.cmjDifference === 0
+          ? "El CMJ coincide con la media individual disponible."
+          : `El CMJ se sitúa un ${formatPercent(
+              Math.abs(summary.cmjDifference),
+            )} ${
+              summary.cmjDifference > 0 ? "por encima" : "por debajo"
+            } de su media individual (${getStatusLabel(
+              summary.cmjDifference,
+            )}).`;
+    const neuromuscularMessage =
+      summary.neuromuscularControls === 0
+        ? "No hay controles neuromusculares disponibles para realizar una lectura reciente."
+        : neuromuscularValues.length === 0
+          ? "El último control disponible no contiene valores válidos de CMJ, RSI mod, VMP o RPE."
+          : `En el último control disponible: ${neuromuscularValues.join(
+              ", ",
+            )}. ${cmjMessage} Conviene revisar la tendencia y no interpretar una medición de forma aislada.`;
+    const testsMessage =
+      summary.testScores === 0
+        ? "No hay puntuaciones de tests disponibles para realizar una lectura general."
+        : summary.averageTestScore === null
+          ? "Hay puntuaciones registradas, pero no permiten calcular una media válida."
+          : `Hay ${summary.testScores} puntuaciones disponibles, con una media global de ${formatNumber(
+              summary.averageTestScore,
+              1,
+            )}. Deben revisarse por capacidades y según la cobertura de variables disponible.`;
+    const needsCmjReview =
+      summary.cmjDifference !== null && summary.cmjDifference <= -5;
+    const recommendationMessage = needsCmjReview
+      ? "Revisar el próximo control y contrastar la variación de CMJ con GPS, RSI mod, VMP y RPE antes de ajustar la carga; una señal aislada no diagnostica fatiga, lesión ni riesgo."
+      : summary.gpsSessions > 0 && summary.neuromuscularControls > 0
+        ? "Cruzar los últimos registros de GPS, CMJ, RSI mod, VMP y RPE antes de tomar decisiones, incorporando también los tests físicos disponibles."
+        : "Completar los módulos sin registros y evitar conclusiones a partir de un único indicador; los datos disponibles no diagnostican fatiga, lesión ni riesgo.";
+
+    return [
+      {
+        title: "GPS reciente",
+        variant: "info",
+        message: gpsMessage,
+      },
+      {
+        title: "Estado neuromuscular",
+        variant: needsCmjReview ? "warning" : "info",
+        message: neuromuscularMessage,
+      },
+      {
+        title: "Tests físicos",
+        variant: "info",
+        message: testsMessage,
+      },
+      {
+        title: "Recomendación para el staff",
+        variant: needsCmjReview ? "warning" : "info",
+        message: recommendationMessage,
+      },
+    ];
+  }, [gpsChartData, summary]);
+
+  const hasPlayerPerformanceData =
+    summary.gpsSessions > 0 ||
+    summary.neuromuscularControls > 0 ||
+    summary.testScores > 0;
+
   return (
     <AppShell
       title="Jugador"
@@ -519,6 +630,36 @@ export default function JugadorPage() {
                 value={formatNumber(summary.latestRpe, 1)}
               />
             </section>
+
+            {hasPlayerPerformanceData && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Interpretación individual
+                </p>
+
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Lectura rápida del jugador
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Señales orientativas a partir de los últimos registros
+                  disponibles. Deben interpretarse junto al contexto del
+                  jugador y de cada sesión.
+                </p>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {quickPlayerReadingCards.map((card) => (
+                    <StatusMessage
+                      key={card.title}
+                      variant={card.variant}
+                      title={card.title}
+                    >
+                      {card.message}
+                    </StatusMessage>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="grid gap-6 xl:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
