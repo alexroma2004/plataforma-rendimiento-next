@@ -109,6 +109,12 @@ const gpsMetricOptions: {
 
 type GpsView = "session" | "objectives" | "weekly" | "records";
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 const gpsViewOptions: {
   key: GpsView;
   label: string;
@@ -1187,6 +1193,123 @@ export default function GpsPage() {
     };
   }, [filteredRecords]);
 
+  const quickGpsReadingCards = useMemo<QuickReadingCard[]>(() => {
+    const latestSession = sessions[0] ?? null;
+    const isLatestSession =
+      !selectedSession ||
+      !latestSession ||
+      selectedSession.id === latestSession.id;
+    const excludedRecords = Math.max(
+      records.length - filteredRecords.length,
+      0,
+    );
+    const incompleteIntensityRecords = filteredRecords.filter((row) =>
+      [
+        row.hsr,
+        row.distance_vrange6,
+        row.sprints,
+        row.num_acc,
+        row.num_dec,
+      ].some((value) => value === null || value === undefined),
+    ).length;
+    const hasIntensityData = filteredRecords.some((row) =>
+      [
+        row.hsr,
+        row.distance_vrange6,
+        row.sprints,
+        row.num_acc,
+        row.num_dec,
+      ].some((value) => value !== null && value !== undefined),
+    );
+    const sessionContext =
+      selectedSession && latestSession && !isLatestSession
+        ? `La última sesión registrada es del ${
+            latestSession.session_date
+          }; la lectura actual corresponde a la sesión seleccionada del ${
+            selectedSession.session_date
+          }.`
+        : `La sesión seleccionada (${
+            selectedSession?.session_date ?? "fecha no disponible"
+          }) es la última sesión registrada.`;
+    const recentMessage = `${sessionContext} Incluye ${
+      summary.players
+    } registros analizados, ${formatMeters(
+      summary.totalDistance,
+    )} de distancia acumulada y ${formatMeters(
+      summary.averageDistance,
+    )} de media. La carga puede variar por minutos, posición y composición de la sesión.`;
+    const intensityMessage = hasIntensityData
+      ? `En el ámbito seleccionado se acumulan ${formatMeters(
+          summary.totalHsr,
+        )} de HSR, ${formatMeters(
+          summary.totalSprintDistance,
+        )} de sprint, ${formatNumber(
+          summary.totalSprints,
+        )} sprints, ${formatNumber(
+          summary.totalAcc,
+        )} aceleraciones y ${formatNumber(
+          summary.totalDec,
+        )} deceleraciones. Deben interpretarse junto al tiempo de exposición y el rol del jugador.`
+      : "Los últimos registros disponibles no contienen variables de intensidad suficientes para una lectura específica.";
+    const alertMessages: string[] = [];
+
+    if (incompleteIntensityRecords > 0) {
+      alertMessages.push(
+        `${incompleteIntensityRecords} de ${
+          summary.players
+        } registros no incluyen todos los campos de HSR, sprint, sprints, ACC y DEC.`,
+      );
+    }
+
+    if (excludedRecords > 0) {
+      alertMessages.push(
+        `El filtro actual excluye ${excludedRecords} de ${
+          records.length
+        } registros, por lo que la lectura no representa a toda la sesión.`,
+      );
+    }
+
+    if (!isLatestSession) {
+      alertMessages.push(
+        "La sesión seleccionada no es la última registrada y no debe interpretarse como situación actual.",
+      );
+    }
+
+    const hasCoverageAlert =
+      incompleteIntensityRecords > 0 || excludedRecords > 0;
+    const alertsMessage =
+      alertMessages.length > 0
+        ? alertMessages.join(" ")
+        : "No se observan vacíos de cobertura en el ámbito seleccionado. Una única sesión no permite establecer tendencias ni cambios entre sesiones.";
+    const recommendationMessage = hasCoverageAlert
+      ? "Revisar la cobertura y la exposición individual antes de comparar jugadores; después, cruzar GPS con RPE y controles neuromusculares."
+      : "Revisar la exposición individual por minutos y posición, y cruzar GPS con RPE y controles neuromusculares; estos datos no diagnostican fatiga, lesión ni riesgo.";
+
+    return [
+      {
+        title: "Carga reciente",
+        variant: "info",
+        message: recentMessage,
+      },
+      {
+        title: "Intensidad",
+        variant: "info",
+        message: intensityMessage,
+      },
+      {
+        title: "Alertas y cobertura",
+        variant:
+          hasCoverageAlert || !isLatestSession ? "warning" : "info",
+        message: alertsMessage,
+      },
+      {
+        title: "Recomendación para el staff",
+        variant: hasCoverageAlert ? "warning" : "info",
+        message: recommendationMessage,
+      },
+    ];
+  }, [filteredRecords, records.length, selectedSession, sessions, summary]);
+
   useEffect(() => {
     const evaluations = weeklyEvaluation?.evaluations ?? [];
 
@@ -1449,6 +1572,35 @@ export default function GpsPage() {
                     value={formatNumber(summary.totalDec)}
                   />
                 </div>
+
+                {gpsView === "session" && filteredRecords.length > 0 && (
+                  <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                      Interpretación GPS
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black text-slate-950">
+                      Lectura rápida GPS
+                    </h2>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Señales orientativas a partir de los últimos registros
+                      disponibles y del ámbito de jugadores seleccionado.
+                    </p>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {quickGpsReadingCards.map((card) => (
+                        <StatusMessage
+                          key={card.title}
+                          variant={card.variant}
+                          title={card.title}
+                        >
+                          {card.message}
+                        </StatusMessage>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 <div
                   className={
