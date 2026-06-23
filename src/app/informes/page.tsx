@@ -38,6 +38,12 @@ type PlayerReportRow = {
   averageTestScore: number | null;
 };
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 function normalizeName(value: string | null | undefined) {
   return String(value ?? "")
     .normalize("NFD")
@@ -724,6 +730,184 @@ export default function InformesPage() {
     };
   }, [playerRows]);
 
+  const quickReportReading = useMemo(() => {
+    const activePlayerRow =
+      reportType === "player" ? selectedPlayerRow : null;
+    const reportRows =
+      reportType === "player"
+        ? activePlayerRow
+          ? [activePlayerRow]
+          : []
+        : playerRows;
+    const hasSufficientData =
+      reportRows.length > 0 &&
+      reportRows.some(
+        (row) =>
+          row.gpsSessions > 0 ||
+          row.neuromuscularSessions > 0 ||
+          row.testScores > 0,
+      );
+    const filterText = buildFilterText(filters);
+    const generalMessage = activePlayerRow
+      ? `El informe individual de ${
+          activePlayerRow.player.name
+        } integra los datos disponibles para ${
+          activePlayerRow.player.position ?? "sin posición"
+        }. El periodo aplicado es ${filterText.periodText}.`
+      : `El informe global incluye ${
+          summary.players
+        } jugadores tras aplicar “${filterText.positionText}” y el periodo ${
+          filterText.periodText
+        }. Resume la información disponible, no el estado absoluto del equipo.`;
+    const signalParts: string[] = [];
+
+    if (activePlayerRow) {
+      if (activePlayerRow.gpsSessions > 0) {
+        signalParts.push(
+          `GPS: ${
+            activePlayerRow.gpsSessions
+          } registros, ${formatMeters(
+            activePlayerRow.gpsTotalDistance,
+          )} de distancia, ${formatMeters(
+            activePlayerRow.gpsHsr,
+          )} de HSR y ${formatMeters(
+            activePlayerRow.gpsSprintDistance,
+          )} de sprint.`,
+        );
+      }
+
+      if (activePlayerRow.neuromuscularSessions > 0) {
+        const neuromuscularValues = [
+          activePlayerRow.cmjPre === null
+            ? null
+            : `CMJ ${formatNumber(activePlayerRow.cmjPre, 2)}`,
+          activePlayerRow.rsimodPre === null
+            ? null
+            : `RSI mod ${formatNumber(activePlayerRow.rsimodPre, 2)}`,
+          activePlayerRow.vmpPre === null
+            ? null
+            : `VMP ${formatNumber(activePlayerRow.vmpPre, 3)}`,
+          activePlayerRow.rpe === null
+            ? null
+            : `RPE ${formatNumber(activePlayerRow.rpe, 1)}`,
+        ].filter((value): value is string => Boolean(value));
+
+        signalParts.push(
+          `Neuromuscular: ${
+            neuromuscularValues.length > 0
+              ? neuromuscularValues.join(", ")
+              : "sin valores válidos en el último control"
+          }.`,
+        );
+      }
+
+      if (activePlayerRow.testScores > 0) {
+        signalParts.push(
+          `Tests: ${
+            activePlayerRow.testScores
+          } puntuaciones y media de ${formatNumber(
+            activePlayerRow.averageTestScore,
+            1,
+          )}.`,
+        );
+      }
+    } else {
+      const totalGpsDistance = playerRows.reduce(
+        (total, row) => total + row.gpsTotalDistance,
+        0,
+      );
+      const playersWithCmj = playerRows.filter(
+        (row) => row.cmjPre !== null,
+      ).length;
+      const playersWithTestAverage = playerRows.filter(
+        (row) => row.averageTestScore !== null,
+      ).length;
+
+      if (summary.gpsRecords > 0) {
+        signalParts.push(
+          `GPS: ${summary.gpsRecords} registros y ${formatMeters(
+            totalGpsDistance,
+          )} de distancia acumulada.`,
+        );
+      }
+
+      if (summary.neuromuscularRecords > 0) {
+        signalParts.push(
+          `Neuromuscular: ${
+            summary.neuromuscularRecords
+          } controles y CMJ disponible en ${
+            playersWithCmj
+          } jugadores.`,
+        );
+      }
+
+      if (summary.testScores > 0) {
+        signalParts.push(
+          `Tests: ${summary.testScores} puntuaciones y media disponible en ${
+            playersWithTestAverage
+          } jugadores.`,
+        );
+      }
+    }
+
+    const signalsMessage =
+      signalParts.length > 0
+        ? signalParts.join(" ") +
+          " Estas señales deben interpretarse junto al contexto deportivo y temporal."
+        : "No hay señales GPS, neuromusculares o de tests suficientes para resumir.";
+    const hasCoverageLimit = activePlayerRow
+      ? activePlayerRow.gpsSessions === 0 ||
+        activePlayerRow.neuromuscularSessions === 0 ||
+        activePlayerRow.testScores === 0
+      : summary.playersWithGps < summary.players ||
+        summary.playersWithNeuromuscular < summary.players ||
+        summary.playersWithTests < summary.players;
+    const coverageMessage = activePlayerRow
+      ? `Cobertura individual: ${
+          activePlayerRow.gpsSessions
+        } registros GPS, ${
+          activePlayerRow.neuromuscularSessions
+        } neuromusculares y ${
+          activePlayerRow.testScores
+        } puntuaciones de tests. Los tests se integran globalmente y no siguen el filtro de fecha.`
+      : `Cobertura del equipo: GPS ${summary.playersWithGps}/${
+          summary.players
+        }, neuromuscular ${summary.playersWithNeuromuscular}/${
+          summary.players
+        } y tests ${summary.playersWithTests}/${
+          summary.players
+        } jugadores. Los tests no siguen el filtro de fecha.`;
+    const recommendationMessage = hasCoverageLimit
+      ? "Revisar los módulos sin cobertura antes de cerrar conclusiones y contrastar GPS, CMJ, RSI modificado, VMP, RPE y tests en su contexto; el informe no diagnostica fatiga, lesión ni riesgo."
+      : "Cruzar las señales GPS, neuromusculares y de tests con el contexto del jugador o equipo antes de tomar decisiones; el informe es descriptivo y no diagnóstico.";
+
+    return {
+      hasSufficientData,
+      cards: [
+        {
+          title: "Resumen general",
+          variant: "info",
+          message: generalMessage,
+        },
+        {
+          title: "Señales principales",
+          variant: "info",
+          message: signalsMessage,
+        },
+        {
+          title: "Datos disponibles",
+          variant: hasCoverageLimit ? "warning" : "info",
+          message: coverageMessage,
+        },
+        {
+          title: "Recomendación para el staff",
+          variant: hasCoverageLimit ? "warning" : "info",
+          message: recommendationMessage,
+        },
+      ] as QuickReadingCard[],
+    };
+  }, [filters, playerRows, reportType, selectedPlayerRow, summary]);
+
   function handleDownloadHtml() {
     if (reportType === "team") {
       const html = buildTeamHtmlReport(playerRows, filters);
@@ -938,6 +1122,38 @@ export default function InformesPage() {
             </>
           )}
         </section>
+
+        {!loading &&
+          !error &&
+          data &&
+          quickReportReading.hasSufficientData && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Interpretación del informe
+              </p>
+
+              <h2 className="mt-2 text-xl font-black text-slate-950">
+                Lectura rápida del informe
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Señales orientativas construidas con los datos disponibles y
+                los filtros actuales.
+              </p>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {quickReportReading.cards.map((card) => (
+                  <StatusMessage
+                    key={card.title}
+                    variant={card.variant}
+                    title={card.title}
+                  >
+                    {card.message}
+                  </StatusMessage>
+                ))}
+              </div>
+            </section>
+          )}
 
         {!loading && !error && data && reportType === "player" && !selectedPlayerRow && (
           <EmptyState
