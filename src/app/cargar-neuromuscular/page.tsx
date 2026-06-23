@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   createNeuromuscularSessionWithRecords,
   type NeuromuscularRecordInput,
@@ -778,48 +779,16 @@ export default function CargarNeuromuscularPage() {
     };
   }, [records]);
 
-  const missingMetricLabels = useMemo(() => {
-    if (records.length === 0) return [];
-
-    const labels: string[] = [];
-
-    if (summary.withCmj === 0) labels.push("CMJ");
-    if (summary.withRsimod === 0) labels.push("RSI mod");
-    if (summary.withVmp === 0) labels.push("VMP");
-    if (summary.withRpe === 0) labels.push("RPE");
-
-    return labels;
-  }, [records.length, summary.withCmj, summary.withRsimod, summary.withVmp, summary.withRpe]);
-
-  const successVariant =
-    successMessage?.includes("Sin vincular:") &&
-    !successMessage.includes("Sin vincular: 0")
-      ? "warning"
-      : "success";
-
-  const successTitle = successMessage?.startsWith("Sesión guardada")
-    ? successVariant === "warning"
-      ? "Sesión guardada con jugadores sin vincular"
-      : "Sesión guardada"
-    : "Operación completada";
-
   async function handleFileUpload(file: File | null) {
     if (!file) return;
 
     try {
       setError(null);
       setSuccessMessage(null);
-      setSourceFilename(file.name);
-      setRecords([]);
 
       const parsedRecords = await parseNeuromuscularCsvFile(file);
 
-      if (parsedRecords.length === 0) {
-        throw new Error(
-          "No se han detectado registros válidos en el archivo. Revisa que exista una columna de jugador y al menos una métrica neuromuscular reconocible.",
-        );
-      }
-
+      setSourceFilename(file.name);
       setRecords(parsedRecords);
       setSuccessMessage(
         `Archivo cargado correctamente. Registros detectados: ${parsedRecords.length}.`,
@@ -832,7 +801,6 @@ export default function CargarNeuromuscularPage() {
 
       setError(message);
       setSuccessMessage(null);
-      setRecords([]);
     }
   }
 
@@ -866,36 +834,20 @@ export default function CargarNeuromuscularPage() {
   }
 
   async function handleSaveSession() {
-    setError(null);
-    setSuccessMessage(null);
-
     if (records.length === 0) {
       setError("No hay registros para guardar.");
       return;
     }
 
-    if (!sessionDate) {
-      setError("Selecciona la fecha de la sesión antes de guardar.");
-      return;
-    }
-
-    if (!microcycle) {
-      setError("Selecciona el día de microciclo antes de guardar.");
-      return;
-    }
-
-    if (!sessionName.trim()) {
-      setError("Escribe un nombre para la sesión neuromuscular.");
-      return;
-    }
-
     try {
       setLoading(true);
+      setError(null);
+      setSuccessMessage(null);
 
       const result = await createNeuromuscularSessionWithRecords({
         session_date: sessionDate,
         microcycle,
-        session_name: sessionName.trim(),
+        session_name: sessionName,
         source_filename: sourceFilename,
         records,
       });
@@ -969,38 +921,21 @@ export default function CargarNeuromuscularPage() {
             </label>
           </div>
 
-          <div className="mt-6">
-            <StatusMessage variant="info" title="Flujo de carga neuromuscular">
-              Completa los datos de la sesión, carga un CSV o añade registros de
-              forma manual, revisa la previsualización y guarda solo cuando los
-              jugadores y las métricas sean correctos.
-            </StatusMessage>
-          </div>
-
           {error && (
-            <div className="mt-6">
-              <StatusMessage variant="error" title="Error en la carga neuromuscular">
-                {error}
-              </StatusMessage>
-            </div>
-          )}
+  <div className="mt-6">
+    <StatusMessage variant="error" title="Error en la carga neuromuscular">
+      {error}
+    </StatusMessage>
+  </div>
+)}
 
-          {successMessage && (
-            <div className="mt-6">
-              <StatusMessage variant={successVariant} title={successTitle}>
-                {successMessage}
-              </StatusMessage>
-            </div>
-          )}
-
-          {loading && (
-            <div className="mt-6">
-              <StatusMessage variant="info" title="Guardando sesión neuromuscular">
-                Insertando la sesión y vinculando automáticamente los registros
-                con los jugadores existentes en Supabase.
-              </StatusMessage>
-            </div>
-          )}
+{successMessage && (
+  <div className="mt-6">
+    <StatusMessage variant="success" title="Operación completada">
+      {successMessage}
+    </StatusMessage>
+  </div>
+)}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
@@ -1019,15 +954,6 @@ export default function CargarNeuromuscularPage() {
               post, VMP pre, VMP post, Carga y RPE.
             </p>
 
-            <div className="mt-5">
-              <StatusMessage variant="info" title="Formato recomendado">
-                El archivo debe incluir una columna de jugador y al menos una
-                métrica reconocible: CMJ, RSI mod, VMP, carga de sentadilla o
-                RPE. También se admiten formatos por bloques con columnas de
-                variable, PRE y POST.
-              </StatusMessage>
-            </div>
-
             <label className="mt-5 block rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center sm:p-6">
               <span className="text-sm font-black text-slate-700">
                 Seleccionar CSV
@@ -1044,17 +970,15 @@ export default function CargarNeuromuscularPage() {
             </label>
 
             {sourceFilename ? (
-              <div className="mt-4">
-                <StatusMessage variant="info" title="Archivo seleccionado">
-                  <span className="break-all">{sourceFilename}</span>
-                </StatusMessage>
-              </div>
+              <p className="mt-4 break-all text-sm font-bold text-slate-600">
+                Archivo cargado: {sourceFilename}
+              </p>
             ) : (
-              <div className="mt-4">
-                <StatusMessage variant="warning" title="Sin archivo seleccionado">
-                  Todavía no se ha cargado ningún CSV neuromuscular. Puedes
-                  cargar un archivo o introducir los registros manualmente.
-                </StatusMessage>
+              <div className="mt-5">
+                <EmptyState
+                  title="Ningún CSV seleccionado"
+                  description="Selecciona un CSV neuromuscular o añade registros de forma manual para preparar la sesión."
+                />
               </div>
             )}
           </div>
@@ -1067,14 +991,6 @@ export default function CargarNeuromuscularPage() {
             <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
               Añadir jugador
             </h2>
-
-            <div className="mt-5">
-              <StatusMessage variant="info" title="Entrada manual">
-                Úsala para añadir registros sueltos o corregir jugadores que no
-                aparezcan en el CSV. El nombre debe coincidir lo máximo posible
-                con el jugador registrado en la plataforma.
-              </StatusMessage>
-            </div>
 
             <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
               <input
@@ -1266,32 +1182,14 @@ export default function CargarNeuromuscularPage() {
             <SummaryCard title="Con RPE" value={summary.withRpe} />
           </div>
 
-          {records.length > 0 && (
-            <div className="mt-6 space-y-4">
-              <StatusMessage variant="info" title="Revisión antes de guardar">
-                Revisa nombres, posiciones y valores PRE/POST. Al guardar, la
-                plataforma intentará vincular cada registro con los jugadores ya
-                creados en Supabase.
-              </StatusMessage>
-
-              {missingMetricLabels.length > 0 && (
-                <StatusMessage variant="warning" title="Métricas no detectadas">
-                  No se han detectado valores para: {missingMetricLabels.join(", ")}. Si
-                  esas columnas deberían estar presentes, revisa los encabezados
-                  del CSV o corrige los registros manualmente antes de guardar.
-                </StatusMessage>
-              )}
-            </div>
-          )}
-
           {records.length === 0 ? (
-  <div className="mt-6">
-    <StatusMessage variant="warning" title="Sin registros preparados">
-      Todavía no hay registros preparados. Carga un CSV o añade jugadores de
-      forma manual antes de guardar la sesión.
-    </StatusMessage>
-  </div>
-) : (
+            <div className="mt-6">
+              <EmptyState
+                title="Sin registros preparados"
+                description="Todavía no hay registros preparados. Carga un CSV o añade jugadores de forma manual antes de guardar la sesión."
+              />
+            </div>
+          ) : (
             <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
               <div className="divide-y divide-slate-100 md:hidden">
                 {records.map((record, index) => (

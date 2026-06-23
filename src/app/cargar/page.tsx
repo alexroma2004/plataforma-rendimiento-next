@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
+import EmptyState from "@/components/ui/EmptyState";
 import StatusMessage from "@/components/ui/StatusMessage";
 
 const uploadSections = [
@@ -61,37 +62,46 @@ export default function CargarDatosPage() {
         </StatusMessage>
 
         <section className="grid gap-6 lg:grid-cols-3">
-          {uploadSections.map((section) => (
-            <Link
-              key={section.href}
-              href={section.href}
-              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg sm:p-6"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.3em]">
-                    {section.subtitle}
-                  </p>
+          {uploadSections.length === 0 ? (
+            <div className="lg:col-span-3">
+              <EmptyState
+                title="Sin módulos de carga disponibles"
+                description="No hay accesos de carga configurados para GPS, neuromuscular o tests físicos."
+              />
+            </div>
+          ) : (
+            uploadSections.map((section) => (
+              <Link
+                key={section.href}
+                href={section.href}
+                className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg sm:p-6"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.3em]">
+                      {section.subtitle}
+                    </p>
 
-                  <h2 className="mt-3 break-words text-xl font-black text-slate-950 sm:text-2xl">
-                    {section.title}
-                  </h2>
+                    <h2 className="mt-3 break-words text-xl font-black text-slate-950 sm:text-2xl">
+                      {section.title}
+                    </h2>
+                  </div>
+
+                  <span className="w-fit shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                    {section.tag}
+                  </span>
                 </div>
 
-                <span className="w-fit shrink-0 rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
-                  {section.tag}
-                </span>
-              </div>
+                <p className="mt-4 break-words text-sm leading-6 text-slate-600">
+                  {section.description}
+                </p>
 
-              <p className="mt-4 break-words text-sm leading-6 text-slate-600">
-                {section.description}
-              </p>
-
-              <div className="mt-6 inline-flex w-full justify-center rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition group-hover:bg-blue-700 sm:w-auto">
-                Entrar
-              </div>
-            </Link>
-          ))}
+                <div className="mt-6 inline-flex w-full justify-center rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition group-hover:bg-blue-700 sm:w-auto">
+                  Entrar
+                </div>
+              </Link>
+            ))
+          )}
         </section>
 
         <StatusMessage variant="warning" title="Antes de guardar una sesión">
@@ -117,26 +127,35 @@ export default function CargarDatosPage() {
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
-            {workflowSteps.map((step) => (
-              <div
-                key={step.title}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm font-black text-slate-950">
-                  {step.title}
-                </p>
-
-                <p className="mt-2 break-words text-sm leading-6 text-slate-600">
-                  {step.description}
-                </p>
+            {workflowSteps.length === 0 ? (
+              <div className="md:col-span-3">
+                <EmptyState
+                  title="Sin pasos de trabajo definidos"
+                  description="No hay pasos configurados para explicar el flujo recomendado de carga."
+                />
               </div>
-            ))}
+            ) : (
+              workflowSteps.map((step) => (
+                <div
+                  key={step.title}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <p className="text-sm font-black text-slate-950">
+                    {step.title}
+                  </p>
+
+                  <p className="mt-2 break-words text-sm leading-6 text-slate-600">
+                    {step.description}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </section>
 
         <StatusMessage variant="success" title="Después de guardar">
-          Los datos cargados aparecerán automáticamente en Equipo, Jugador,
-          GPS, Neuromuscular, Tests, Perfil F-R, Comparador, Informes y Lupa IA,
+          Los datos cargados aparecerán automáticamente en Equipo, Jugador, GPS,
+          Neuromuscular, Tests, Perfil F-R, Comparador, Informes y Lupa IA,
           siempre que estén correctamente vinculados.
         </StatusMessage>
       </div>
