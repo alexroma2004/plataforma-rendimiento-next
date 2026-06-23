@@ -133,6 +133,21 @@ function inferSessionName(filename: string | null) {
     .trim();
 }
 
+function hasDetectedHeader(headers: string[], aliases: string[]) {
+  const normalizedHeaders = headers.map(normalizeHeader);
+
+  return aliases.some((alias) =>
+    normalizedHeaders.includes(normalizeHeader(alias)),
+  );
+}
+
+function summarizeDetectedValues(values: string[], limit = 5) {
+  if (values.length === 0) return "ninguna";
+
+  const remaining = values.length - limit;
+  return `${values.slice(0, limit).join(", ")}${remaining > 0 ? ` y ${remaining} más` : ""}`;
+}
+
 function preparePreviewRow(row: RawTestRow): TestPreviewRow | null {
   const playerName = toText(
     getFirstExistingValue(row, [
@@ -324,6 +339,7 @@ function SummaryCard({
 export default function CargarTestsPage() {
   const [rawRows, setRawRows] = useState<RawTestRow[]>([]);
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
+  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
 
   const [sessionDate, setSessionDate] = useState("");
   const [sessionName, setSessionName] = useState("");
@@ -353,12 +369,121 @@ export default function CargarTestsPage() {
     };
   }, [previewRows]);
 
+  const previewValidation = useMemo(() => {
+    const blocks = [...new Set(previewRows.map((row) => row.test_block))];
+    const variables = [...new Set(previewRows.map((row) => row.variable))];
+    const warnings: string[] = [];
+
+    if (selectedFilename) {
+      if (detectedHeaders.length === 0) {
+        warnings.push("No se ha detectado una cabecera CSV legible.");
+      } else {
+        const requiredHeaders = [
+          {
+            label: "Jugador",
+            aliases: [
+              "jugador",
+              "nombre",
+              "name",
+              "player",
+              "player_name",
+              "playername",
+              "athlete",
+              "deportista",
+            ],
+          },
+          {
+            label: "Bloque/capacidad",
+            aliases: [
+              "bloque",
+              "capacidad",
+              "test_block",
+              "testblock",
+              "capacity",
+            ],
+          },
+          {
+            label: "Variable/prueba",
+            aliases: ["variable", "prueba", "test"],
+          },
+        ];
+        const missingHeaders = requiredHeaders
+          .filter(
+            ({ aliases }) => !hasDetectedHeader(detectedHeaders, aliases),
+          )
+          .map(({ label }) => label);
+
+        if (missingHeaders.length > 0) {
+          warnings.push(`Faltan columnas importantes: ${missingHeaders.join(", ")}.`);
+        }
+        if (
+          !hasDetectedHeader(detectedHeaders, [
+            "valor",
+            "resultado",
+            "marca",
+            "value",
+          ])
+        ) {
+          warnings.push(
+            "No se ha detectado una columna Valor/Resultado; revisa las marcas antes de guardar.",
+          );
+        }
+      }
+    }
+
+    const discardedRows = Math.max(rawRows.length - previewRows.length, 0);
+    const rowsWithoutValue = previewRows.filter((row) => row.value === null).length;
+    const rowsWithoutScore = previewRows.filter(
+      (row) => row.variable_score === null,
+    ).length;
+
+    if (discardedRows > 0) {
+      warnings.push(
+        `${discardedRows} fila${discardedRows === 1 ? "" : "s"} no contiene jugador, bloque o variable válidos y no se incluirá.`,
+      );
+    }
+    if (rowsWithoutValue > 0) {
+      warnings.push(
+        `${rowsWithoutValue} registro${rowsWithoutValue === 1 ? "" : "s"} no tiene un valor numérico válido.`,
+      );
+    }
+    if (previewRows.length > 0 && rowsWithoutScore === previewRows.length) {
+      warnings.push(
+        "No se han detectado puntuaciones por variable; confirma si el archivo debía incluirlas.",
+      );
+    }
+    if (previewRows.length > 0 && previewRows.length < 3) {
+      warnings.push(
+        `Solo hay ${previewRows.length} registro${previewRows.length === 1 ? "" : "s"} válido${previewRows.length === 1 ? "" : "s"}; comprueba si el archivo está completo.`,
+      );
+    }
+    if (variables.length === 1) {
+      warnings.push(
+        "Solo se ha detectado una variable; la lectura de capacidades puede tener cobertura limitada.",
+      );
+    }
+    if (!sessionDate) warnings.push("Falta seleccionar la fecha de la sesión.");
+    if (!sessionName.trim()) warnings.push("Falta el nombre de la sesión.");
+    if (!context.trim()) warnings.push("Falta el contexto de la sesión.");
+
+    return { blocks, variables, warnings };
+  }, [
+    context,
+    detectedHeaders,
+    previewRows,
+    rawRows.length,
+    selectedFilename,
+    sessionDate,
+    sessionName,
+  ]);
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     setSaveMessage(null);
     setSaveError(null);
     setRawRows([]);
+    setDetectedHeaders([]);
 
     if (!file) return;
 
@@ -381,6 +506,7 @@ export default function CargarTestsPage() {
           );
         });
 
+        setDetectedHeaders(results.meta.fields ?? []);
         setRawRows(rows);
       },
       error: (error) => {
@@ -462,6 +588,14 @@ export default function CargarTestsPage() {
                 variable/prueba y valor. Si incluye puntuación de variable, la
                 app calculará automáticamente la puntuación final por capacidad.
               </p>
+
+              <div className="mt-4 max-w-4xl">
+                <StatusMessage variant="info" title="Formato esperado">
+                  Usa un CSV separado por punto y coma, con una fila por jugador
+                  y prueba. También se reconocen columnas opcionales como unidad,
+                  dirección, disponibilidad, puntuación y clasificación.
+                </StatusMessage>
+              </div>
             </div>
 
             <label className="w-full cursor-pointer rounded-xl bg-slate-950 px-5 py-3 text-center text-sm font-bold text-white shadow hover:bg-slate-800 md:w-auto md:shrink-0">
@@ -482,12 +616,47 @@ export default function CargarTestsPage() {
             </span>
           </div>
 
+          {saveMessage && (
+            <div className="mt-4">
+              <StatusMessage variant="success" title="Sesión guardada">
+                {saveMessage}
+              </StatusMessage>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="mt-4">
+              <StatusMessage variant="error" title="Revisa la carga de tests">
+                {saveError}
+              </StatusMessage>
+            </div>
+          )}
+
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <SummaryCard title="Registros válidos" value={summary.rows} />
             <SummaryCard title="Jugadores detectados" value={summary.players} />
             <SummaryCard title="Bloques/capacidades" value={summary.blocks} />
             <SummaryCard title="Variables" value={summary.variables} />
           </div>
+
+          {selectedFilename && (
+            <div className="mt-6">
+              {previewValidation.warnings.length > 0 ? (
+                <StatusMessage variant="warning" title="Revisión antes de guardar">
+                  <ul className="list-disc space-y-1 pl-5">
+                    {previewValidation.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </StatusMessage>
+              ) : (
+                <StatusMessage variant="success" title="Comprobación previa">
+                  No se han detectado incidencias visibles. Confirma la tabla
+                  antes de guardar la sesión.
+                </StatusMessage>
+              )}
+            </div>
+          )}
 
           {rawRows.length > 0 && previewRows.length === 0 && (
             <div className="mt-6">
@@ -513,6 +682,16 @@ export default function CargarTestsPage() {
                 <h3 className="text-lg font-black text-slate-950">
                   Datos de la sesión
                 </h3>
+
+                <div className="mt-4">
+                  <StatusMessage variant="info" title="Resumen detectado">
+                    {summary.rows} registros · {summary.players} jugadores · Fecha:{" "}
+                    {sessionDate || "pendiente"} · Sesión:{" "}
+                    {sessionName.trim() || "pendiente"}. Pruebas:{" "}
+                    {summarizeDetectedValues(previewValidation.blocks)}. Variables:{" "}
+                    {summarizeDetectedValues(previewValidation.variables)}.
+                  </StatusMessage>
+                </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                   <label className="text-sm font-bold text-slate-700">
@@ -569,21 +748,6 @@ export default function CargarTestsPage() {
                     : "Guardar sesión de tests en Supabase"}
                 </button>
 
-                {saveMessage && (
-  <div className="mt-4">
-    <StatusMessage variant="success" title="Sesión guardada">
-      {saveMessage}
-    </StatusMessage>
-  </div>
-)}
-
-{saveError && (
-  <div className="mt-4">
-    <StatusMessage variant="error" title="No se ha podido guardar">
-      {saveError}
-    </StatusMessage>
-  </div>
-)}
               </section>
 
               <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -708,13 +872,6 @@ export default function CargarTestsPage() {
                   </table>
                 </div>
               </div>
-
-              <div className="mt-4">
-  <StatusMessage variant="success" title="Archivo leído correctamente">
-    Archivo de tests leído correctamente. Revisa la fecha, el contexto y el
-    nombre de sesión antes de guardar en Supabase.
-  </StatusMessage>
-</div>
             </>
           )}
         </section>
