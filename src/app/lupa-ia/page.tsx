@@ -18,6 +18,12 @@ import {
 type CategoryFilter = "all" | InsightCategory;
 type PriorityFilter = "all" | InsightPriority;
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 const categoryLabels: Record<InsightCategory, string> = {
   gps: "GPS",
   neuromuscular: "Neuromuscular",
@@ -257,6 +263,117 @@ export default function LupaIAPage() {
     });
   }, [filteredInsights]);
 
+  const quickAiReading = useMemo(() => {
+    const categoryCounts: Record<InsightCategory, number> = {
+      gps: 0,
+      neuromuscular: 0,
+      tests: 0,
+      disponibilidad: 0,
+      general: 0,
+    };
+
+    insights.forEach((insight) => {
+      categoryCounts[insight.category] += 1;
+    });
+
+    const dominantCategory =
+      (
+        Object.entries(categoryCounts) as Array<[InsightCategory, number]>
+      ).sort((a, b) => b[1] - a[1])[0] ?? null;
+    const topPlayer = topPlayerRows[0] ?? null;
+    const sourceCounts = {
+      gps: dashboardData?.gpsRecords.length ?? 0,
+      neuromuscular: dashboardData?.neuromuscularRecords.length ?? 0,
+      tests: dashboardData?.testScores.length ?? 0,
+    };
+    const missingSources = [
+      sourceCounts.gps === 0 ? "GPS" : null,
+      sourceCounts.neuromuscular === 0 ? "neuromuscular" : null,
+      sourceCounts.tests === 0 ? "tests" : null,
+    ].filter((value): value is string => Boolean(value));
+    const hasLimitations =
+      missingSources.length > 0 || categoryCounts.disponibilidad > 0;
+    const summaryMessage = `La Lupa IA ha generado ${
+      summary.total
+    } señales con los datos disponibles: ${summary.high} de prioridad alta, ${
+      summary.medium
+    } media y ${
+      summary.low
+    } baja. Sirven para ordenar la revisión, no para establecer diagnósticos.`;
+    const priorityParts: string[] = [];
+
+    if (topPlayer) {
+      priorityParts.push(
+        `${topPlayer.playerName} concentra ${
+          topPlayer.total
+        } señales (${topPlayer.high} altas, ${
+          topPlayer.medium
+        } medias y ${topPlayer.low} bajas).`,
+      );
+    }
+
+    if (dominantCategory && dominantCategory[1] > 0) {
+      priorityParts.push(
+        `El área con más señales es ${
+          categoryLabels[dominantCategory[0]]
+        }, con ${dominantCategory[1]}.`,
+      );
+    }
+
+    const priorityMessage =
+      priorityParts.length > 0
+        ? priorityParts.join(" ") +
+          " La prioridad refleja los criterios automáticos actuales y debe confirmarse con contexto."
+        : "No hay jugadores o áreas con señales suficientes para establecer una prioridad descriptiva.";
+    const limitationsMessage = `Fuentes disponibles: ${
+      sourceCounts.gps
+    } registros GPS, ${
+      sourceCounts.neuromuscular
+    } neuromusculares y ${sourceCounts.tests} puntuaciones de tests. ${
+      missingSources.length > 0
+        ? "Faltan datos de: " + missingSources.join(", ") + "."
+        : "Los tres módulos aportan datos."
+    } ${
+      categoryCounts.disponibilidad > 0
+        ? categoryCounts.disponibilidad +
+          " señales están relacionadas con disponibilidad o cobertura."
+        : "No se han generado señales específicas de disponibilidad."
+    } La lógica no incorpora por sí sola todo el contexto de minutos, molestias o planificación.`;
+    const recommendationMessage =
+      summary.high > 0
+        ? "Revisar primero las señales de prioridad alta, comprobar sus datos de origen y contrastarlas con minutos, planificación y observación del staff; no diagnostican fatiga, lesión ni riesgo."
+        : hasLimitations
+          ? "Completar la cobertura de datos y revisar las señales de disponibilidad antes de ajustar decisiones individuales o colectivas."
+          : "Revisar las señales por orden de prioridad y contrastarlas con la planificación, los minutos y la observación del staff antes de actuar.";
+
+    return {
+      hasSufficientData: hasSourceData && insights.length > 0,
+      cards: [
+        {
+          title: "Resumen IA",
+          variant: summary.high > 0 ? "warning" : "info",
+          message: summaryMessage,
+        },
+        {
+          title: "Prioridad",
+          variant: summary.high > 0 ? "warning" : "info",
+          message: priorityMessage,
+        },
+        {
+          title: "Limitaciones",
+          variant: hasLimitations ? "warning" : "info",
+          message: limitationsMessage,
+        },
+        {
+          title: "Recomendación para el staff",
+          variant:
+            summary.high > 0 || hasLimitations ? "warning" : "info",
+          message: recommendationMessage,
+        },
+      ] as QuickReadingCard[],
+    };
+  }, [dashboardData, hasSourceData, insights, summary, topPlayerRows]);
+
   return (
     <AppShell
       title="Lupa IA"
@@ -339,6 +456,35 @@ export default function LupaIAPage() {
               />
             </div>
           </section>
+
+          {quickAiReading.hasSufficientData && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                Interpretación automática
+              </p>
+
+              <h2 className="mt-2 text-xl font-black text-slate-950">
+                Lectura rápida IA
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Síntesis prudente de las señales generadas con los datos
+                disponibles.
+              </p>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {quickAiReading.cards.map((card) => (
+                  <StatusMessage
+                    key={card.title}
+                    variant={card.variant}
+                    title={card.title}
+                  >
+                    {card.message}
+                  </StatusMessage>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
