@@ -58,6 +58,36 @@ function formatPercent(value: number | null | undefined) {
   return `${Number(value).toFixed(1).replace(".", ",")}%`;
 }
 
+function formatSessionDate(value: string | null | undefined) {
+  if (!value) return "fecha no disponible";
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) return value;
+
+  return (
+    String(day).padStart(2, "0") +
+    "/" +
+    String(month).padStart(2, "0") +
+    "/" +
+    year
+  );
+}
+
+function getGpsSessionPlayerCount(
+  records: TeamDashboardGpsRecord[],
+  sessionDate: string | null | undefined,
+) {
+  if (!sessionDate) return 0;
+
+  return new Set(
+    records
+      .filter((record) => record.session_date === sessionDate)
+      .map((record) => record.player_id || record.player_name)
+      .filter(Boolean),
+  ).size;
+}
+
 function average(values: Array<number | null | undefined>) {
   const validValues = values
     .map((value) => Number(value))
@@ -179,6 +209,12 @@ type TestPlayerSummary = {
   averageScore: number | null;
   scores: number;
   bestClassification: string | null;
+};
+
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
 };
 
 function SummaryCard({
@@ -442,6 +478,149 @@ export default function EquipoPage() {
     );
   }, [data]);
 
+  const quickTeamReadingCards = useMemo<QuickReadingCard[]>(() => {
+    const latestGpsSession =
+      gpsEvolutionData[gpsEvolutionData.length - 1] ?? null;
+    const previousGpsSession =
+      gpsEvolutionData[gpsEvolutionData.length - 2] ?? null;
+    const latestGpsCoverage = getGpsSessionPlayerCount(
+      data.gpsRecords,
+      latestGpsSession?.fecha,
+    );
+    const previousGpsCoverage = getGpsSessionPlayerCount(
+      data.gpsRecords,
+      previousGpsSession?.fecha,
+    );
+    const gpsDifference = getDifferencePercent(
+      latestGpsSession?.distancia,
+      previousGpsSession?.distancia,
+    );
+    const gpsCoverageChanged = Boolean(
+      previousGpsSession && latestGpsCoverage !== previousGpsCoverage,
+    );
+    const neuromuscularStatus = {
+      alert: 0,
+      control: 0,
+      ok: 0,
+      withoutReference: 0,
+    };
+
+    neuromuscularPlayerSummary.forEach((row) => {
+      const status = getStatusLabel(row.cmjDifference);
+
+      if (status === "Alerta") neuromuscularStatus.alert += 1;
+      else if (status === "Control") neuromuscularStatus.control += 1;
+      else if (status === "OK") neuromuscularStatus.ok += 1;
+      else neuromuscularStatus.withoutReference += 1;
+    });
+
+    const playersToReview =
+      neuromuscularStatus.alert + neuromuscularStatus.control;
+    const gpsComparisonMessage = !previousGpsSession
+      ? "Todavía no hay una sesión anterior para realizar una comparación prudente."
+      : gpsDifference === null
+        ? "No se puede calcular una variación porcentual válida frente a la sesión anterior."
+        : gpsDifference === 0
+          ? "La distancia acumulada fue igual a la sesión anterior."
+          : `La distancia acumulada fue un ${formatPercent(
+              Math.abs(gpsDifference),
+            )} ${gpsDifference > 0 ? "mayor" : "menor"} que en la sesión anterior.`;
+    const gpsCoverageMessage = !previousGpsSession
+      ? ""
+      : gpsCoverageChanged
+        ? `La cobertura cambió de ${previousGpsCoverage} a ${latestGpsCoverage} jugadores, por lo que la comparación es orientativa.`
+        : "La cobertura fue equivalente, aunque la carga también puede variar por minutos, composición de la sesión o jugadores disponibles.";
+    const gpsMessage = latestGpsSession
+      ? `La última sesión registrada (${formatSessionDate(
+          latestGpsSession.fecha,
+        )}) acumuló ${formatMeters(
+          latestGpsSession.distancia,
+        )} con ${latestGpsCoverage} ${
+          latestGpsCoverage === 1 ? "jugador" : "jugadores"
+        }. ${[gpsComparisonMessage, gpsCoverageMessage]
+          .filter(Boolean)
+          .join(" ")}`
+      : "No hay sesiones GPS registradas para interpretar la carga del equipo.";
+    const neuromuscularFollowUp =
+      playersToReview >= 2
+        ? "Varios jugadores presentan una caída dentro de los umbrales actuales; conviene revisar su evolución individual y el RPE."
+        : playersToReview === 1
+          ? "Conviene revisar la evolución individual del jugador señalado sin interpretar el dato de forma aislada."
+          : "No aparecen caídas dentro de los umbrales actuales; conviene mantener el seguimiento habitual.";
+    const neuromuscularMessage =
+      summary.neuromuscularRecords > 0
+        ? `Según el último CMJ frente a la media individual: ${
+            neuromuscularStatus.alert
+          } en alerta, ${neuromuscularStatus.control} en control, ${
+            neuromuscularStatus.ok
+          } OK y ${
+            neuromuscularStatus.withoutReference
+          } sin referencia. ${neuromuscularFollowUp}`
+        : "No hay controles neuromusculares registrados para establecer una referencia.";
+    const testCoverageMessage =
+      summary.testPlayers <= 1
+        ? "La cobertura es reducida y no representa al conjunto de la plantilla."
+        : "La media debe revisarse junto al rendimiento por capacidades y la cobertura disponible.";
+    const testsMessage =
+      summary.testScores === 0
+        ? "No hay puntuaciones de tests disponibles para realizar una lectura general prudente."
+        : summary.averageTestScore === null
+          ? "Hay puntuaciones registradas, pero no permiten calcular una media válida."
+          : `Hay ${summary.testScores} puntuaciones disponibles en ${
+              summary.testPlayers
+            } ${
+              summary.testPlayers === 1 ? "jugador" : "jugadores"
+            }, con una media global de ${formatNumber(
+              summary.averageTestScore,
+              1,
+            )}. ${testCoverageMessage}`;
+    let staffRecommendation =
+      "Revisar la exposición individual y cruzar GPS, CMJ y RPE antes de tomar decisiones; un único indicador no permite concluir fatiga.";
+
+    if (playersToReview >= 2) {
+      staffRecommendation =
+        "Priorizar la revisión individual de los jugadores en alerta o control y cruzar su exposición GPS con CMJ y RPE, sin concluir fatiga por un indicador aislado.";
+    } else if (gpsCoverageChanged) {
+      staffRecommendation =
+        "Revisar la exposición individual antes de atribuir el cambio GPS a una variación real de carga y cruzar la lectura con CMJ y RPE.";
+    } else if (
+      summary.gpsRecords === 0 ||
+      summary.neuromuscularRecords === 0
+    ) {
+      staffRecommendation =
+        "Completar la información disponible y cruzar GPS, CMJ y RPE antes de tomar decisiones; un único indicador no permite concluir fatiga.";
+    }
+
+    return [
+      {
+        title: "Carga GPS reciente",
+        variant: gpsCoverageChanged ? "warning" : "info",
+        message: gpsMessage,
+      },
+      {
+        title: "Estado neuromuscular",
+        variant: playersToReview > 0 ? "warning" : "info",
+        message: neuromuscularMessage,
+      },
+      {
+        title: "Tests físicos",
+        variant: "info",
+        message: testsMessage,
+      },
+      {
+        title: "Recomendación para el staff",
+        variant:
+          playersToReview >= 2 || gpsCoverageChanged ? "warning" : "info",
+        message: staffRecommendation,
+      },
+    ];
+  }, [
+    data.gpsRecords,
+    gpsEvolutionData,
+    neuromuscularPlayerSummary,
+    summary,
+  ]);
+
   return (
     <AppShell
       title="Equipo"
@@ -510,6 +689,36 @@ export default function EquipoPage() {
                 title="Sin datos del equipo"
                 description="Todavía no hay jugadores, registros GPS, controles neuromusculares ni puntuaciones de tests físicos para mostrar en el dashboard."
               />
+            )}
+
+            {hasAnyDashboardData && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Interpretación
+                </p>
+
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Lectura rápida del equipo
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Señales orientativas a partir de los últimos registros
+                  disponibles. Deben interpretarse junto al contexto de cada
+                  sesión y jugador.
+                </p>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {quickTeamReadingCards.map((card) => (
+                    <StatusMessage
+                      key={card.title}
+                      variant={card.variant}
+                      title={card.title}
+                    >
+                      {card.message}
+                    </StatusMessage>
+                  ))}
+                </div>
+              </section>
             )}
 
             <section className="grid gap-6 xl:grid-cols-3">
