@@ -283,6 +283,10 @@ type NeuromuscularNumberKey =
   | "squat_load_kg"
   | "rpe";
 
+function isValidMeasurement(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function normalizeCsvText(value: unknown) {
   return String(value ?? "")
     .normalize("NFD")
@@ -357,6 +361,18 @@ function splitCsvLine(line: string, delimiter: string) {
   }
 
   return result;
+}
+
+async function getCsvHeaders(file: File) {
+  const text = (await file.text()).replace(/^\uFEFF/, "");
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return [];
+
+  return splitCsvLine(lines[0], detectCsvDelimiter(lines));
 }
 
 function findColumn(headers: string[], aliases: string[]) {
@@ -744,6 +760,7 @@ export default function CargarNeuromuscularPage() {
   const [microcycle, setMicrocycle] = useState("MD-1");
   const [sessionName, setSessionName] = useState("Control neuromuscular");
   const [sourceFilename, setSourceFilename] = useState<string | null>(null);
+  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
 
   const [records, setRecords] = useState<NeuromuscularRecordInput[]>([]);
   const [manualForm, setManualForm] =
@@ -779,6 +796,163 @@ export default function CargarNeuromuscularPage() {
     };
   }, [records]);
 
+  const previewAnalysis = useMemo(() => {
+    const detectedVariables = [
+      {
+        label: "CMJ",
+        present: records.some(
+          (record) =>
+            isValidMeasurement(record.cmj_pre) ||
+            isValidMeasurement(record.cmj_post),
+        ),
+      },
+      {
+        label: "RSI",
+        present: records.some(
+          (record) =>
+            isValidMeasurement(record.rsimod_pre) ||
+            isValidMeasurement(record.rsimod_post),
+        ),
+      },
+      {
+        label: "VMP",
+        present: records.some(
+          (record) =>
+            isValidMeasurement(record.vmp_pre) ||
+            isValidMeasurement(record.vmp_post),
+        ),
+      },
+      {
+        label: "carga",
+        present: records.some((record) =>
+          isValidMeasurement(record.squat_load_kg),
+        ),
+      },
+      {
+        label: "RPE",
+        present: records.some((record) => isValidMeasurement(record.rpe)),
+      },
+    ];
+    const variables = detectedVariables
+      .filter((variable) => variable.present)
+      .map((variable) => variable.label);
+    const missingKeyVariables = detectedVariables
+      .filter(
+        (variable) =>
+          ["CMJ", "RSI", "VMP", "RPE"].includes(variable.label) &&
+          !variable.present,
+      )
+      .map((variable) => variable.label);
+    const players = new Set(
+      records.map((record) => normalizeCsvText(record.player_name)),
+    ).size;
+    const hasPre = records.some((record) =>
+      [record.cmj_pre, record.rsimod_pre, record.vmp_pre].some(
+        isValidMeasurement,
+      ),
+    );
+    const hasPost = records.some((record) =>
+      [record.cmj_post, record.rsimod_post, record.vmp_post].some(
+        isValidMeasurement,
+      ),
+    );
+    const incompletePrePost = records.filter((record) =>
+      [
+        [record.cmj_pre, record.cmj_post],
+        [record.rsimod_pre, record.rsimod_post],
+        [record.vmp_pre, record.vmp_post],
+      ].some(
+        ([pre, post]) =>
+          isValidMeasurement(pre) !== isValidMeasurement(post),
+      ),
+    ).length;
+    const emptyKeyValues = records.reduce(
+      (total, record) =>
+        total +
+        [
+          record.cmj_pre,
+          record.cmj_post,
+          record.rsimod_pre,
+          record.rsimod_post,
+          record.vmp_pre,
+          record.vmp_post,
+          record.rpe,
+        ].filter((value) => !isValidMeasurement(value)).length,
+      0,
+    );
+    const warnings: string[] = [];
+
+    if (missingKeyVariables.length > 0) {
+      warnings.push(
+        `Sin datos válidos detectados para: ${missingKeyVariables.join(", ")}.`,
+      );
+    }
+    if (!hasPre || !hasPost) {
+      warnings.push(
+        `No se han detectado valores ${!hasPre ? "PRE" : "POST"}; confirma si encaja con el protocolo de la sesión.`,
+      );
+    } else if (incompletePrePost > 0) {
+      warnings.push(
+        `${incompletePrePost} jugador${incompletePrePost === 1 ? "" : "es"} tiene alguna pareja PRE/POST incompleta.`,
+      );
+    }
+    if (records.length > 0 && emptyKeyValues / (records.length * 7) >= 0.4) {
+      warnings.push(
+        "Hay bastantes campos vacíos o no válidos entre CMJ, RSI, VMP y RPE; revisa si son ausencias esperadas.",
+      );
+    }
+
+    return { players, variables, warnings };
+  }, [records]);
+
+  const csvWarnings = useMemo(() => {
+    if (!sourceFilename) return [];
+    if (detectedHeaders.length === 0) {
+      return ["No se ha detectado una cabecera CSV legible."];
+    }
+
+    const hasPlayer =
+      findColumn(detectedHeaders, [
+        "jugador",
+        "nombre",
+        "nombre jugador",
+        "player",
+        "player name",
+      ]) !== -1;
+    const hasVariable =
+      findColumn(detectedHeaders, ["variable", "variables", "metrica", "test"]) !==
+      -1;
+    const hasPre =
+      findColumn(detectedHeaders, ["pre", "valor pre", "inicial"]) !== -1;
+    const hasPost =
+      findColumn(detectedHeaders, ["post", "valor post", "final"]) !== -1;
+    const hasWideMetrics = detectedHeaders.some((header) =>
+      ["cmj", "rsi", "vmp", "carga", "rpe"].some((metric) =>
+        normalizeCsvText(header).includes(metric),
+      ),
+    );
+    const warnings: string[] = [];
+
+    if (!hasPlayer) warnings.push("Falta una columna Jugador o Nombre.");
+    if (!(hasVariable && (hasPre || hasPost)) && !hasWideMetrics) {
+      warnings.push(
+        "Faltan columnas de medición: usa Variable con PRE/POST o columnas CMJ, RSI, VMP, carga o RPE.",
+      );
+    }
+
+    return warnings;
+  }, [detectedHeaders, sourceFilename]);
+
+  const validationMessages = [
+    ...csvWarnings,
+    ...(!sessionDate ? ["Falta la fecha de la sesión."] : []),
+    ...(!sessionName.trim() ? ["Falta el nombre de la sesión."] : []),
+    ...(sourceFilename && records.length === 0
+      ? ["No hay registros válidos preparados desde el archivo seleccionado."]
+      : []),
+    ...previewAnalysis.warnings,
+  ];
+
   async function handleFileUpload(file: File | null) {
     if (!file) return;
 
@@ -786,13 +960,21 @@ export default function CargarNeuromuscularPage() {
       setError(null);
       setSuccessMessage(null);
 
+      const headers = await getCsvHeaders(file);
       const parsedRecords = await parseNeuromuscularCsvFile(file);
 
       setSourceFilename(file.name);
+      setDetectedHeaders(headers);
       setRecords(parsedRecords);
-      setSuccessMessage(
-        `Archivo cargado correctamente. Registros detectados: ${parsedRecords.length}.`,
-      );
+      if (parsedRecords.length > 0) {
+        setSuccessMessage(
+          `Archivo cargado correctamente. Registros detectados: ${parsedRecords.length}.`,
+        );
+      } else {
+        setError(
+          "No se detectaron registros válidos. Revisa la columna de jugador, las variables y los valores numéricos.",
+        );
+      }
     } catch (err) {
       const message =
         err instanceof Error
@@ -864,6 +1046,7 @@ export default function CargarNeuromuscularPage() {
 
       setRecords([]);
       setSourceFilename(null);
+      setDetectedHeaders([]);
     } catch (err) {
       const message =
         err instanceof Error
@@ -949,10 +1132,27 @@ export default function CargarNeuromuscularPage() {
             </h2>
 
             <p className="mt-2 break-words text-sm leading-6 text-slate-600">
-              Sube un CSV separado por punto y coma. La app reconoce columnas
-              como Jugador, Posición, CMJ pre, CMJ post, RSI mod pre, RSI mod
-              post, VMP pre, VMP post, Carga y RPE.
+              Puedes importar un CSV ancho o un archivo organizado por bloques.
             </p>
+
+            <div className="mt-4">
+              <StatusMessage variant="info" title="Formato esperado">
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>
+                    Formato ancho: Jugador y columnas como CMJ pre/post, RSI
+                    pre/post, VMP pre/post, Carga y RPE.
+                  </li>
+                  <li>
+                    Formato por bloques: Jugador, Variable y al menos una
+                    columna PRE o POST.
+                  </li>
+                  <li>
+                    Se admiten separadores de punto y coma, coma o tabulador, y
+                    decimales con coma o punto.
+                  </li>
+                </ul>
+              </StatusMessage>
+            </div>
 
             <label className="mt-5 block rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center sm:p-6">
               <span className="text-sm font-black text-slate-700">
@@ -1173,6 +1373,36 @@ export default function CargarNeuromuscularPage() {
               {loading ? "Guardando..." : "Guardar sesión"}
             </button>
           </div>
+
+          {records.length > 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Resumen detectado">
+                {summary.total} registros · {previewAnalysis.players} jugadores ·{" "}
+                {sessionDate || "sin fecha"} · {sessionName.trim() || "sin nombre"}
+                {" · "}
+                Variables: {previewAnalysis.variables.join(", ") || "ninguna"}.
+              </StatusMessage>
+            </div>
+          )}
+
+          {(sourceFilename || records.length > 0) && (
+            <div className="mt-4">
+              {validationMessages.length > 0 ? (
+                <StatusMessage variant="warning" title="Revisión antes de guardar">
+                  <ul className="list-disc space-y-1 pl-5">
+                    {validationMessages.map((message) => (
+                      <li key={message}>{message}</li>
+                    ))}
+                  </ul>
+                </StatusMessage>
+              ) : (
+                <StatusMessage variant="success" title="Comprobación previa">
+                  No se han detectado incidencias visibles en los campos
+                  revisados. Confirma la tabla antes de guardar.
+                </StatusMessage>
+              )}
+            </div>
+          )}
 
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
             <SummaryCard title="Registros" value={summary.total} />
