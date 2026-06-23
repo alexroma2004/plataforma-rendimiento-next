@@ -21,6 +21,70 @@ type GpsPreviewRow = {
   dec: number | null;
 };
 
+type GpsColumnGroup = {
+  label: string;
+  aliases: string[];
+};
+
+const requiredColumnGroups: GpsColumnGroup[] = [
+  {
+    label: "jugador",
+    aliases: [
+      "player",
+      "player_name",
+      "playername",
+      "jugador",
+      "nombre",
+      "name",
+      "athlete",
+      "deportista",
+    ],
+  },
+  {
+    label: "distancia total",
+    aliases: [
+      "total_distance",
+      "totaldistance",
+      "distance",
+      "distancia",
+      "distancia_total",
+    ],
+  },
+];
+
+const recommendedColumnGroups: GpsColumnGroup[] = [
+  { label: "posición", aliases: ["position", "posicion"] },
+  { label: "sesión", aliases: ["session", "sesion", "session_name"] },
+  { label: "tarea", aliases: ["task", "tarea", "drill"] },
+  { label: "microciclo", aliases: ["md", "microcycle", "microciclo"] },
+  {
+    label: "HSR",
+    aliases: ["hsr", "high_speed_running", "hsr_distance", "distancia_hsr"],
+  },
+  {
+    label: "distancia sprint",
+    aliases: [
+      "distance_vrange6",
+      "sprint",
+      "sprint_distance",
+      "distance_sprint",
+      "distancia_sprint",
+    ],
+  },
+  {
+    label: "sprints",
+    aliases: ["sprints", "num_sprints", "n_sprints", "sprint_count"],
+  },
+  {
+    label: "aceleraciones",
+    aliases: ["num_acc", "numacc", "acc", "accelerations", "aceleraciones"],
+  },
+  {
+    label: "deceleraciones",
+    aliases: ["num_dec", "numdec", "dec", "decelerations", "deceleraciones"],
+  },
+];
+
 function normalizeHeader(value: string): string {
   return String(value ?? "")
     .replace(/^\uFEFF/, "")
@@ -359,6 +423,100 @@ export default function CargarGpsPage() {
     );
   }, [previewRows]);
 
+  const fileAnalysis = useMemo(() => {
+    const detectedHeaders = new Set(
+      Object.keys(gpsRows[0] ?? {}).map(normalizeHeader),
+    );
+    const hasColumnGroup = (group: GpsColumnGroup) =>
+      group.aliases.some((alias) => detectedHeaders.has(alias));
+    const missingRequiredColumns = requiredColumnGroups
+      .filter((group) => !hasColumnGroup(group))
+      .map((group) => group.label);
+    const missingRecommendedColumns = recommendedColumnGroups
+      .filter((group) => !hasColumnGroup(group))
+      .map((group) => group.label);
+    const emptyText = toText(null);
+    const uniquePlayers = new Set(
+      previewRows
+        .map((row) => row.jugador)
+        .filter((player) => player !== emptyText),
+    );
+    const detectedSessions = Array.from(
+      new Set(
+        previewRows
+          .map((row) => row.sesion)
+          .filter((session) => session !== emptyText),
+      ),
+    );
+    const rowsWithoutPlayer = previewRows.filter(
+      (row) => row.jugador === emptyText,
+    ).length;
+    const rowsWithoutDistance = previewRows.filter(
+      (row) => row.distancia === null,
+    ).length;
+    const metricValues = previewRows.flatMap((row) => [
+      row.distancia,
+      row.hsr,
+      row.sprint,
+      row.sprints,
+      row.acc,
+      row.dec,
+    ]);
+    const emptyMetricValues = metricValues.filter(
+      (value) => value === null,
+    ).length;
+    const emptyMetricPercent =
+      metricValues.length > 0
+        ? (emptyMetricValues / metricValues.length) * 100
+        : 0;
+    const warnings: string[] = [];
+
+    if (missingRecommendedColumns.length > 0) {
+      warnings.push(
+        `No se detectan estas columnas recomendadas: ${missingRecommendedColumns.join(
+          ", ",
+        )}.`,
+      );
+    }
+
+    if (rowsWithoutPlayer > 0) {
+      warnings.push(
+        `${rowsWithoutPlayer} registros no tienen un jugador reconocible.`,
+      );
+    }
+
+    if (rowsWithoutDistance > 0) {
+      warnings.push(
+        `${rowsWithoutDistance} registros no tienen distancia total válida.`,
+      );
+    }
+
+    if (emptyMetricPercent >= 25) {
+      warnings.push(
+        `${formatNumber(
+          emptyMetricPercent,
+        )}% de los valores de métricas principales están vacíos.`,
+      );
+    }
+
+    return {
+      uniquePlayers: uniquePlayers.size,
+      detectedSession: detectedSessions[0] ?? null,
+      missingRequiredColumns,
+      warnings,
+    };
+  }, [gpsRows, previewRows]);
+
+  const missingSessionFields = [
+    !sessionDate ? "fecha de sesión" : null,
+    !microcycle ? "día de microciclo" : null,
+    !sessionName.trim() ? "nombre de sesión" : null,
+  ].filter((value): value is string => Boolean(value));
+  const hasBlockingValidationIssues =
+    missingSessionFields.length > 0 ||
+    fileAnalysis.missingRequiredColumns.length > 0 ||
+    fileAnalysis.uniquePlayers === 0;
+
   function handleGpsFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -485,6 +643,15 @@ export default function CargarGpsPage() {
             </label>
           </div>
 
+          <div className="mt-6">
+            <StatusMessage variant="info" title="Formato CSV esperado">
+              Usa un CSV con encabezados y separador de punto y coma (;). Las
+              columnas imprescindibles son jugador y distancia total. Se
+              recomiendan posición, sesión, tarea, MD, HSR, distancia sprint,
+              sprints, num_acc y num_dec. Se admiten coma o punto decimal.
+            </StatusMessage>
+          </div>
+
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             Archivo seleccionado:{" "}
             <span className="break-all font-bold">
@@ -492,10 +659,45 @@ export default function CargarGpsPage() {
             </span>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {saveMessage && (
+            <div className="mt-4">
+              <StatusMessage variant="success" title="Sesión guardada">
+                {saveMessage}
+              </StatusMessage>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="mt-4">
+              <StatusMessage variant="error" title="Revisa el archivo o la sesión">
+                {saveError}
+              </StatusMessage>
+            </div>
+          )}
+
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+            <SummaryCard
+              title="Registros detectados"
+              value={previewRows.length}
+            />
+
             <SummaryCard
               title="Jugadores detectados"
-              value={previewRows.length}
+              value={fileAnalysis.uniquePlayers}
+            />
+
+            <SummaryCard
+              title="Fecha / sesión"
+              value={
+                sessionDate || sessionName
+                  ? [
+                      sessionDate || "Sin fecha",
+                      sessionName ||
+                        fileAnalysis.detectedSession ||
+                        "Sin nombre",
+                    ].join(" · ")
+                  : "Pendiente"
+              }
             />
 
             <SummaryCard
@@ -510,6 +712,27 @@ export default function CargarGpsPage() {
               value={formatNumber(totals.sprint, " m")}
             />
           </div>
+
+          {previewRows.length > 0 &&
+            fileAnalysis.missingRequiredColumns.length > 0 && (
+              <div className="mt-6">
+                <StatusMessage
+                  variant="error"
+                  title="Columnas imprescindibles no detectadas"
+                >
+                  Revisa los encabezados del CSV. Faltan:{" "}
+                  {fileAnalysis.missingRequiredColumns.join(", ")}.
+                </StatusMessage>
+              </div>
+            )}
+
+          {previewRows.length > 0 && fileAnalysis.warnings.length > 0 && (
+            <div className="mt-4">
+              <StatusMessage variant="warning" title="Revisa la calidad de los datos">
+                {fileAnalysis.warnings.join(" ")}
+              </StatusMessage>
+            </div>
+          )}
 
           {previewRows.length === 0 ? (
             <div className="mt-6">
@@ -584,32 +807,28 @@ export default function CargarGpsPage() {
                   />
                 </label>
 
+                {missingSessionFields.length > 0 && (
+                  <div className="mt-4">
+                    <StatusMessage
+                      variant="warning"
+                      title="Completa los datos de la sesión"
+                    >
+                      Antes de guardar, revisa:{" "}
+                      {missingSessionFields.join(", ")}.
+                    </StatusMessage>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={handleSaveGpsSession}
-                  disabled={isSaving}
+                  disabled={isSaving || hasBlockingValidationIssues}
                   className="mt-5 w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {isSaving
                     ? "Guardando sesión GPS..."
                     : "Guardar sesión GPS en Supabase"}
                 </button>
-
-                {saveMessage && (
-                  <div className="mt-4">
-                    <StatusMessage variant="success" title="Sesión guardada">
-                      {saveMessage}
-                    </StatusMessage>
-                  </div>
-                )}
-
-                {saveError && (
-                  <div className="mt-4">
-                    <StatusMessage variant="error" title="No se ha podido guardar">
-                      {saveError}
-                    </StatusMessage>
-                  </div>
-                )}
               </section>
 
               <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
