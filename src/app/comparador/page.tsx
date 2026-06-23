@@ -86,6 +86,12 @@ type ComparisonMetric = {
   getValue: (stats: ComparisonStats) => number | null;
 };
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 const historyScopeOptions: {
   key: HistoryScope;
   label: string;
@@ -653,6 +659,204 @@ export default function ComparadorPage() {
     );
   }, [historyScope]);
 
+  const quickComparison = useMemo(() => {
+    if (!playerAStats || !playerBStats) {
+      return {
+        hasSufficientData: false,
+        cards: [] as QuickReadingCard[],
+      };
+    }
+
+    const playerAName = playerAStats.player.name;
+    const playerBName = playerBStats.player.name;
+    const comparableRows = comparisonMetrics.flatMap((metric) => {
+      const valueA = metric.getValue(playerAStats);
+      const valueB = metric.getValue(playerBStats);
+
+      if (
+        valueA === null ||
+        valueB === null ||
+        !Number.isFinite(Number(valueA)) ||
+        !Number.isFinite(Number(valueB))
+      ) {
+        return [];
+      }
+
+      const denominator =
+        (Math.abs(Number(valueA)) + Math.abs(Number(valueB))) / 2;
+      const relativeDifference =
+        denominator === 0
+          ? 0
+          : (Math.abs(Number(valueA) - Number(valueB)) / denominator) * 100;
+
+      return [{ metric, valueA, valueB, relativeDifference }];
+    });
+    const mainDifference =
+      [...comparableRows]
+        .filter((row) => row.metric.key !== "rpe_latest")
+        .sort((a, b) => b.relativeDifference - a.relativeDifference)[0] ??
+      comparableRows[0] ??
+      null;
+    const mainDifferenceMessage = !mainDifference
+      ? "No hay una variable con datos válidos para ambos jugadores."
+      : mainDifference.valueA === mainDifference.valueB
+        ? `Ambos jugadores registran el mismo valor en ${
+            mainDifference.metric.category
+          } · ${mainDifference.metric.label}: ${formatMetric(
+            mainDifference.valueA,
+            mainDifference.metric.unit,
+          )}.`
+        : `${
+            mainDifference.valueA > mainDifference.valueB
+              ? playerAStats.player.name
+              : playerBStats.player.name
+          } registra el mayor valor en ${
+            mainDifference.metric.category
+          } · ${mainDifference.metric.label} (${
+            playerAStats.player.name
+          }: ${formatMetric(
+            mainDifference.valueA,
+            mainDifference.metric.unit,
+          )}; ${playerBStats.player.name}: ${formatMetric(
+            mainDifference.valueB,
+            mainDifference.metric.unit,
+          )}). La diferencia relativa es ${formatNumber(
+            mainDifference.relativeDifference,
+            1,
+          )}% dentro de los datos disponibles.`;
+
+    function getHigherValueSummary(
+      label: string,
+      rows: typeof comparableRows,
+    ) {
+      const playerAHigher = rows.filter(
+        (row) => row.valueA > row.valueB,
+      ).length;
+      const playerBHigher = rows.filter(
+        (row) => row.valueB > row.valueA,
+      ).length;
+      const ties = rows.length - playerAHigher - playerBHigher;
+
+      return `${label}: ${playerAName} registra el mayor valor en ${
+        playerAHigher
+      }, ${playerBName} en ${
+        playerBHigher
+      } y hay ${ties} empates.`;
+    }
+
+    const categoryMessages = ["GPS", "Neuromuscular"]
+      .map((category) => {
+        const rows = comparableRows.filter(
+          (row) => row.metric.category === category,
+        );
+
+        return rows.length > 0 ? getHigherValueSummary(category, rows) : null;
+      })
+      .filter((value): value is string => Boolean(value));
+    const comparableCapacityRows = capacityComparisonRows.filter(
+      (row) =>
+        row.playerAValue !== null &&
+        row.playerBValue !== null &&
+        Number.isFinite(Number(row.playerAValue)) &&
+        Number.isFinite(Number(row.playerBValue)),
+    );
+
+    if (comparableCapacityRows.length > 0) {
+      const playerAHigher = comparableCapacityRows.filter(
+        (row) => Number(row.playerAValue) > Number(row.playerBValue),
+      ).length;
+      const playerBHigher = comparableCapacityRows.filter(
+        (row) => Number(row.playerBValue) > Number(row.playerAValue),
+      ).length;
+      const ties =
+        comparableCapacityRows.length - playerAHigher - playerBHigher;
+
+      categoryMessages.push(
+        `Tests: ${playerAStats.player.name} registra mayor puntuación media en ${
+          playerAHigher
+        } capacidades, ${playerBStats.player.name} en ${
+          playerBHigher
+        } y hay ${ties} empates.`,
+      );
+    } else {
+      const testRows = comparableRows.filter(
+        (row) => row.metric.category === "Tests",
+      );
+
+      if (testRows.length > 0) {
+        categoryMessages.push(getHigherValueSummary("Tests", testRows));
+      }
+    }
+
+    const averageRelativeDifference =
+      comparableRows.length > 0
+        ? comparableRows.reduce(
+            (total, row) => total + row.relativeDifference,
+            0,
+          ) / comparableRows.length
+        : null;
+    const balanceLevel =
+      averageRelativeDifference === null
+        ? null
+        : averageRelativeDifference < 5
+          ? "baja"
+          : averageRelativeDifference < 15
+            ? "moderada"
+            : "alta";
+    const balanceMessage =
+      averageRelativeDifference === null || balanceLevel === null
+        ? "No hay suficientes variables comunes para valorar el equilibrio comparativo."
+        : `La diferencia relativa media entre ${
+            comparableRows.length
+          } variables comparables es ${formatNumber(
+            averageRelativeDifference,
+            1,
+          )}% y se describe como ${balanceLevel}. Es una referencia descriptiva, no una medida de rendimiento absoluto o riesgo.`;
+    const hasSufficientData =
+      playerAStats.player.id !== playerBStats.player.id &&
+      comparableRows.length > 0;
+    const needsContextReview =
+      comparableRows.length < 3 || balanceLevel === "alta";
+    const recommendationMessage =
+      comparableRows.length < 3
+        ? "Completar datos comunes antes de extraer conclusiones y revisar que ambos jugadores tengan una cobertura histórica comparable."
+        : balanceLevel === "alta"
+          ? "Revisar las variables con mayor diferencia junto a minutos, posición, historial y contexto de medición; no implican por sí solas fatiga, lesión ni riesgo."
+          : "Usar la comparación para orientar preguntas individuales y contrastarla con posición, historial y contexto de medición antes de ajustar contenidos.";
+
+    return {
+      hasSufficientData,
+      cards: [
+        {
+          title: "Diferencia principal",
+          variant: "info",
+          message: mainDifferenceMessage,
+        },
+        {
+          title: "Comparación por capacidad",
+          variant: "info",
+          message:
+            categoryMessages.join(" ") ||
+            "No hay categorías con datos comunes para ambos jugadores.",
+        },
+        {
+          title: "Equilibrio comparativo",
+          variant: balanceLevel === "alta" ? "warning" : "info",
+          message: balanceMessage,
+        },
+        {
+          title: "Recomendación para el staff",
+          variant: needsContextReview ? "warning" : "info",
+          message: recommendationMessage,
+        },
+      ] as QuickReadingCard[],
+    };
+  }, [
+    capacityComparisonRows,
+    playerAStats,
+    playerBStats,
+  ]);
+
   return (
     <AppShell
       title="Comparador"
@@ -821,6 +1025,35 @@ export default function ComparadorPage() {
                 description="Jugador A / Jugador B"
               />
             </section>
+
+            {quickComparison.hasSufficientData && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                  Interpretación comparativa
+                </p>
+
+                <h2 className="mt-2 text-xl font-black text-slate-950">
+                  Lectura rápida comparativa
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Señales orientativas construidas con los datos disponibles y
+                  el criterio de histórico seleccionado.
+                </p>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {quickComparison.cards.map((card) => (
+                    <StatusMessage
+                      key={card.title}
+                      variant={card.variant}
+                      title={card.title}
+                    >
+                      {card.message}
+                    </StatusMessage>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
               <div className="flex flex-col gap-2">
