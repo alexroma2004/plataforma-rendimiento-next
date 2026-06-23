@@ -24,6 +24,12 @@ import {
 
 type NeuromuscularVariableKey = "cmj" | "rsimod" | "vmp";
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 const variableOptions: {
   key: NeuromuscularVariableKey;
   label: string;
@@ -373,6 +379,161 @@ export default function NeuromuscularPage() {
       );
   }, [records, selectedVariable]);
 
+  const quickNeuromuscularCards = useMemo<QuickReadingCard[]>(() => {
+    function getVariableSummary(variable: NeuromuscularVariableKey) {
+      const preAverage = getAverage(
+        records.map((row) => getVariableValue(row, variable, "pre")),
+      );
+      const postAverage = getAverage(
+        records.map((row) => getVariableValue(row, variable, "post")),
+      );
+      const deltaPercent =
+        isFiniteNumber(preAverage) &&
+        isFiniteNumber(postAverage) &&
+        preAverage !== 0
+          ? ((postAverage - preAverage) / preAverage) * 100
+          : null;
+
+      return { preAverage, postAverage, deltaPercent };
+    }
+
+    const cmjSummary = getVariableSummary("cmj");
+    const rsiSummary = getVariableSummary("rsimod");
+    const vmpSummary = getVariableSummary("vmp");
+    const cmjMessage =
+      isFiniteNumber(cmjSummary.preAverage) ||
+      isFiniteNumber(cmjSummary.postAverage)
+        ? `En los últimos registros disponibles, la media CMJ es ${formatVariableValue(
+            cmjSummary.preAverage,
+            "cmj",
+          )} PRE y ${formatVariableValue(
+            cmjSummary.postAverage,
+            "cmj",
+          )} POST, con una variación media de ${formatPercent(
+            cmjSummary.deltaPercent,
+          )}. Describe la respuesta de esta sesión, no un estado absoluto.`
+        : "Los últimos registros disponibles no contienen valores CMJ suficientes para una lectura media.";
+    const reactivityParts: string[] = [];
+
+    if (
+      isFiniteNumber(rsiSummary.preAverage) ||
+      isFiniteNumber(rsiSummary.postAverage)
+    ) {
+      reactivityParts.push(
+        `RSI mod: ${formatVariableValue(
+          rsiSummary.preAverage,
+          "rsimod",
+        )} PRE, ${formatVariableValue(
+          rsiSummary.postAverage,
+          "rsimod",
+        )} POST y ${formatPercent(rsiSummary.deltaPercent)} de variación media.`,
+      );
+    }
+
+    if (
+      isFiniteNumber(vmpSummary.preAverage) ||
+      isFiniteNumber(vmpSummary.postAverage)
+    ) {
+      reactivityParts.push(
+        `VMP: ${formatVariableValue(
+          vmpSummary.preAverage,
+          "vmp",
+        )} PRE, ${formatVariableValue(
+          vmpSummary.postAverage,
+          "vmp",
+        )} POST y ${formatPercent(vmpSummary.deltaPercent)} de variación media.`,
+      );
+    }
+
+    if (isFiniteNumber(rpeAverage)) {
+      reactivityParts.push(
+        `El RPE medio disponible es ${formatNumber(rpeAverage, 1)}.`,
+      );
+    }
+
+    const reactivityMessage =
+      reactivityParts.length > 0
+        ? reactivityParts.join(" ") +
+          " Conviene interpretar estas variables junto a la tarea realizada y la carga previa."
+        : "No hay valores suficientes de RSI modificado, VMP o RPE para una lectura conjunta.";
+    const negativeDeltaCounts = {
+      cmj: records.filter((row) => {
+        const value = getDeltaPercent(row, "cmj");
+        return isFiniteNumber(value) && value < 0;
+      }).length,
+      rsimod: records.filter((row) => {
+        const value = getDeltaPercent(row, "rsimod");
+        return isFiniteNumber(value) && value < 0;
+      }).length,
+      vmp: records.filter((row) => {
+        const value = getDeltaPercent(row, "vmp");
+        return isFiniteNumber(value) && value < 0;
+      }).length,
+    };
+    const incompleteRecords = records.filter((row) =>
+      variableOptions.some(
+        ({ key }) =>
+          !isFiniteNumber(getVariableValue(row, key, "pre")) ||
+          !isFiniteNumber(getVariableValue(row, key, "post")),
+      ),
+    ).length;
+    const negativeParts = [
+      negativeDeltaCounts.cmj > 0
+        ? `CMJ (${negativeDeltaCounts.cmj})`
+        : null,
+      negativeDeltaCounts.rsimod > 0
+        ? `RSI mod (${negativeDeltaCounts.rsimod})`
+        : null,
+      negativeDeltaCounts.vmp > 0
+        ? `VMP (${negativeDeltaCounts.vmp})`
+        : null,
+    ].filter((value): value is string => Boolean(value));
+    const alertMessages = [
+      negativeParts.length > 0
+        ? `Hay variaciones PRE-POST negativas en ${negativeParts.join(
+            ", ",
+          )}; deben revisarse individualmente y en contexto.`
+        : "No aparecen variaciones PRE-POST negativas entre los registros completos de esta sesión.",
+      incompleteRecords > 0
+        ? `${incompleteRecords} de ${
+            records.length
+          } registros no incluyen PRE y POST completos en CMJ, RSI modificado y VMP.`
+        : "Los registros incluyen PRE y POST completos para las tres variables.",
+      "La comparación utiliza el PRE de la sesión y no constituye una referencia longitudinal individual.",
+    ];
+    const hasAlert = negativeParts.length > 0 || incompleteRecords > 0;
+    const recommendationMessage = hasAlert
+      ? "Revisar los casos señalados, confirmar la calidad del registro y cruzar CMJ, RSI modificado, VMP y RPE con GPS y próximos controles; una variación aislada no diagnostica fatiga, lesión ni riesgo."
+      : "Mantener el seguimiento individual y cruzar CMJ, RSI modificado, VMP y RPE con GPS y próximos controles antes de ajustar la carga.";
+
+    return [
+      {
+        title: "Estado CMJ",
+        variant:
+          isFiniteNumber(cmjSummary.deltaPercent) &&
+          cmjSummary.deltaPercent < 0
+            ? "warning"
+            : "info",
+        message: cmjMessage,
+      },
+      {
+        title: "Reactividad · RSI y VMP",
+        variant: "info",
+        message: reactivityMessage,
+      },
+      {
+        title: "Alertas y referencia",
+        variant: hasAlert ? "warning" : "info",
+        message: alertMessages.join(" "),
+      },
+      {
+        title: "Recomendación para el staff",
+        variant: hasAlert ? "warning" : "info",
+        message: recommendationMessage,
+      },
+    ];
+  }, [records, rpeAverage]);
+
   return (
     <AppShell
       title="Rendimiento neuromuscular"
@@ -540,6 +701,35 @@ export default function NeuromuscularPage() {
                     }
                   />
                 </div>
+
+                {records.length > 0 && (
+                  <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                      Interpretación neuromuscular
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black text-slate-950">
+                      Lectura rápida neuromuscular
+                    </h2>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Señales orientativas a partir de los últimos registros
+                      disponibles de la sesión seleccionada.
+                    </p>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {quickNeuromuscularCards.map((card) => (
+                        <StatusMessage
+                          key={card.title}
+                          variant={card.variant}
+                          title={card.title}
+                        >
+                          {card.message}
+                        </StatusMessage>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
                   <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
