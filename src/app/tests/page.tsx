@@ -84,6 +84,12 @@ function getUniquePlayers(
   return players;
 }
 
+type QuickReadingCard = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
 function SummaryCard({
   title,
   value,
@@ -297,6 +303,133 @@ export default function TestsPage() {
     );
   }, [scores]);
 
+  const quickTestReadingCards = useMemo<QuickReadingCard[]>(() => {
+    const capacityMap = new Map<string, { total: number; count: number }>();
+
+    scores.forEach((score) => {
+      const value = Number(score.final_score);
+
+      if (
+        score.final_score === null ||
+        score.final_score === undefined ||
+        !Number.isFinite(value) ||
+        !score.capacity
+      ) {
+        return;
+      }
+
+      const current = capacityMap.get(score.capacity) ?? {
+        total: 0,
+        count: 0,
+      };
+
+      current.total += value;
+      current.count += 1;
+      capacityMap.set(score.capacity, current);
+    });
+
+    const capacitySummaries = Array.from(capacityMap.entries())
+      .map(([capacity, values]) => ({
+        capacity,
+        average: values.total / values.count,
+      }))
+      .sort((a, b) => b.average - a.average);
+    const bestCapacity = capacitySummaries[0] ?? null;
+    const lowestCapacity =
+      capacitySummaries[capacitySummaries.length - 1] ?? null;
+    const invalidScores = scores.filter((score) => {
+      return (
+        score.final_score === null ||
+        score.final_score === undefined ||
+        !Number.isFinite(Number(score.final_score))
+      );
+    }).length;
+    const incompleteScores = scores.filter((score) => {
+      const used = Number(score.used_variables);
+      const expected = Number(score.expected_variables);
+
+      return (
+        Number.isFinite(used) &&
+        Number.isFinite(expected) &&
+        expected > 0 &&
+        used < expected
+      );
+    }).length;
+    const unavailableResults = results.filter(
+      (result) =>
+        result.available === false ||
+        result.value === null ||
+        result.value === undefined,
+    ).length;
+    const validScoreCount = scores.length - invalidScores;
+    const generalMessage =
+      summary.averageScore === null
+        ? "Los últimos datos disponibles no permiten calcular una puntuación media válida."
+        : `Los últimos datos disponibles incluyen ${
+            validScoreCount
+          } puntuaciones válidas, con una media descriptiva de ${formatNumber(
+            summary.averageScore,
+          )}. Resume esta sesión y no representa por sí sola el rendimiento global absoluto.`;
+    const capacitiesMessage =
+      !bestCapacity || !lowestCapacity
+        ? "No hay puntuaciones suficientes para comparar capacidades."
+        : bestCapacity.capacity === lowestCapacity.capacity
+          ? `Solo hay datos comparables de ${
+              bestCapacity.capacity
+            }, con una media de ${formatNumber(bestCapacity.average)}.`
+          : `La media más alta disponible corresponde a ${
+              bestCapacity.capacity
+            } (${formatNumber(
+              bestCapacity.average,
+            )}) y la más baja a ${lowestCapacity.capacity} (${formatNumber(
+              lowestCapacity.average,
+            )}). La comparación depende de la muestra y variables disponibles.`;
+    const coverageMessages = [
+      `Hay ${summary.players} jugadores, ${
+        summary.capacities
+      } capacidades, ${summary.variables} variables, ${
+        summary.scores
+      } puntuaciones y ${summary.results} resultados registrados.`,
+      incompleteScores > 0
+        ? `${incompleteScores} puntuaciones utilizan menos variables de las esperadas.`
+        : null,
+      unavailableResults > 0
+        ? `${unavailableResults} resultados figuran como no disponibles o sin valor.`
+        : null,
+      invalidScores > 0
+        ? `${invalidScores} puntuaciones no tienen un valor final válido.`
+        : null,
+    ].filter((value): value is string => Boolean(value));
+    const hasCoverageIssue =
+      incompleteScores > 0 || unavailableResults > 0 || invalidScores > 0;
+    const recommendationMessage = hasCoverageIssue
+      ? "Completar o revisar los datos incompletos antes de comparar perfiles y priorizar las capacidades con menor media solo después de confirmar su cobertura."
+      : "Revisar las capacidades con menor media junto a sus variables de origen y al contexto del jugador; una sesión aislada no define rendimiento global ni riesgo.";
+
+    return [
+      {
+        title: "Estado general",
+        variant: "info",
+        message: generalMessage,
+      },
+      {
+        title: "Capacidades destacadas",
+        variant: "info",
+        message: capacitiesMessage,
+      },
+      {
+        title: "Cobertura de datos",
+        variant: hasCoverageIssue ? "warning" : "info",
+        message: coverageMessages.join(" "),
+      },
+      {
+        title: "Recomendación para el staff",
+        variant: hasCoverageIssue ? "warning" : "info",
+        message: recommendationMessage,
+      },
+    ];
+  }, [results, scores, summary]);
+
   return (
     <AppShell
       title="Tests físicos"
@@ -439,6 +572,35 @@ export default function TestsPage() {
                     value={formatNumber(summary.averageScore)}
                   />
                 </div>
+
+                {(scores.length > 0 || results.length > 0) && (
+                  <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                      Interpretación de tests
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black text-slate-950">
+                      Lectura rápida de tests
+                    </h2>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Señales orientativas a partir de los últimos datos
+                      disponibles de la sesión seleccionada.
+                    </p>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {quickTestReadingCards.map((card) => (
+                        <StatusMessage
+                          key={card.title}
+                          variant={card.variant}
+                          title={card.title}
+                        >
+                          {card.message}
+                        </StatusMessage>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
                   <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
