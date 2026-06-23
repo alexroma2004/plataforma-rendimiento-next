@@ -1314,7 +1314,9 @@ export default function GpsPage() {
     const evaluations = weeklyEvaluation?.evaluations ?? [];
 
     if (evaluations.length === 0) {
-      setSelectedWeeklyPlayer("");
+      queueMicrotask(() => {
+        setSelectedWeeklyPlayer("");
+      });
       return;
     }
 
@@ -1323,7 +1325,9 @@ export default function GpsPage() {
     );
 
     if (!selectedExists) {
-      setSelectedWeeklyPlayer(evaluations[0].normalizedName);
+      queueMicrotask(() => {
+        setSelectedWeeklyPlayer(evaluations[0].normalizedName);
+      });
     }
   }, [weeklyEvaluation, selectedWeeklyPlayer]);
 
