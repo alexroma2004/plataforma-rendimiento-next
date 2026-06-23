@@ -688,7 +688,9 @@ export default function InformesPage() {
 
   useEffect(() => {
     if (playerRows.length === 0) {
-      setSelectedPlayerId("");
+      queueMicrotask(() => {
+        setSelectedPlayerId("");
+      });
       return;
     }
 
@@ -697,7 +699,9 @@ export default function InformesPage() {
     );
 
     if (!selectedExists) {
-      setSelectedPlayerId(playerRows[0].player.id);
+      queueMicrotask(() => {
+        setSelectedPlayerId(playerRows[0].player.id);
+      });
     }
   }, [playerRows, selectedPlayerId]);
 

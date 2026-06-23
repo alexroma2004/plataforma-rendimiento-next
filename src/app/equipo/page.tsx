@@ -278,7 +278,9 @@ export default function EquipoPage() {
   }
 
   useEffect(() => {
-    loadData();
+    queueMicrotask(() => {
+      void loadData();
+    });
   }, []);
 
   const summary = useMemo(() => {
