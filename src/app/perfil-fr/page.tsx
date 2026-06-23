@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   Bar,
   BarChart,
@@ -298,13 +299,6 @@ function SummaryCard({
   );
 }
 
-function EmptyState({ children }: { children: string }) {
-  return (
-    <StatusMessage variant="warning" title="Sin datos disponibles">
-      {children}
-    </StatusMessage>
-  );
-}
 
 export default function PerfilFrPage() {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -596,6 +590,27 @@ export default function PerfilFrPage() {
               </StatusMessage>
             </div>
           )}
+
+          {!loading && !error && players.length === 0 && (
+            <div className="mt-6">
+              <EmptyState
+                title="Sin jugadores disponibles"
+                description="No hay jugadores activos disponibles para seleccionar en el perfil F-R."
+              />
+            </div>
+          )}
+
+          {!loading &&
+            !error &&
+            players.length > 0 &&
+            baseProfilePoints.length === 0 && (
+              <div className="mt-6">
+                <EmptyState
+                  title="Sin registros neuromusculares"
+                  description="Todavía no hay registros válidos con CMJ, RSI modificado o VMP para construir el perfil F-R."
+                />
+              </div>
+            )}
         </section>
 
         {!loading && !error && (
@@ -645,10 +660,10 @@ export default function PerfilFrPage() {
                 </div>
 
                 {chartPoints.length === 0 ? (
-                  <EmptyState>
-                    No hay registros neuromusculares válidos para los filtros
-                    seleccionados.
-                  </EmptyState>
+                  <EmptyState
+                    title="Sin registros F-R"
+                    description="No hay registros neuromusculares válidos para los filtros seleccionados."
+                  />
                 ) : (
                   <div className="h-[340px] w-full sm:h-[420px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -758,7 +773,10 @@ export default function PerfilFrPage() {
                   })}
 
                   {latestPoints.length === 0 && (
-                    <EmptyState>No hay datos disponibles para interpretar.</EmptyState>
+                    <EmptyState
+                      title="Sin datos para interpretar"
+                      description="No hay datos disponibles para interpretar."
+                    />
                   )}
                 </div>
               </div>
@@ -940,9 +958,10 @@ export default function PerfilFrPage() {
 
                 {filteredPoints.length === 0 && (
                   <div className="p-5">
-                    <StatusMessage variant="warning" title="Sin registros F-R">
-                      No hay registros para los filtros seleccionados.
-                    </StatusMessage>
+                    <EmptyState
+                      title="Sin registros F-R"
+                      description="No hay registros para los filtros seleccionados."
+                    />
                   </div>
                 )}
               </div>
@@ -1020,9 +1039,10 @@ export default function PerfilFrPage() {
                     {filteredPoints.length === 0 && (
                       <tr>
                         <td colSpan={10} className="px-4 py-6">
-                          <StatusMessage variant="warning" title="Sin registros F-R">
-                            No hay registros para los filtros seleccionados.
-                          </StatusMessage>
+                          <EmptyState
+                            title="Sin registros F-R"
+                            description="No hay registros para los filtros seleccionados."
+                          />
                         </td>
                       </tr>
                     )}
@@ -1058,9 +1078,10 @@ function RankingCard({
 
       {rows.length === 0 ? (
         <div className="mt-4">
-          <StatusMessage variant="warning" title="Sin datos suficientes">
-            No hay datos suficientes.
-          </StatusMessage>
+          <EmptyState
+            title="Sin datos suficientes"
+            description="No hay datos suficientes para generar este ranking."
+          />
         </div>
       ) : (
         <div className="mt-4 space-y-3">
@@ -1095,3 +1116,4 @@ function RankingCard({
     </div>
   );
 }
+

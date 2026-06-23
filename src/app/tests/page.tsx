@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   getTestResultsBySessionId,
   getTestScoresBySessionId,
@@ -376,10 +377,18 @@ export default function TestsPage() {
 
           {!loadingSessions && sessions.length === 0 && (
             <div className="mt-6">
-              <StatusMessage variant="warning" title="Sin sesiones de tests">
-                Todavía no hay sesiones de tests guardadas. Primero carga una
-                sesión desde el apartado de carga de tests.
-              </StatusMessage>
+              <EmptyState
+                title="Sin sesiones de tests"
+                description="Todavía no hay sesiones de tests guardadas. Primero carga una sesión desde el apartado de carga de tests."
+                action={
+                  <Link
+                    href="/cargar-tests"
+                    className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow hover:bg-slate-800"
+                  >
+                    Cargar sesión de tests
+                  </Link>
+                }
+              />
             </div>
           )}
 
@@ -477,9 +486,10 @@ export default function TestsPage() {
 
                     {rankingRows.length === 0 ? (
                       <div className="mt-4">
-                        <StatusMessage variant="warning" title="Sin ranking disponible">
-                          No hay puntuaciones disponibles para generar ranking.
-                        </StatusMessage>
+                        <EmptyState
+                          title="Sin ranking disponible"
+                          description="No hay puntuaciones disponibles para generar el ranking general de jugadores."
+                        />
                       </div>
                     ) : (
                       <div className="mt-4 space-y-3">
@@ -568,9 +578,10 @@ export default function TestsPage() {
 
                       {filteredScores.length === 0 && (
                         <div className="p-5">
-                          <StatusMessage variant="warning" title="Sin puntuaciones">
-                            No hay puntuaciones para esta selección.
-                          </StatusMessage>
+                          <EmptyState
+                            title="Sin puntuaciones"
+                            description="No hay puntuaciones para esta selección. Cambia la capacidad o carga una sesión con puntuaciones válidas."
+                          />
                         </div>
                       )}
                     </div>
@@ -626,9 +637,10 @@ export default function TestsPage() {
                           {filteredScores.length === 0 && (
                             <tr>
                               <td colSpan={6} className="px-4 py-6">
-                                <StatusMessage variant="warning" title="Sin puntuaciones">
-                                  No hay puntuaciones para esta selección.
-                                </StatusMessage>
+                                <EmptyState
+                                  title="Sin puntuaciones"
+                                  description="No hay puntuaciones para esta selección. Cambia la capacidad o carga una sesión con puntuaciones válidas."
+                                />
                               </td>
                             </tr>
                           )}
@@ -730,9 +742,10 @@ export default function TestsPage() {
 
                     {filteredResults.length === 0 && (
                       <div className="p-5">
-                        <StatusMessage variant="warning" title="Sin resultados por variable">
-                          No hay resultados por variable para esta selección.
-                        </StatusMessage>
+                        <EmptyState
+                          title="Sin resultados por variable"
+                          description="No hay resultados por variable para esta selección. Cambia la capacidad o revisa la sesión de tests cargada."
+                        />
                       </div>
                     )}
                   </div>
@@ -805,9 +818,10 @@ export default function TestsPage() {
                         {filteredResults.length === 0 && (
                           <tr>
                             <td colSpan={10} className="px-4 py-6">
-                              <StatusMessage variant="warning" title="Sin resultados por variable">
-                                No hay resultados por variable para esta selección.
-                              </StatusMessage>
+                              <EmptyState
+                                title="Sin resultados por variable"
+                                description="No hay resultados por variable para esta selección. Cambia la capacidad o revisa la sesión de tests cargada."
+                              />
                             </td>
                           </tr>
                         )}
@@ -823,3 +837,4 @@ export default function TestsPage() {
     </AppShell>
   );
 }
+

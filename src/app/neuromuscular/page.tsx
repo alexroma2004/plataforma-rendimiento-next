@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   Bar,
   BarChart,
@@ -244,17 +245,6 @@ function MetricSummaryCard({
   );
 }
 
-function EmptyState({ children }: { children: string }) {
-  return (
-    <div className="flex h-full min-h-[220px] items-center justify-center">
-      <div className="w-full">
-        <StatusMessage variant="warning" title="Sin datos disponibles">
-          {children}
-        </StatusMessage>
-      </div>
-    </div>
-  );
-}
 
 export default function NeuromuscularPage() {
   const [sessions, setSessions] = useState<NeuromuscularSessionRow[]>([]);
@@ -455,10 +445,10 @@ export default function NeuromuscularPage() {
 
           {!loadingSessions && sessions.length === 0 && (
             <div className="mt-6">
-              <StatusMessage variant="warning" title="Sin sesiones neuromusculares">
-                Todavía no hay sesiones neuromusculares guardadas. Primero sube una
-                sesión desde la página de carga neuromuscular.
-              </StatusMessage>
+              <EmptyState
+                title="Sin sesiones neuromusculares"
+                description="Todavía no hay sesiones neuromusculares guardadas. Primero sube una sesión desde la página de carga neuromuscular."
+              />
             </div>
           )}
 
@@ -590,9 +580,12 @@ export default function NeuromuscularPage() {
 
                   <div className="mt-6 h-[340px] w-full sm:h-[440px]">
                     {chartData.length === 0 ? (
-                      <EmptyState>
-                        No hay datos PRE/POST disponibles para esta variable.
-                      </EmptyState>
+                      <div className="flex h-full items-center justify-center">
+                        <EmptyState
+                          title="Sin datos PRE/POST"
+                          description="No hay datos PRE/POST disponibles para esta variable."
+                        />
+                      </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -744,9 +737,10 @@ export default function NeuromuscularPage() {
 
                     {deltaRows.length === 0 && (
                       <div className="p-5">
-                        <StatusMessage variant="warning" title="Sin registros PRE-POST">
-                          No hay registros disponibles para esta variable.
-                        </StatusMessage>
+                        <EmptyState
+                          title="Sin registros PRE-POST"
+                          description="No hay registros disponibles para esta variable."
+                        />
                       </div>
                     )}
                   </div>
@@ -806,12 +800,10 @@ export default function NeuromuscularPage() {
                         {deltaRows.length === 0 && (
                           <tr>
                             <td colSpan={6} className="px-4 py-6">
-                              <StatusMessage
-                                variant="warning"
+                              <EmptyState
                                 title="Sin registros PRE-POST"
-                              >
-                                No hay registros disponibles para esta variable.
-                              </StatusMessage>
+                                description="No hay registros disponibles para esta variable."
+                              />
                             </td>
                           </tr>
                         )}
@@ -942,12 +934,10 @@ export default function NeuromuscularPage() {
 
                     {records.length === 0 && (
                       <div className="p-5">
-                        <StatusMessage
-                          variant="warning"
+                        <EmptyState
                           title="Sin registros neuromusculares"
-                        >
-                          No hay registros neuromusculares para esta sesión.
-                        </StatusMessage>
+                          description="No hay registros neuromusculares para esta sesión."
+                        />
                       </div>
                     )}
                   </div>
@@ -1020,12 +1010,10 @@ export default function NeuromuscularPage() {
                         {records.length === 0 && (
                           <tr>
                             <td colSpan={11} className="px-4 py-6">
-                              <StatusMessage
-                                variant="warning"
+                              <EmptyState
                                 title="Sin registros neuromusculares"
-                              >
-                                No hay registros neuromusculares para esta sesión.
-                              </StatusMessage>
+                                description="No hay registros neuromusculares para esta sesión."
+                              />
                             </td>
                           </tr>
                         )}

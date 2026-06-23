@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   getGpsMatchReferenceRecordsFromSupabase,
   getGpsRecordsBySessionId,
@@ -789,10 +790,11 @@ function RankingCard({
         ))}
 
         {ranking.length === 0 && (
-  <StatusMessage variant="warning" title="Sin registros">
-    No hay registros disponibles.
-  </StatusMessage>
-)}
+          <EmptyState
+            title="Sin registros"
+            description="No hay registros disponibles."
+          />
+        )}
       </div>
     </div>
   );
@@ -1266,10 +1268,10 @@ export default function GpsPage() {
 
 {!loadingSessions && sessions.length === 0 && (
   <div className="mt-6">
-    <StatusMessage variant="warning" title="Sin sesiones GPS">
-      Todavía no hay sesiones GPS guardadas. Primero sube una sesión desde la
-      página Cargar datos.
-    </StatusMessage>
+    <EmptyState
+      title="Sin sesiones GPS"
+      description="Todavía no hay sesiones GPS guardadas. Primero sube una sesión desde la página Cargar datos."
+    />
   </div>
 )}
 
@@ -1856,12 +1858,13 @@ export default function GpsPage() {
                       )}
 
                       {weeklyEvaluation.evaluations.length === 0 ? (
-  <div className="mt-6">
-    <StatusMessage variant="warning" title="Sin registros semanales">
-      No hay registros GPS de entrenamiento para la semana seleccionada.
-    </StatusMessage>
-  </div>
-) : (
+                        <div className="mt-6">
+                          <EmptyState
+                            title="Sin registros semanales"
+                            description="No hay registros GPS de entrenamiento para la semana seleccionada."
+                          />
+                        </div>
+                      ) : (
                         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
                           <div className="divide-y divide-slate-100 md:hidden">
                             {weeklyEvaluation.evaluations.map((evaluation) => {
@@ -2236,9 +2239,10 @@ export default function GpsPage() {
                   <div className="mt-6 h-[340px] w-full sm:h-[420px]">
   {chartData.length === 0 ? (
     <div className="flex h-full items-center justify-center">
-      <StatusMessage variant="warning" title="Sin datos para el gráfico">
-        No hay registros GPS para representar con la métrica seleccionada.
-      </StatusMessage>
+      <EmptyState
+        title="Sin datos para el gráfico"
+        description="No hay registros GPS para representar con la métrica seleccionada."
+      />
     </div>
   ) : (
     <ResponsiveContainer width="100%" height="100%">
@@ -2371,13 +2375,13 @@ export default function GpsPage() {
                         </article>
                       ))}
                       {objectiveRows.length === 0 && (
-  <div className="p-5">
-    <StatusMessage variant="warning" title="Sin objetivos individuales">
-      No hay registros GPS para calcular objetivos individuales con esta
-      selección.
-    </StatusMessage>
-  </div>
-)}
+                        <div className="p-5">
+                          <EmptyState
+                            title="Sin objetivos individuales"
+                            description="No hay registros GPS para calcular objetivos individuales con esta selección."
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="hidden max-h-[420px] overflow-auto md:block">
@@ -2431,15 +2435,15 @@ export default function GpsPage() {
                             </tr>
                           ))}
                           {objectiveRows.length === 0 && (
-  <tr>
-    <td colSpan={6} className="px-4 py-6">
-      <StatusMessage variant="warning" title="Sin objetivos individuales">
-        No hay registros GPS para calcular objetivos individuales con esta
-        selección.
-      </StatusMessage>
-    </td>
-  </tr>
-)}
+                            <tr>
+                              <td colSpan={6} className="px-4 py-6">
+                                <EmptyState
+                                  title="Sin objetivos individuales"
+                                  description="No hay registros GPS para calcular objetivos individuales con esta selección."
+                                />
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -2551,12 +2555,13 @@ export default function GpsPage() {
                     ))}
 
                     {filteredRecords.length === 0 && (
-  <div className="p-5">
-    <StatusMessage variant="warning" title="Sin registros GPS">
-      No hay registros GPS para esta selección.
-    </StatusMessage>
-  </div>
-)}
+                      <div className="p-5">
+                        <EmptyState
+                          title="Sin registros GPS"
+                          description="No hay registros GPS para esta selección."
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="hidden max-h-[560px] overflow-auto md:block">
@@ -2629,14 +2634,15 @@ export default function GpsPage() {
                         ))}
 
                         {filteredRecords.length === 0 && (
-  <tr>
-    <td colSpan={11} className="px-4 py-6">
-      <StatusMessage variant="warning" title="Sin registros GPS">
-        No hay registros GPS para esta selección.
-      </StatusMessage>
-    </td>
-  </tr>
-)}
+                          <tr>
+                            <td colSpan={11} className="px-4 py-6">
+                              <EmptyState
+                                title="Sin registros GPS"
+                                description="No hay registros GPS para esta selección."
+                              />
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

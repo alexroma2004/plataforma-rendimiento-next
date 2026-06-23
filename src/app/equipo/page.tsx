@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   getTeamDashboardData,
   type TeamDashboardData,
@@ -204,13 +205,11 @@ function SummaryCard({
   );
 }
 
-function EmptyState({ children }: { children: string }) {
+function ChartEmptyState({ description }: { description: string }) {
   return (
     <div className="flex h-full min-h-[220px] items-center justify-center">
       <div className="w-full">
-        <StatusMessage variant="warning" title="Sin datos disponibles">
-          {children}
-        </StatusMessage>
+        <EmptyState title="Sin datos disponibles" description={description} />
       </div>
     </div>
   );
@@ -507,10 +506,10 @@ export default function EquipoPage() {
             </section>
 
             {!hasAnyDashboardData && (
-              <StatusMessage variant="warning" title="Sin datos del equipo">
-                Todavía no hay jugadores, registros GPS, controles neuromusculares
-                ni puntuaciones de tests físicos para mostrar en el dashboard.
-              </StatusMessage>
+              <EmptyState
+                title="Sin datos del equipo"
+                description="Todavía no hay jugadores, registros GPS, controles neuromusculares ni puntuaciones de tests físicos para mostrar en el dashboard."
+              />
             )}
 
             <section className="grid gap-6 xl:grid-cols-3">
@@ -530,9 +529,7 @@ export default function EquipoPage() {
 
                 <div className="mt-6 h-[320px] w-full sm:h-[380px]">
                   {gpsEvolutionData.length === 0 ? (
-                    <EmptyState>
-                      Todavía no hay registros GPS para representar.
-                    </EmptyState>
+                    <ChartEmptyState description="Todavía no hay registros GPS para representar." />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
@@ -612,7 +609,7 @@ export default function EquipoPage() {
 
                 <div className="mt-6 h-[320px] w-full sm:h-[380px]">
                   {testChartData.length === 0 ? (
-                    <EmptyState>Todavía no hay puntuaciones de tests.</EmptyState>
+                    <ChartEmptyState description="Todavía no hay puntuaciones de tests." />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -731,9 +728,10 @@ export default function EquipoPage() {
 
                   {gpsPlayerSummary.length === 0 && (
                     <div className="p-5">
-                      <StatusMessage variant="warning" title="Sin datos GPS">
-                        No hay datos GPS disponibles.
-                      </StatusMessage>
+                      <EmptyState
+                        title="Sin datos GPS"
+                        description="No hay datos GPS disponibles."
+                      />
                     </div>
                   )}
                 </div>
@@ -779,9 +777,10 @@ export default function EquipoPage() {
                       {gpsPlayerSummary.length === 0 && (
                         <tr>
                           <td colSpan={7} className="px-4 py-6">
-                            <StatusMessage variant="warning" title="Sin datos GPS">
-                              No hay datos GPS disponibles.
-                            </StatusMessage>
+                            <EmptyState
+                              title="Sin datos GPS"
+                              description="No hay datos GPS disponibles."
+                            />
                           </td>
                         </tr>
                       )}
@@ -872,12 +871,10 @@ export default function EquipoPage() {
 
                   {neuromuscularPlayerSummary.length === 0 && (
                     <div className="p-5">
-                      <StatusMessage
-                        variant="warning"
+                      <EmptyState
                         title="Sin datos neuromusculares"
-                      >
-                        No hay datos neuromusculares disponibles.
-                      </StatusMessage>
+                        description="No hay datos neuromusculares disponibles."
+                      />
                     </div>
                   )}
                 </div>
@@ -937,12 +934,10 @@ export default function EquipoPage() {
                       {neuromuscularPlayerSummary.length === 0 && (
                         <tr>
                           <td colSpan={7} className="px-4 py-6">
-                            <StatusMessage
-                              variant="warning"
+                            <EmptyState
                               title="Sin datos neuromusculares"
-                            >
-                              No hay datos neuromusculares disponibles.
-                            </StatusMessage>
+                              description="No hay datos neuromusculares disponibles."
+                            />
                           </td>
                         </tr>
                       )}
@@ -1010,9 +1005,10 @@ export default function EquipoPage() {
 
                 {testPlayerSummary.length === 0 && (
                   <div className="p-5">
-                    <StatusMessage variant="warning" title="Sin puntuaciones de tests">
-                      No hay puntuaciones de tests disponibles.
-                    </StatusMessage>
+                    <EmptyState
+                      title="Sin puntuaciones de tests"
+                      description="No hay puntuaciones de tests disponibles."
+                    />
                   </div>
                 )}
               </div>
@@ -1065,12 +1061,10 @@ export default function EquipoPage() {
                     {testPlayerSummary.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-4 py-6">
-                        <StatusMessage
-                          variant="warning"
+                        <EmptyState
                           title="Sin puntuaciones de tests"
-                        >
-                          No hay puntuaciones de tests disponibles.
-                        </StatusMessage>
+                          description="No hay puntuaciones de tests disponibles."
+                        />
                       </td>
                     </tr>
                   )}
