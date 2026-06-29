@@ -213,8 +213,10 @@ export default function JugadorPage() {
 
       setData(dashboardData);
 
-      if (!selectedPlayerId && dashboardData.players.length > 0) {
-        setSelectedPlayerId(dashboardData.players[0].id);
+      if (dashboardData.players.length > 0) {
+        setSelectedPlayerId(
+          (currentPlayerId) => currentPlayerId || dashboardData.players[0].id,
+        );
       }
     } catch (err) {
       const message =
@@ -230,7 +232,9 @@ export default function JugadorPage() {
   }
 
   useEffect(() => {
-    loadData();
+    queueMicrotask(() => {
+      void loadData();
+    });
   }, []);
 
   const selectedPlayer = useMemo(() => {
