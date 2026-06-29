@@ -425,7 +425,9 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    loadAdminData();
+    queueMicrotask(() => {
+      void loadAdminData();
+    });
   }, []);
 
   const qualityIssues = useMemo<QualityIssue[]>(() => {
