@@ -72,7 +72,9 @@ export default function AdminUsuariosPage() {
   }
 
   useEffect(() => {
-    loadRoles();
+    queueMicrotask(() => {
+      void loadRoles();
+    });
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
