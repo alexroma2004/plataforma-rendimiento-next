@@ -112,6 +112,11 @@ const navGroups: NavGroup[] = [
         allowedRoles: ["admin"],
       },
       {
+        label: "Jugadores",
+        href: "/admin/jugadores",
+        allowedRoles: ["admin"],
+      },
+      {
         label: "Usuarios",
         href: "/admin/usuarios",
         allowedRoles: ["admin"],
