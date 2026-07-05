@@ -4,6 +4,13 @@ export type PlayerDashboardPlayer = {
   id: string;
   name: string;
   normalized_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  birth_date: string | null;
+  dominant_foot: string | null;
+  primary_position: string | null;
+  secondary_position: string | null;
+  photo_path: string | null;
   position: string | null;
   active: boolean | null;
 };
@@ -99,7 +106,9 @@ export async function getPlayerDashboardData(): Promise<PlayerDashboardData> {
   ] = await Promise.all([
     client
       .from("players")
-      .select("id, name, normalized_name, position, active")
+      .select(
+        "id, name, normalized_name, first_name, last_name, birth_date, dominant_foot, primary_position, secondary_position, photo_path, position, active",
+      )
       .eq("active", true)
       .order("name", { ascending: true }),
 

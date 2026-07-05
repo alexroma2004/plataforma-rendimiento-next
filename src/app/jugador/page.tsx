@@ -76,6 +76,84 @@ function getLatestRecord<T extends { session_date: string }>(records: T[]) {
   )[0] ?? null;
 }
 
+type DashboardPlayer = PlayerDashboardData["players"][number];
+
+function cleanProfileText(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+
+  return text || null;
+}
+
+function getPlayerDisplayName(player: DashboardPlayer) {
+  const fullName = [player.first_name, player.last_name]
+    .map(cleanProfileText)
+    .filter(Boolean)
+    .join(" ");
+
+  return fullName || player.name || "Jugador sin nombre";
+}
+
+function getPlayerPrimaryPosition(player: DashboardPlayer) {
+  return (
+    cleanProfileText(player.primary_position) ??
+    cleanProfileText(player.position) ??
+    "—"
+  );
+}
+
+function getPlayerInitials(player: DashboardPlayer) {
+  const words = getPlayerDisplayName(player).split(/\s+/).filter(Boolean);
+  const initials = words.slice(0, 2).map((word) => word[0]).join("");
+
+  return initials.toUpperCase() || "J";
+}
+
+function parseBirthDate(value: string | null | undefined) {
+  if (!value) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) return null;
+
+  const date = new Date(year, month - 1, day);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+}
+
+function formatBirthDate(value: string | null | undefined) {
+  const date = parseBirthDate(value);
+
+  if (!date) return "—";
+
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function calculateAge(value: string | null | undefined) {
+  const birthDate = parseBirthDate(value);
+
+  if (!birthDate) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const birthdayThisYear = new Date(
+    today.getFullYear(),
+    birthDate.getMonth(),
+    birthDate.getDate(),
+  );
+
+  if (today < birthdayThisYear) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
 function getDifferencePercent(
   currentValue: number | null | undefined,
   referenceValue: number | null | undefined,
@@ -195,6 +273,30 @@ function SummaryCard({
   );
 }
 
+function PlayerProfileField({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string;
+  description?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+
+      <p className="mt-2 break-words text-base font-black text-slate-950">
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs font-bold text-slate-500">{description}</p>
+      )}
+    </div>
+  );
+}
+
 
 export default function JugadorPage() {
   const [data, setData] = useState<PlayerDashboardData>(
@@ -240,6 +342,29 @@ export default function JugadorPage() {
   const selectedPlayer = useMemo(() => {
     return data.players.find((player) => player.id === selectedPlayerId) ?? null;
   }, [data.players, selectedPlayerId]);
+
+  const selectedPlayerProfile = useMemo(() => {
+    if (!selectedPlayer) return null;
+
+    const age = calculateAge(selectedPlayer.birth_date);
+
+    return {
+      displayName: getPlayerDisplayName(selectedPlayer),
+      initials: getPlayerInitials(selectedPlayer),
+      firstName:
+        cleanProfileText(selectedPlayer.first_name) ??
+        cleanProfileText(selectedPlayer.name) ??
+        "—",
+      lastName: cleanProfileText(selectedPlayer.last_name) ?? "—",
+      birthDate: formatBirthDate(selectedPlayer.birth_date),
+      age: age === null ? "—" : `${age} años`,
+      dominantFoot: cleanProfileText(selectedPlayer.dominant_foot) ?? "—",
+      primaryPosition: getPlayerPrimaryPosition(selectedPlayer),
+      secondaryPosition:
+        cleanProfileText(selectedPlayer.secondary_position) ?? "—",
+      photoLabel: selectedPlayer.photo_path ? "Foto registrada" : "Sin foto",
+    };
+  }, [selectedPlayer]);
 
   const playerGpsRecords = useMemo(() => {
     return data.gpsRecords.filter(
@@ -507,7 +632,8 @@ export default function JugadorPage() {
 
                 {data.players.map((player) => (
                   <option key={player.id} value={player.id}>
-                    {player.name} · {player.position ?? "Sin posición"}
+                    {getPlayerDisplayName(player)} ·{" "}
+                    {getPlayerPrimaryPosition(player)}
                   </option>
                 ))}
               </select>
@@ -540,38 +666,83 @@ export default function JugadorPage() {
             </div>
           )}
 
-          {!loading && !error && selectedPlayer && (
-            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Jugador</p>
-                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
-                  {selectedPlayer.name}
-                </p>
-              </div>
+          {!loading && !error && selectedPlayer && selectedPlayerProfile && (
+            <>
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                  <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-2xl font-black text-slate-700">
+                      {selectedPlayerProfile.initials}
+                    </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Posición</p>
-                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
-                  {selectedPlayer.position ?? "—"}
-                </p>
-              </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">
+                        Perfil del jugador
+                      </p>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">Estado</p>
-                <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
-                  {selectedPlayer.active ? "Activo" : "Inactivo"}
-                </p>
-              </div>
+                      <h3 className="mt-2 break-words text-2xl font-black text-slate-950">
+                        {selectedPlayerProfile.displayName}
+                      </h3>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-bold text-slate-500">
-                  Nombre normalizado
-                </p>
-                <p className="mt-2 break-all text-sm font-black text-slate-950">
-                  {selectedPlayer.normalized_name}
-                </p>
+                      <p className="mt-1 text-sm font-bold text-slate-500">
+                        {selectedPlayerProfile.primaryPosition}
+                        {selectedPlayerProfile.secondaryPosition !== "—"
+                          ? ` · ${selectedPlayerProfile.secondaryPosition}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-fit rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-black text-slate-700">
+                    {selectedPlayer.active ? "Activo" : "Inactivo"}
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <PlayerProfileField
+                    title="Nombre"
+                    value={selectedPlayerProfile.firstName}
+                  />
+
+                  <PlayerProfileField
+                    title="Apellidos"
+                    value={selectedPlayerProfile.lastName}
+                  />
+
+                  <PlayerProfileField
+                    title="Fecha nacimiento"
+                    value={selectedPlayerProfile.birthDate}
+                    description={`Edad: ${selectedPlayerProfile.age}`}
+                  />
+
+                  <PlayerProfileField
+                    title="Pie dominante"
+                    value={selectedPlayerProfile.dominantFoot}
+                  />
+
+                  <PlayerProfileField
+                    title="Posición principal"
+                    value={selectedPlayerProfile.primaryPosition}
+                  />
+
+                  <PlayerProfileField
+                    title="Posición secundaria"
+                    value={selectedPlayerProfile.secondaryPosition}
+                  />
+
+                  <PlayerProfileField
+                    title="Foto"
+                    value={selectedPlayerProfile.photoLabel}
+                    description="Placeholder visual; subida pendiente"
+                  />
+
+                  <PlayerProfileField
+                    title="Nombre normalizado"
+                    value={selectedPlayer.normalized_name}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
         </section>
 
