@@ -30,8 +30,17 @@ export type AdminPlayerProfileRow = {
   notes: string | null;
 };
 
+export type AdminTeamRow = {
+  id: string;
+  name: string;
+  club: string | null;
+  category: string | null;
+  season: string | null;
+};
+
 export type SaveAdminPlayerInput = {
   id?: string;
+  team_id?: string | null;
   first_name: string;
   last_name?: string | null;
   birth_date?: string | null;
@@ -118,28 +127,20 @@ function buildPhotoPath(params: {
   return `${teamPath}/${params.playerId}/profile.${extension}`;
 }
 
-async function getDefaultTeamId() {
+export async function getAdminTeamsFromSupabase(): Promise<AdminTeamRow[]> {
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
     .from("teams")
-    .select("id")
+    .select("id, name, club, category, season")
     .order("created_at", { ascending: true })
-    .limit(1);
+    .order("name", { ascending: true });
 
   if (error) {
-    throw new Error(`No se ha podido cargar el equipo: ${error.message}`);
+    throw new Error(`No se han podido cargar los equipos: ${error.message}`);
   }
 
-  const teamId = data?.[0]?.id;
-
-  if (!teamId) {
-    throw new Error(
-      "No hay ningún equipo creado en Supabase. Crea o confirma un equipo antes de añadir jugadores.",
-    );
-  }
-
-  return teamId as string;
+  return (data ?? []) as AdminTeamRow[];
 }
 
 export async function getAdminPlayersFromSupabase() {
@@ -161,6 +162,7 @@ export async function saveAdminPlayerToSupabase(input: SaveAdminPlayerInput) {
   const supabase = getSupabaseClient();
   const firstName = cleanText(input.first_name);
   const lastName = cleanText(input.last_name);
+  const teamId = cleanText(input.team_id);
 
   if (!firstName) {
     throw new Error("El nombre del jugador es obligatorio.");
@@ -172,7 +174,12 @@ export async function saveAdminPlayerToSupabase(input: SaveAdminPlayerInput) {
     throw new Error("El nombre completo del jugador es obligatorio.");
   }
 
+  if (!teamId) {
+    throw new Error("Selecciona un equipo antes de guardar el jugador.");
+  }
+
   const payload = {
+    team_id: teamId,
     first_name: firstName,
     last_name: lastName,
     birth_date: cleanText(input.birth_date),
@@ -210,14 +217,9 @@ export async function saveAdminPlayerToSupabase(input: SaveAdminPlayerInput) {
     return data as AdminPlayerProfileRow;
   }
 
-  const teamId = await getDefaultTeamId();
-
   const { data, error } = await supabase
     .from("players")
-    .insert({
-      ...payload,
-      team_id: teamId,
-    })
+    .insert(payload)
     .select(PLAYER_SELECT)
     .single();
 

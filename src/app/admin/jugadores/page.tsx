@@ -15,12 +15,15 @@ import {
   PLAYER_PHOTO_MIME_TYPES,
   getAdminPlayerPhotoSignedUrl,
   getAdminPlayersFromSupabase,
+  getAdminTeamsFromSupabase,
   saveAdminPlayerToSupabase,
   uploadAdminPlayerPhotoToSupabase,
   type AdminPlayerProfileRow,
+  type AdminTeamRow,
 } from "@/lib/supabase/players-admin";
 
 type PlayerFormState = {
+  team_id: string;
   first_name: string;
   last_name: string;
   birth_date: string;
@@ -33,6 +36,7 @@ type PlayerFormState = {
 };
 
 const emptyForm: PlayerFormState = {
+  team_id: "",
   first_name: "",
   last_name: "",
   birth_date: "",
@@ -71,8 +75,36 @@ function formatBirthDate(value: string | null | undefined) {
   return date.toLocaleDateString("es-ES");
 }
 
+function getTeamLabel(team: AdminTeamRow) {
+  const details = [team.club, team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
+
+function buildEmptyForm(teams: AdminTeamRow[]): PlayerFormState {
+  const [onlyTeam] = teams;
+
+  return {
+    ...emptyForm,
+    team_id: teams.length === 1 && onlyTeam ? onlyTeam.id : "",
+  };
+}
+
+function getPlayerTeamLabel(
+  player: AdminPlayerProfileRow,
+  teams: AdminTeamRow[],
+) {
+  const team = teams.find((currentTeam) => currentTeam.id === player.team_id);
+
+  return team ? getTeamLabel(team) : "Sin equipo asignado";
+}
+
 function buildFormFromPlayer(player: AdminPlayerProfileRow): PlayerFormState {
   return {
+    team_id: player.team_id ?? "",
     first_name: player.first_name ?? player.name ?? "",
     last_name: player.last_name ?? "",
     birth_date: player.birth_date ?? "",
@@ -96,6 +128,7 @@ function getPhotoHelpText() {
 
 export default function AdminJugadoresPage() {
   const [players, setPlayers] = useState<AdminPlayerProfileRow[]>([]);
+  const [teams, setTeams] = useState<AdminTeamRow[]>([]);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [form, setForm] = useState<PlayerFormState>(emptyForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -112,9 +145,25 @@ export default function AdminJugadoresPage() {
       setLoading(true);
       setError(null);
 
-      const data = await getAdminPlayersFromSupabase();
+      const [playersData, teamsData] = await Promise.all([
+        getAdminPlayersFromSupabase(),
+        getAdminTeamsFromSupabase(),
+      ]);
 
-      setPlayers(data);
+      setPlayers(playersData);
+      setTeams(teamsData);
+      setForm((current) => {
+        const [onlyTeam] = teamsData;
+
+        if (current.team_id || teamsData.length !== 1 || !onlyTeam) {
+          return current;
+        }
+
+        return {
+          ...current,
+          team_id: onlyTeam.id,
+        };
+      });
     } catch (err) {
       const errorMessage =
         err instanceof Error
@@ -163,7 +212,7 @@ export default function AdminJugadoresPage() {
 
   function resetForm() {
     setEditingPlayerId(null);
-    setForm(emptyForm);
+    setForm(buildEmptyForm(teams));
     setPhotoFile(null);
     setEditingPhotoUrl(null);
     setPhotoError(null);
@@ -173,8 +222,15 @@ export default function AdminJugadoresPage() {
   }
 
   async function handleEdit(player: AdminPlayerProfileRow) {
+    const playerForm = buildFormFromPlayer(player);
+    const [onlyTeam] = teams;
+
     setEditingPlayerId(player.id);
-    setForm(buildFormFromPlayer(player));
+    setForm({
+      ...playerForm,
+      team_id:
+        playerForm.team_id || (teams.length === 1 && onlyTeam ? onlyTeam.id : ""),
+    });
     setPhotoFile(null);
     setEditingPhotoUrl(null);
     setPhotoError(null);
@@ -228,6 +284,7 @@ export default function AdminJugadoresPage() {
   function buildSaveInput(photoPath?: string) {
     return {
       id: editingPlayerId ?? undefined,
+      team_id: form.team_id || null,
       first_name: form.first_name,
       last_name: form.last_name,
       birth_date: form.birth_date || null,
@@ -255,12 +312,22 @@ export default function AdminJugadoresPage() {
       setError(null);
       setMessage(null);
 
+      if (teams.length === 0) {
+        throw new Error(
+          "No hay equipos disponibles. Crea o confirma un equipo antes de guardar jugadores.",
+        );
+      }
+
+      if (!form.team_id) {
+        throw new Error("Selecciona un equipo antes de guardar el jugador.");
+      }
+
       let uploadedPhotoPath: string | undefined;
 
       if (photoFile && editingPlayerId) {
         uploadedPhotoPath = await uploadAdminPlayerPhotoToSupabase({
           playerId: editingPlayerId,
-          teamId: editingPlayer?.team_id ?? null,
+          teamId: form.team_id,
           file: photoFile,
         });
       }
@@ -288,7 +355,7 @@ export default function AdminJugadoresPage() {
           : `Jugador creado: ${getDisplayName(savedPlayer)}.`,
       );
 
-      setForm(emptyForm);
+      setForm(buildEmptyForm(teams));
       setEditingPlayerId(null);
       setPhotoFile(null);
       setEditingPhotoUrl(null);
@@ -371,6 +438,15 @@ export default function AdminJugadoresPage() {
             )}
           </div>
 
+          {!loading && teams.length === 0 && (
+            <div className="mt-5">
+              <StatusMessage variant="warning" title="No hay equipos disponibles">
+                Crea o confirma un equipo antes de guardar jugadores. En este
+                bloque no se crean equipos nuevos.
+              </StatusMessage>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4 lg:grid-cols-2">
             <label className="text-sm font-bold text-slate-700">
               Nombre
@@ -402,6 +478,28 @@ export default function AdminJugadoresPage() {
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
                 placeholder="Apellidos"
               />
+            </label>
+
+            <label className="text-sm font-bold text-slate-700">
+              Equipo
+              <select
+                value={form.team_id}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    team_id: event.target.value,
+                  }))
+                }
+                disabled={teams.length === 0 || saving}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+              >
+                <option value="">Selecciona equipo</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {getTeamLabel(team)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="text-sm font-bold text-slate-700">
@@ -573,7 +671,7 @@ export default function AdminJugadoresPage() {
             <div className="flex flex-col gap-3 lg:col-span-2 sm:flex-row">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || teams.length === 0}
                 className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving
@@ -652,6 +750,9 @@ export default function AdminJugadoresPage() {
                     </p>
                     <p className="mt-1 text-xs font-bold text-slate-500">
                       {player.normalized_name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      Equipo: {getPlayerTeamLabel(player, teams)}
                     </p>
                   </div>
 
