@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusMessage from "@/components/ui/StatusMessage";
@@ -11,8 +11,12 @@ import {
   type PlayerPosition,
 } from "@/lib/domain/performance";
 import {
+  PLAYER_PHOTO_MAX_SIZE_BYTES,
+  PLAYER_PHOTO_MIME_TYPES,
+  getAdminPlayerPhotoSignedUrl,
   getAdminPlayersFromSupabase,
   saveAdminPlayerToSupabase,
+  uploadAdminPlayerPhotoToSupabase,
   type AdminPlayerProfileRow,
 } from "@/lib/supabase/players-admin";
 
@@ -84,10 +88,20 @@ function buildFormFromPlayer(player: AdminPlayerProfileRow): PlayerFormState {
   };
 }
 
+function getPhotoHelpText() {
+  return `JPG, PNG o WEBP. Máximo ${Math.round(
+    PLAYER_PHOTO_MAX_SIZE_BYTES / 1024 / 1024,
+  )} MB.`;
+}
+
 export default function AdminJugadoresPage() {
   const [players, setPlayers] = useState<AdminPlayerProfileRow[]>([]);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [form, setForm] = useState<PlayerFormState>(emptyForm);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [editingPhotoUrl, setEditingPhotoUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -123,6 +137,22 @@ export default function AdminJugadoresPage() {
     return players.find((player) => player.id === editingPlayerId) ?? null;
   }, [players, editingPlayerId]);
 
+  const localPhotoPreviewUrl = useMemo(() => {
+    if (!photoFile) return null;
+
+    return URL.createObjectURL(photoFile);
+  }, [photoFile]);
+
+  useEffect(() => {
+    return () => {
+      if (localPhotoPreviewUrl) {
+        URL.revokeObjectURL(localPhotoPreviewUrl);
+      }
+    };
+  }, [localPhotoPreviewUrl]);
+
+  const photoPreviewUrl = localPhotoPreviewUrl ?? editingPhotoUrl;
+
   const summary = useMemo(() => {
     return {
       total: players.length,
@@ -134,15 +164,87 @@ export default function AdminJugadoresPage() {
   function resetForm() {
     setEditingPlayerId(null);
     setForm(emptyForm);
+    setPhotoFile(null);
+    setEditingPhotoUrl(null);
+    setPhotoError(null);
+    setPhotoInputKey((current) => current + 1);
     setMessage(null);
     setError(null);
   }
 
-  function handleEdit(player: AdminPlayerProfileRow) {
+  async function handleEdit(player: AdminPlayerProfileRow) {
     setEditingPlayerId(player.id);
     setForm(buildFormFromPlayer(player));
+    setPhotoFile(null);
+    setEditingPhotoUrl(null);
+    setPhotoError(null);
+    setPhotoInputKey((current) => current + 1);
     setMessage(null);
     setError(null);
+
+    if (!player.photo_path) return;
+
+    try {
+      const signedUrl = await getAdminPlayerPhotoSignedUrl(player.photo_path);
+
+      setEditingPhotoUrl(signedUrl);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "No se ha podido cargar la vista previa de la foto.";
+
+      setPhotoError(errorMessage);
+    }
+  }
+
+  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    setPhotoError(null);
+
+    if (!file) {
+      setPhotoFile(null);
+      return;
+    }
+
+    if (!PLAYER_PHOTO_MIME_TYPES.includes(file.type as (typeof PLAYER_PHOTO_MIME_TYPES)[number])) {
+      setPhotoFile(null);
+      setPhotoError("La foto debe estar en formato JPG, PNG o WEBP.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > PLAYER_PHOTO_MAX_SIZE_BYTES) {
+      setPhotoFile(null);
+      setPhotoError("La foto no puede superar los 5 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    setPhotoFile(file);
+  }
+
+  function buildSaveInput(photoPath?: string) {
+    return {
+      id: editingPlayerId ?? undefined,
+      first_name: form.first_name,
+      last_name: form.last_name,
+      birth_date: form.birth_date || null,
+      dominant_foot: isDominantFoot(form.dominant_foot)
+        ? form.dominant_foot
+        : null,
+      primary_position: isPlayerPosition(form.primary_position)
+        ? form.primary_position
+        : null,
+      secondary_position: isPlayerPosition(form.secondary_position)
+        ? form.secondary_position
+        : null,
+      shirt_number: form.shirt_number ? Number(form.shirt_number) : null,
+      active: form.active,
+      notes: form.notes,
+      ...(photoPath ? { photo_path: photoPath } : {}),
+    };
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -153,24 +255,32 @@ export default function AdminJugadoresPage() {
       setError(null);
       setMessage(null);
 
-      const savedPlayer = await saveAdminPlayerToSupabase({
-        id: editingPlayerId ?? undefined,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        birth_date: form.birth_date || null,
-        dominant_foot: isDominantFoot(form.dominant_foot)
-          ? form.dominant_foot
-          : null,
-        primary_position: isPlayerPosition(form.primary_position)
-          ? form.primary_position
-          : null,
-        secondary_position: isPlayerPosition(form.secondary_position)
-          ? form.secondary_position
-          : null,
-        shirt_number: form.shirt_number ? Number(form.shirt_number) : null,
-        active: form.active,
-        notes: form.notes,
-      });
+      let uploadedPhotoPath: string | undefined;
+
+      if (photoFile && editingPlayerId) {
+        uploadedPhotoPath = await uploadAdminPlayerPhotoToSupabase({
+          playerId: editingPlayerId,
+          teamId: editingPlayer?.team_id ?? null,
+          file: photoFile,
+        });
+      }
+
+      let savedPlayer = await saveAdminPlayerToSupabase(
+        buildSaveInput(uploadedPhotoPath),
+      );
+
+      if (photoFile && !editingPlayerId) {
+        uploadedPhotoPath = await uploadAdminPlayerPhotoToSupabase({
+          playerId: savedPlayer.id,
+          teamId: savedPlayer.team_id,
+          file: photoFile,
+        });
+
+        savedPlayer = await saveAdminPlayerToSupabase({
+          ...buildSaveInput(uploadedPhotoPath),
+          id: savedPlayer.id,
+        });
+      }
 
       setMessage(
         editingPlayerId
@@ -180,6 +290,10 @@ export default function AdminJugadoresPage() {
 
       setForm(emptyForm);
       setEditingPlayerId(null);
+      setPhotoFile(null);
+      setEditingPhotoUrl(null);
+      setPhotoError(null);
+      setPhotoInputKey((current) => current + 1);
 
       await loadPlayers();
     } catch (err) {
@@ -400,6 +514,47 @@ export default function AdminJugadoresPage() {
               Jugador activo
             </label>
 
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div
+                  className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 bg-cover bg-center text-xs font-black uppercase tracking-wide text-slate-500"
+                  style={
+                    photoPreviewUrl
+                      ? { backgroundImage: `url(${photoPreviewUrl})` }
+                      : undefined
+                  }
+                  aria-label="Vista previa de la foto del jugador"
+                >
+                  {!photoPreviewUrl && "Sin foto"}
+                </div>
+
+                <label className="w-full text-sm font-bold text-slate-700">
+                  Foto del jugador
+                  <input
+                    key={photoInputKey}
+                    type="file"
+                    accept={PLAYER_PHOTO_MIME_TYPES.join(",")}
+                    onChange={handlePhotoChange}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-xs file:font-black file:text-white focus:border-blue-500"
+                  />
+                  <span className="mt-2 block text-xs font-bold text-slate-500">
+                    {getPhotoHelpText()}
+                    {editingPlayer?.photo_path && !photoFile
+                      ? " Hay una foto guardada; selecciona otra para reemplazarla."
+                      : ""}
+                  </span>
+                </label>
+              </div>
+
+              {photoError && (
+                <div className="mt-4">
+                  <StatusMessage variant="warning" title="Revisa la foto">
+                    {photoError}
+                  </StatusMessage>
+                </div>
+              )}
+            </div>
+
             <label className="text-sm font-bold text-slate-700 lg:col-span-2">
               Notas
               <textarea
@@ -518,6 +673,9 @@ export default function AdminJugadoresPage() {
                     <p className="mt-1 text-xs text-slate-500">
                       Nacimiento: {formatBirthDate(player.birth_date)}
                     </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Foto: {player.photo_path ? "registrada" : "sin foto"}
+                    </p>
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
@@ -533,7 +691,9 @@ export default function AdminJugadoresPage() {
 
                     <button
                       type="button"
-                      onClick={() => handleEdit(player)}
+                      onClick={() => {
+                        void handleEdit(player);
+                      }}
                       className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-100"
                     >
                       Editar
