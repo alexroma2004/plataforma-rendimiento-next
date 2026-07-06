@@ -6,6 +6,7 @@ import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
   getPlayerDashboardData,
+  getPlayerDashboardPhotoSignedUrl,
   type PlayerDashboardData,
   type PlayerDashboardGpsRecord,
   type PlayerDashboardNeuromuscularRecord,
@@ -303,6 +304,8 @@ export default function JugadorPage() {
     emptyPlayerDashboardData,
   );
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
+  const [playerPhotoUrl, setPlayerPhotoUrl] = useState<string | null>(null);
+  const [playerPhotoError, setPlayerPhotoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -343,6 +346,52 @@ export default function JugadorPage() {
     return data.players.find((player) => player.id === selectedPlayerId) ?? null;
   }, [data.players, selectedPlayerId]);
 
+  const selectedPlayerPhotoPath = selectedPlayer?.photo_path ?? null;
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    queueMicrotask(() => {
+      async function loadPhotoUrl() {
+        if (!selectedPlayerPhotoPath) {
+          if (isCurrent) {
+            setPlayerPhotoUrl(null);
+            setPlayerPhotoError(null);
+          }
+
+          return;
+        }
+
+        try {
+          const signedUrl = await getPlayerDashboardPhotoSignedUrl(
+            selectedPlayerPhotoPath,
+          );
+
+          if (isCurrent) {
+            setPlayerPhotoUrl(signedUrl);
+            setPlayerPhotoError(null);
+          }
+        } catch (err) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : "No se ha podido cargar la foto del jugador.";
+
+          if (isCurrent) {
+            setPlayerPhotoUrl(null);
+            setPlayerPhotoError(message);
+          }
+        }
+      }
+
+      void loadPhotoUrl();
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedPlayerPhotoPath]);
+
   const selectedPlayerProfile = useMemo(() => {
     if (!selectedPlayer) return null;
 
@@ -362,9 +411,13 @@ export default function JugadorPage() {
       primaryPosition: getPlayerPrimaryPosition(selectedPlayer),
       secondaryPosition:
         cleanProfileText(selectedPlayer.secondary_position) ?? "—",
-      photoLabel: selectedPlayer.photo_path ? "Foto registrada" : "Sin foto",
+      photoLabel: selectedPlayer.photo_path
+        ? playerPhotoError
+          ? "Foto no disponible"
+          : "Foto registrada"
+        : "Sin foto",
     };
-  }, [selectedPlayer]);
+  }, [playerPhotoError, selectedPlayer]);
 
   const playerGpsRecords = useMemo(() => {
     return data.gpsRecords.filter(
@@ -671,8 +724,16 @@ export default function JugadorPage() {
               <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 text-2xl font-black text-slate-700">
-                      {selectedPlayerProfile.initials}
+                    <div
+                      className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 bg-cover bg-center text-2xl font-black text-slate-700"
+                      style={
+                        playerPhotoUrl
+                          ? { backgroundImage: `url("${playerPhotoUrl}")` }
+                          : undefined
+                      }
+                      aria-label="Foto del jugador"
+                    >
+                      {!playerPhotoUrl && selectedPlayerProfile.initials}
                     </div>
 
                     <div className="min-w-0">
@@ -733,7 +794,13 @@ export default function JugadorPage() {
                   <PlayerProfileField
                     title="Foto"
                     value={selectedPlayerProfile.photoLabel}
-                    description="Placeholder visual; subida pendiente"
+                    description={
+                      playerPhotoError
+                        ? "No se pudo cargar la vista previa."
+                        : playerPhotoUrl
+                          ? "Vista previa con URL firmada temporal."
+                          : "Fallback visual sin foto."
+                    }
                   />
 
                   <PlayerProfileField

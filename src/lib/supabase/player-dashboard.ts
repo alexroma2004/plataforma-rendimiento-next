@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 
+const PLAYER_PHOTOS_BUCKET = "player-photos";
+
 export type PlayerDashboardPlayer = {
   id: string;
   name: string;
@@ -92,6 +94,32 @@ function getSupabaseClient() {
   }
 
   return supabase;
+}
+
+function cleanStoragePath(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+
+  return text || null;
+}
+
+export async function getPlayerDashboardPhotoSignedUrl(
+  photoPath: string | null | undefined,
+) {
+  const cleanPath = cleanStoragePath(photoPath);
+
+  if (!cleanPath) return null;
+
+  const client = getSupabaseClient();
+
+  const { data, error } = await client.storage
+    .from(PLAYER_PHOTOS_BUCKET)
+    .createSignedUrl(cleanPath, 60 * 30);
+
+  if (error) {
+    throw new Error(`No se ha podido cargar la foto del jugador: ${error.message}`);
+  }
+
+  return data.signedUrl;
 }
 
 export async function getPlayerDashboardData(): Promise<PlayerDashboardData> {
