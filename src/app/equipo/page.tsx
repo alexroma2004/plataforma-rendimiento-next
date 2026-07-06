@@ -5,11 +5,13 @@ import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
+  getTeamDashboardTeams,
   getTeamDashboardData,
   type TeamDashboardData,
   type TeamDashboardGpsRecord,
   type TeamDashboardNeuromuscularRecord,
   type TeamDashboardTestScore,
+  type TeamDashboardTeam,
 } from "@/lib/supabase/team-dashboard";
 
 import {
@@ -72,6 +74,15 @@ function formatSessionDate(value: string | null | undefined) {
     "/" +
     year
   );
+}
+
+function getTeamLabel(team: TeamDashboardTeam) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
 }
 
 function getGpsSessionPlayerCount(
@@ -253,16 +264,27 @@ function ChartEmptyState({ description }: { description: string }) {
 
 export default function EquipoPage() {
   const [data, setData] = useState<TeamDashboardData>(emptyTeamDashboardData);
+  const [teams, setTeams] = useState<TeamDashboardTeam[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData() {
+  async function loadData(teamId?: string) {
     try {
       setLoading(true);
       setError(null);
 
-      const dashboardData = await getTeamDashboardData();
+      const teamsData = await getTeamDashboardTeams();
+      const [onlyTeam] = teamsData;
+      const resolvedTeamId =
+        teamId || (teamsData.length === 1 && onlyTeam ? onlyTeam.id : "");
+      const dashboardData =
+        teamsData.length === 0
+          ? emptyTeamDashboardData
+          : await getTeamDashboardData(resolvedTeamId || undefined);
 
+      setTeams(teamsData);
+      setSelectedTeamId(resolvedTeamId);
       setData(dashboardData);
     } catch (err) {
       const message =
@@ -282,6 +304,15 @@ export default function EquipoPage() {
       void loadData();
     });
   }, []);
+
+  function handleTeamChange(teamId: string) {
+    setSelectedTeamId(teamId);
+    void loadData(teamId);
+  }
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
 
   const summary = useMemo(() => {
     const gpsPlayers = new Set(
@@ -642,6 +673,63 @@ export default function EquipoPage() {
           </StatusMessage>
         ) : error ? null : (
           <>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                    Equipo
+                  </p>
+
+                  <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                    Selector de equipo
+                  </h2>
+
+                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+                    {selectedTeam
+                      ? `Mostrando datos filtrados para ${getTeamLabel(
+                          selectedTeam,
+                        )}.`
+                      : teams.length > 1
+                        ? "Sin selección se mantiene la vista general compatible con el dashboard anterior."
+                        : "Selecciona un equipo para filtrar el dashboard."}
+                  </p>
+                </div>
+
+                <label className="w-full text-sm font-bold text-slate-700 lg:max-w-sm">
+                  Equipo
+                  <select
+                    value={selectedTeamId}
+                    onChange={(event) => {
+                      handleTeamChange(event.target.value);
+                    }}
+                    disabled={teams.length === 0 || loading}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    <option value="">
+                      {teams.length > 1
+                        ? "Vista general sin filtrar"
+                        : "Selecciona equipo"}
+                    </option>
+
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {getTeamLabel(team)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {teams.length === 0 && (
+                <div className="mt-5">
+                  <StatusMessage variant="warning" title="No hay equipos disponibles">
+                    Crea o confirma un equipo antes de filtrar el dashboard por
+                    equipo.
+                  </StatusMessage>
+                </div>
+              )}
+            </section>
+
             <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <SummaryCard title="Jugadores activos" value={summary.players} />
 

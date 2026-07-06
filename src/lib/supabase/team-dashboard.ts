@@ -47,6 +47,13 @@ export type TeamDashboardTestScore = {
   classification: string | null;
 };
 
+export type TeamDashboardTeam = {
+  id: string;
+  name: string;
+  category: string | null;
+  season: string | null;
+};
+
 export type TeamDashboardData = {
   players: TeamDashboardPlayer[];
   gpsRecords: TeamDashboardGpsRecord[];
@@ -62,37 +69,98 @@ function getSupabaseClient() {
   return supabase;
 }
 
-export async function getTeamDashboardData(): Promise<TeamDashboardData> {
+function cleanText(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+
+  return text || null;
+}
+
+export async function getTeamDashboardTeams(): Promise<TeamDashboardTeam[]> {
   const client = getSupabaseClient();
 
-  const [playersResponse, gpsResponse, neuromuscularResponse, testScoresResponse] =
-    await Promise.all([
-      client
+  const { data, error } = await client
+    .from("teams")
+    .select("id, name, category, season")
+    .order("created_at", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los equipos: ${error.message}`);
+  }
+
+  return (data ?? []) as TeamDashboardTeam[];
+}
+
+export async function getTeamDashboardData(
+  teamId?: string | null,
+): Promise<TeamDashboardData> {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  const playersQuery = selectedTeamId
+    ? client
         .from("players")
         .select("id, name, normalized_name, position, active")
         .eq("active", true)
-        .order("name", { ascending: true }),
+        .eq("team_id", selectedTeamId)
+        .order("name", { ascending: true })
+    : client
+        .from("players")
+        .select("id, name, normalized_name, position, active")
+        .eq("active", true)
+        .order("name", { ascending: true });
 
-      client
+  const gpsQuery = selectedTeamId
+    ? client
         .from("gps_records")
         .select(
           "id, player_id, player_name, position, session_date, microcycle, total_distance, hsr, distance_vrange6, sprints, num_acc, num_dec",
         )
-        .order("session_date", { ascending: false }),
+        .eq("team_id", selectedTeamId)
+        .order("session_date", { ascending: false })
+    : client
+        .from("gps_records")
+        .select(
+          "id, player_id, player_name, position, session_date, microcycle, total_distance, hsr, distance_vrange6, sprints, num_acc, num_dec",
+        )
+        .order("session_date", { ascending: false });
 
-      client
+  const neuromuscularQuery = selectedTeamId
+    ? client
         .from("neuromuscular_records")
         .select(
           "id, player_id, player_name, position, session_date, microcycle, cmj_pre, rsimod_pre, vmp_pre, rpe",
         )
-        .order("session_date", { ascending: false }),
+        .eq("team_id", selectedTeamId)
+        .order("session_date", { ascending: false })
+    : client
+        .from("neuromuscular_records")
+        .select(
+          "id, player_id, player_name, position, session_date, microcycle, cmj_pre, rsimod_pre, vmp_pre, rpe",
+        )
+        .order("session_date", { ascending: false });
 
-      client
+  const testScoresQuery = selectedTeamId
+    ? client
         .from("test_scores")
         .select(
           "id, player_id, player_name, normalized_name, position, capacity, final_score, classification",
         )
-        .order("capacity", { ascending: true }),
+        .eq("team_id", selectedTeamId)
+        .order("capacity", { ascending: true })
+    : client
+        .from("test_scores")
+        .select(
+          "id, player_id, player_name, normalized_name, position, capacity, final_score, classification",
+        )
+        .order("capacity", { ascending: true });
+
+  const [playersResponse, gpsResponse, neuromuscularResponse, testScoresResponse] =
+    await Promise.all([
+      playersQuery,
+      gpsQuery,
+      neuromuscularQuery,
+      testScoresQuery,
     ]);
 
   if (playersResponse.error) {
