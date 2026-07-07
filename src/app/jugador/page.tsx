@@ -7,10 +7,13 @@ import EmptyState from "@/components/ui/EmptyState";
 import {
   getPlayerDashboardData,
   getPlayerDashboardPhotoSignedUrl,
+  getPlayerDashboardPlayers,
+  getPlayerDashboardTeams,
   type PlayerDashboardData,
   type PlayerDashboardGpsRecord,
   type PlayerDashboardNeuromuscularRecord,
   type PlayerDashboardTestScore,
+  type PlayerDashboardTeam,
 } from "@/lib/supabase/player-dashboard";
 
 import {
@@ -100,6 +103,15 @@ function getPlayerPrimaryPosition(player: DashboardPlayer) {
     cleanProfileText(player.position) ??
     "—"
   );
+}
+
+function getTeamLabel(team: PlayerDashboardTeam) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
 }
 
 function getPlayerInitials(player: DashboardPlayer) {
@@ -303,26 +315,57 @@ export default function JugadorPage() {
   const [data, setData] = useState<PlayerDashboardData>(
     emptyPlayerDashboardData,
   );
+  const [teams, setTeams] = useState<PlayerDashboardTeam[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const [playerPhotoUrl, setPlayerPhotoUrl] = useState<string | null>(null);
   const [playerPhotoError, setPlayerPhotoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData() {
+  async function loadData(teamId?: string, playerId?: string) {
     try {
       setLoading(true);
       setError(null);
 
-      const dashboardData = await getPlayerDashboardData();
+      const teamsData = await getPlayerDashboardTeams();
+      const [onlyTeam] = teamsData;
+      const resolvedTeamId =
+        teamId || (teamsData.length === 1 && onlyTeam ? onlyTeam.id : "");
 
-      setData(dashboardData);
-
-      if (dashboardData.players.length > 0) {
-        setSelectedPlayerId(
-          (currentPlayerId) => currentPlayerId || dashboardData.players[0].id,
-        );
+      if (teamsData.length === 0) {
+        setTeams([]);
+        setSelectedTeamId("");
+        setSelectedPlayerId("");
+        setPlayerPhotoUrl(null);
+        setPlayerPhotoError(null);
+        setData(emptyPlayerDashboardData);
+        return;
       }
+
+      const players = await getPlayerDashboardPlayers(
+        resolvedTeamId || undefined,
+      );
+      const requestedPlayer = players.find(
+        (player) => player.id === playerId,
+      );
+      const resolvedPlayerId =
+        requestedPlayer?.id ?? players[0]?.id ?? "";
+      const dashboardData =
+        !resolvedPlayerId
+          ? {
+              ...emptyPlayerDashboardData,
+              players,
+            }
+          : await getPlayerDashboardData(
+              resolvedTeamId || undefined,
+              resolvedPlayerId,
+            );
+
+      setTeams(teamsData);
+      setSelectedTeamId(resolvedTeamId);
+      setSelectedPlayerId(resolvedPlayerId);
+      setData(dashboardData);
     } catch (err) {
       const message =
         err instanceof Error
@@ -341,6 +384,26 @@ export default function JugadorPage() {
       void loadData();
     });
   }, []);
+
+  function handleTeamChange(teamId: string) {
+    setSelectedTeamId(teamId);
+    setSelectedPlayerId("");
+    setPlayerPhotoUrl(null);
+    setPlayerPhotoError(null);
+    setData(emptyPlayerDashboardData);
+    void loadData(teamId);
+  }
+
+  function handlePlayerChange(playerId: string) {
+    setSelectedPlayerId(playerId);
+    setPlayerPhotoUrl(null);
+    setPlayerPhotoError(null);
+    void loadData(selectedTeamId, playerId);
+  }
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
 
   const selectedPlayer = useMemo(() => {
     return data.players.find((player) => player.id === selectedPlayerId) ?? null;
@@ -669,15 +732,49 @@ export default function JugadorPage() {
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 Escoge un jugador para visualizar todos sus datos integrados.
               </p>
+
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                {selectedTeam
+                  ? `Mostrando jugadores de ${getTeamLabel(selectedTeam)}.`
+                  : teams.length > 1
+                    ? "Sin equipo seleccionado se mantiene la vista general compatible con el comportamiento anterior."
+                    : "Selecciona un equipo para filtrar jugadores y datos."}
+              </p>
             </div>
+
+            <label className="w-full text-sm font-bold text-slate-700 md:w-[320px]">
+              Equipo
+              <select
+                value={selectedTeamId}
+                onChange={(event) => {
+                  handleTeamChange(event.target.value);
+                }}
+                disabled={loading || teams.length === 0}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+              >
+                <option value="">
+                  {teams.length > 1
+                    ? "Vista general sin filtrar"
+                    : "Selecciona equipo"}
+                </option>
+
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {getTeamLabel(team)}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             <label className="w-full text-sm font-bold text-slate-700 md:w-[420px]">
               Jugador
               <select
                 value={selectedPlayerId}
-                onChange={(event) => setSelectedPlayerId(event.target.value)}
+                onChange={(event) => {
+                  handlePlayerChange(event.target.value);
+                }}
                 disabled={loading || data.players.length === 0}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
               >
                 {data.players.length === 0 && (
                   <option value="">No hay jugadores activos</option>
@@ -706,6 +803,15 @@ export default function JugadorPage() {
               <StatusMessage variant="info" title="Cargando panel individual">
                 Cargando jugadores, registros GPS, controles neuromusculares, tests y
                 resultados por variable.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loading && !error && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="No hay equipos disponibles">
+                Crea o confirma un equipo antes de filtrar el panel individual
+                por equipo.
               </StatusMessage>
             </div>
           )}

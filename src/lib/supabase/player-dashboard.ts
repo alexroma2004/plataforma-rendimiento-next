@@ -1,9 +1,12 @@
 import { supabase } from "@/lib/supabase/client";
 
 const PLAYER_PHOTOS_BUCKET = "player-photos";
+const PLAYER_SELECT =
+  "id, team_id, name, normalized_name, first_name, last_name, birth_date, dominant_foot, primary_position, secondary_position, photo_path, position, active";
 
 export type PlayerDashboardPlayer = {
   id: string;
+  team_id: string | null;
   name: string;
   normalized_name: string;
   first_name: string | null;
@@ -80,6 +83,13 @@ export type PlayerDashboardTestResult = {
   available: boolean | null;
 };
 
+export type PlayerDashboardTeam = {
+  id: string;
+  name: string;
+  category: string | null;
+  season: string | null;
+};
+
 export type PlayerDashboardData = {
   players: PlayerDashboardPlayer[];
   gpsRecords: PlayerDashboardGpsRecord[];
@@ -102,6 +112,56 @@ function cleanStoragePath(value: string | null | undefined) {
   return text || null;
 }
 
+function cleanText(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+
+  return text || null;
+}
+
+export async function getPlayerDashboardTeams(): Promise<PlayerDashboardTeam[]> {
+  const client = getSupabaseClient();
+
+  const { data, error } = await client
+    .from("teams")
+    .select("id, name, category, season")
+    .order("created_at", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los equipos: ${error.message}`);
+  }
+
+  return (data ?? []) as PlayerDashboardTeam[];
+}
+
+export async function getPlayerDashboardPlayers(
+  teamId?: string | null,
+): Promise<PlayerDashboardPlayer[]> {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  const query = selectedTeamId
+    ? client
+        .from("players")
+        .select(PLAYER_SELECT)
+        .eq("active", true)
+        .eq("team_id", selectedTeamId)
+        .order("name", { ascending: true })
+    : client
+        .from("players")
+        .select(PLAYER_SELECT)
+        .eq("active", true)
+        .order("name", { ascending: true });
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`No se han podido cargar los jugadores: ${error.message}`);
+  }
+
+  return (data ?? []) as PlayerDashboardPlayer[];
+}
+
 export async function getPlayerDashboardPhotoSignedUrl(
   photoPath: string | null | undefined,
 ) {
@@ -122,8 +182,82 @@ export async function getPlayerDashboardPhotoSignedUrl(
   return data.signedUrl;
 }
 
-export async function getPlayerDashboardData(): Promise<PlayerDashboardData> {
+export async function getPlayerDashboardData(
+  teamId?: string | null,
+  playerId?: string | null,
+): Promise<PlayerDashboardData> {
   const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+  const selectedPlayerId = cleanText(playerId);
+
+  const playersQuery = selectedTeamId
+    ? client
+        .from("players")
+        .select(PLAYER_SELECT)
+        .eq("active", true)
+        .eq("team_id", selectedTeamId)
+        .order("name", { ascending: true })
+    : client
+        .from("players")
+        .select(PLAYER_SELECT)
+        .eq("active", true)
+        .order("name", { ascending: true });
+
+  let gpsQuery = client
+    .from("gps_records")
+    .select(
+      "id, player_id, player_name, position, session_date, microcycle, total_distance, hsr, distance_vrange6, sprints, num_acc, num_dec",
+    );
+
+  if (selectedTeamId) {
+    gpsQuery = gpsQuery.eq("team_id", selectedTeamId);
+  }
+
+  if (selectedPlayerId) {
+    gpsQuery = gpsQuery.eq("player_id", selectedPlayerId);
+  }
+
+  let neuromuscularQuery = client
+    .from("neuromuscular_records")
+    .select(
+      "id, player_id, player_name, position, session_date, microcycle, cmj_pre, rsimod_pre, vmp_pre, cmj_post, rsimod_post, vmp_post, squat_load_kg, rpe, notes",
+    );
+
+  if (selectedTeamId) {
+    neuromuscularQuery = neuromuscularQuery.eq("team_id", selectedTeamId);
+  }
+
+  if (selectedPlayerId) {
+    neuromuscularQuery = neuromuscularQuery.eq("player_id", selectedPlayerId);
+  }
+
+  let testScoresQuery = client
+    .from("test_scores")
+    .select(
+      "id, player_id, player_name, normalized_name, position, capacity, final_score, classification, used_variables, expected_variables",
+    );
+
+  if (selectedTeamId) {
+    testScoresQuery = testScoresQuery.eq("team_id", selectedTeamId);
+  }
+
+  if (selectedPlayerId) {
+    testScoresQuery = testScoresQuery.eq("player_id", selectedPlayerId);
+  }
+
+  let testResultsQuery = client
+    .from("test_results")
+    .select(
+      "id, player_id, player_name, normalized_name, position, test_block, variable, value, unit, original_weight, used_weight, variable_score, classification, available",
+    );
+
+  if (selectedTeamId) {
+    testResultsQuery = testResultsQuery.eq("team_id", selectedTeamId);
+  }
+
+  if (selectedPlayerId) {
+    testResultsQuery = testResultsQuery.eq("player_id", selectedPlayerId);
+  }
 
   const [
     playersResponse,
@@ -132,41 +266,11 @@ export async function getPlayerDashboardData(): Promise<PlayerDashboardData> {
     testScoresResponse,
     testResultsResponse,
   ] = await Promise.all([
-    client
-      .from("players")
-      .select(
-        "id, name, normalized_name, first_name, last_name, birth_date, dominant_foot, primary_position, secondary_position, photo_path, position, active",
-      )
-      .eq("active", true)
-      .order("name", { ascending: true }),
-
-    client
-      .from("gps_records")
-      .select(
-        "id, player_id, player_name, position, session_date, microcycle, total_distance, hsr, distance_vrange6, sprints, num_acc, num_dec",
-      )
-      .order("session_date", { ascending: false }),
-
-    client
-      .from("neuromuscular_records")
-      .select(
-        "id, player_id, player_name, position, session_date, microcycle, cmj_pre, rsimod_pre, vmp_pre, cmj_post, rsimod_post, vmp_post, squat_load_kg, rpe, notes",
-      )
-      .order("session_date", { ascending: false }),
-
-    client
-      .from("test_scores")
-      .select(
-        "id, player_id, player_name, normalized_name, position, capacity, final_score, classification, used_variables, expected_variables",
-      )
-      .order("capacity", { ascending: true }),
-
-    client
-      .from("test_results")
-      .select(
-        "id, player_id, player_name, normalized_name, position, test_block, variable, value, unit, original_weight, used_weight, variable_score, classification, available",
-      )
-      .order("test_block", { ascending: true }),
+    playersQuery,
+    gpsQuery.order("session_date", { ascending: false }),
+    neuromuscularQuery.order("session_date", { ascending: false }),
+    testScoresQuery.order("capacity", { ascending: true }),
+    testResultsQuery.order("test_block", { ascending: true }),
   ]);
 
   if (playersResponse.error) {
