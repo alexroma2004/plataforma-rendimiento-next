@@ -63,6 +63,13 @@ export type TestTeamRow = {
   season: string | null;
 };
 
+export type TestPlayerRow = {
+  id: string;
+  name: string;
+  normalized_name: string | null;
+  position: string | null;
+};
+
 function getSupabaseClient() {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
@@ -93,6 +100,30 @@ export async function getTestTeamsFromSupabase(): Promise<TestTeamRow[]> {
   }
 
   return (data ?? []) as TestTeamRow[];
+}
+
+export async function getTestPlayersByTeamId(
+  teamId: string,
+): Promise<TestPlayerRow[]> {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  if (!selectedTeamId) {
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("players")
+    .select("id, name, normalized_name, position")
+    .eq("team_id", selectedTeamId)
+    .eq("active", true)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los jugadores: ${error.message}`);
+  }
+
+  return (data ?? []) as TestPlayerRow[];
 }
 
 export async function getTestSessionsFromSupabase(teamId?: string | null) {
@@ -192,6 +223,7 @@ export type TestRecordInput = {
 };
 
 export type CreateTestSessionInput = {
+  team_id: string;
   session_date: string;
   session_name: string;
   context: string;
@@ -222,30 +254,6 @@ function toNumberOrNullForTests(value: number | null | undefined) {
   const number = Number(value);
 
   return Number.isFinite(number) ? number : null;
-}
-
-async function getDefaultTeamIdForTests() {
-  const client = getSupabaseClient();
-
-  const { data, error } = await client
-    .from("teams")
-    .select("id")
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (error) {
-    throw new Error(`No se ha podido cargar el equipo: ${error.message}`);
-  }
-
-  const team = data?.[0];
-
-  if (!team?.id) {
-    throw new Error(
-      "No hay ningún equipo creado en Supabase. Primero debe existir un equipo.",
-    );
-  }
-
-  return team.id as string;
 }
 
 async function getPlayersByNormalizedNameForTests(teamId: string) {
@@ -306,7 +314,11 @@ export async function createTestSessionWithResults(
     throw new Error("No hay registros de tests para guardar.");
   }
 
-  const teamId = await getDefaultTeamIdForTests();
+  const teamId = cleanText(input.team_id);
+
+  if (!teamId) {
+    throw new Error("Selecciona un equipo antes de guardar tests.");
+  }
 
   const { data: session, error: sessionError } = await client
     .from("test_sessions")

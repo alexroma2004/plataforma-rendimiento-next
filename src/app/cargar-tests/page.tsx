@@ -1,17 +1,30 @@
 "use client";
 
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
   createTestSessionWithResults,
+  getTestPlayersByTeamId,
+  getTestTeamsFromSupabase,
   type RawTestRow,
+  type TestPlayerRow,
   type TestRecordInput,
+  type TestTeamRow,
 } from "@/lib/supabase/tests";
 
 type TestPreviewRow = TestRecordInput;
+
+function getTeamLabel(team: TestTeamRow) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
 
 function normalizeHeader(value: string): string {
   return String(value ?? "")
@@ -337,6 +350,12 @@ function SummaryCard({
 }
 
 export default function CargarTestsPage() {
+  const [teams, setTeams] = useState<TestTeamRow[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [teamPlayers, setTeamPlayers] = useState<TestPlayerRow[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingTeamPlayers, setLoadingTeamPlayers] = useState(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<RawTestRow[]>([]);
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
   const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
@@ -349,6 +368,77 @@ export default function CargarTestsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function resetPreparedFileState() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    setRawRows([]);
+    setSelectedFilename(null);
+    setDetectedHeaders([]);
+    setSessionName("");
+    setNotes("");
+    setSaveMessage(null);
+    setSaveError(null);
+  }
+
+  useEffect(() => {
+    async function loadTeams() {
+      try {
+        setLoadingTeams(true);
+        setTeamError(null);
+
+        const data = await getTestTeamsFromSupabase();
+        const [onlyTeam] = data;
+
+        setTeams(data);
+        setSelectedTeamId(data.length === 1 && onlyTeam ? onlyTeam.id : "");
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Error desconocido al cargar equipos.";
+
+        setTeamError(message);
+      } finally {
+        setLoadingTeams(false);
+      }
+    }
+
+    loadTeams();
+  }, []);
+
+  useEffect(() => {
+    async function loadTeamPlayers() {
+      if (!selectedTeamId) {
+        setTeamPlayers([]);
+        return;
+      }
+
+      try {
+        setLoadingTeamPlayers(true);
+        setTeamError(null);
+
+        const data = await getTestPlayersByTeamId(selectedTeamId);
+
+        setTeamPlayers(data);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Error desconocido al cargar jugadores del equipo.";
+
+        setTeamError(message);
+        setTeamPlayers([]);
+      } finally {
+        setLoadingTeamPlayers(false);
+      }
+    }
+
+    loadTeamPlayers();
+  }, [selectedTeamId]);
 
   const previewRows = useMemo(() => {
     return rawRows
@@ -368,6 +458,13 @@ export default function CargarTestsPage() {
       variables: variables.size,
     };
   }, [previewRows]);
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
+
+  const canProcessFile =
+    !loadingTeams && teams.length > 0 && selectedTeamId.length > 0;
 
   const previewValidation = useMemo(() => {
     const blocks = [...new Set(previewRows.map((row) => row.test_block))];
@@ -477,6 +574,11 @@ export default function CargarTestsPage() {
     sessionName,
   ]);
 
+  function handleTeamChange(teamId: string) {
+    setSelectedTeamId(teamId);
+    resetPreparedFileState();
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -486,6 +588,13 @@ export default function CargarTestsPage() {
     setDetectedHeaders([]);
 
     if (!file) return;
+
+    if (!selectedTeamId) {
+      event.target.value = "";
+      setSelectedFilename(null);
+      setSaveError("Selecciona un equipo antes de procesar el CSV de tests.");
+      return;
+    }
 
     setSelectedFilename(file.name);
     setSessionName(inferSessionName(file.name));
@@ -520,6 +629,11 @@ export default function CargarTestsPage() {
     setSaveMessage(null);
     setSaveError(null);
 
+    if (!selectedTeamId) {
+      setSaveError("Selecciona un equipo antes de guardar tests.");
+      return;
+    }
+
     if (previewRows.length === 0) {
       setSaveError("No se ha detectado ningún registro válido en el archivo.");
       return;
@@ -544,6 +658,7 @@ export default function CargarTestsPage() {
       setIsSaving(true);
 
       const result = await createTestSessionWithResults({
+        team_id: selectedTeamId,
         session_date: sessionDate,
         session_name: sessionName,
         context,
@@ -598,16 +713,94 @@ export default function CargarTestsPage() {
               </div>
             </div>
 
-            <label className="w-full cursor-pointer rounded-xl bg-slate-950 px-5 py-3 text-center text-sm font-bold text-white shadow hover:bg-slate-800 md:w-auto md:shrink-0">
-              Seleccionar CSV tests
-              <input
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
+            <div className="grid w-full gap-3 md:w-[360px] md:shrink-0">
+              <label className="text-sm font-bold text-slate-700">
+                Equipo
+                <select
+                  value={selectedTeamId}
+                  onChange={(event) => handleTeamChange(event.target.value)}
+                  disabled={loadingTeams || teams.length === 0 || isSaving}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  <option value="">Selecciona equipo</option>
+
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {getTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label
+                className={`w-full rounded-xl px-5 py-3 text-center text-sm font-bold text-white shadow md:shrink-0 ${
+                  canProcessFile
+                    ? "cursor-pointer bg-slate-950 hover:bg-slate-800"
+                    : "cursor-not-allowed bg-slate-400"
+                }`}
+              >
+                Seleccionar CSV tests
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  disabled={!canProcessFile || isSaving}
+                  onChange={handleFileChange}
+                />
+              </label>
+            </div>
           </div>
+
+          {loadingTeams && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando equipos">
+                Cargando equipos disponibles antes de procesar el CSV.
+              </StatusMessage>
+            </div>
+          )}
+
+          {teamError && (
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se han podido cargar equipos">
+                {teamError}
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingTeams && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="No hay equipos disponibles">
+                Crea o confirma un equipo antes de cargar tests. No se guardará
+                ninguna sesión sin equipo seleccionado.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingTeams && teams.length > 1 && !selectedTeamId && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Selecciona un equipo">
+                Selecciona el equipo antes de procesar el CSV para vincular los
+                jugadores y guardar la sesión, resultados y puntuaciones en el
+                `team_id` correcto.
+              </StatusMessage>
+            </div>
+          )}
+
+          {selectedTeam && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Equipo seleccionado">
+                {getTeamLabel(selectedTeam)} ·{" "}
+                {loadingTeamPlayers
+                  ? "cargando jugadores activos..."
+                  : `${teamPlayers.length} jugador${
+                      teamPlayers.length === 1 ? "" : "es"
+                    } activo${teamPlayers.length === 1 ? "" : "s"} para vincular: ${summarizeDetectedValues(
+                      teamPlayers.map((player) => player.name),
+                    )}.`}
+              </StatusMessage>
+            </div>
+          )}
 
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             Archivo seleccionado:{" "}
@@ -740,7 +933,7 @@ export default function CargarTestsPage() {
                 <button
                   type="button"
                   onClick={handleSaveSession}
-                  disabled={isSaving}
+                  disabled={isSaving || !selectedTeamId || teams.length === 0}
                   className="mt-5 w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {isSaving
