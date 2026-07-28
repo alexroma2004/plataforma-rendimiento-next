@@ -207,7 +207,9 @@ export async function getTestScoresBySessionId(
 export type RawTestRow = Record<string, unknown>;
 
 export type TestRecordInput = {
+  player_id?: string | null;
   player_name: string;
+  normalized_name?: string | null;
   position?: string | null;
   test_block: string;
   variable: string;
@@ -230,6 +232,7 @@ export type CreateTestSessionInput = {
   notes?: string | null;
   tests?: unknown[] | null;
   records: TestRecordInput[];
+  skipScores?: boolean;
 };
 
 type PlayerMatchForTests = {
@@ -237,6 +240,11 @@ type PlayerMatchForTests = {
   name: string;
   normalized_name: string;
   position: string | null;
+};
+
+type PlayerMapsForTests = {
+  byId: Map<string, PlayerMatchForTests>;
+  byNormalizedName: Map<string, PlayerMatchForTests>;
 };
 
 function normalizeTestName(value: string) {
@@ -256,7 +264,7 @@ function toNumberOrNullForTests(value: number | null | undefined) {
   return Number.isFinite(number) ? number : null;
 }
 
-async function getPlayersByNormalizedNameForTests(teamId: string) {
+async function getPlayersForTests(teamId: string): Promise<PlayerMapsForTests> {
   const client = getSupabaseClient();
 
   const { data, error } = await client
@@ -269,20 +277,27 @@ async function getPlayersByNormalizedNameForTests(teamId: string) {
     throw new Error(`No se han podido cargar los jugadores: ${error.message}`);
   }
 
-  const playersMap = new Map<string, PlayerMatchForTests>();
+  const byId = new Map<string, PlayerMatchForTests>();
+  const byNormalizedName = new Map<string, PlayerMatchForTests>();
 
   for (const player of data ?? []) {
     if (!player.normalized_name) continue;
 
-    playersMap.set(player.normalized_name, {
+    const playerMatch = {
       id: player.id,
       name: player.name,
       normalized_name: player.normalized_name,
       position: player.position ?? null,
-    });
+    };
+
+    byId.set(player.id, playerMatch);
+    byNormalizedName.set(player.normalized_name, playerMatch);
   }
 
-  return playersMap;
+  return {
+    byId,
+    byNormalizedName,
+  };
 }
 
 function getScoreClassification(score: number | null) {
@@ -339,20 +354,25 @@ export async function createTestSessionWithResults(
     );
   }
 
-  const playersMap = await getPlayersByNormalizedNameForTests(teamId);
+  const playersMap = await getPlayersForTests(teamId);
 
   const resultRows = input.records.map((record) => {
-    const normalizedName = normalizeTestName(record.player_name);
-    const matchedPlayer = playersMap.get(normalizedName) ?? null;
+    const normalizedName =
+      cleanText(record.normalized_name) ?? normalizeTestName(record.player_name);
+    const explicitPlayerId = cleanText(record.player_id);
+    const matchedPlayer =
+      (explicitPlayerId ? playersMap.byId.get(explicitPlayerId) : null) ??
+      playersMap.byNormalizedName.get(normalizedName) ??
+      null;
 
     return {
       session_id: session.id,
       team_id: teamId,
-      player_id: matchedPlayer?.id ?? null,
+      player_id: matchedPlayer?.id ?? explicitPlayerId,
       session_date: input.session_date,
 
-      player_name: record.player_name,
-      normalized_name: normalizedName,
+      player_name: matchedPlayer?.name ?? record.player_name,
+      normalized_name: matchedPlayer?.normalized_name ?? normalizedName,
       position: record.position ?? matchedPlayer?.position ?? null,
       context: input.context,
 
@@ -421,36 +441,38 @@ export async function createTestSessionWithResults(
     groupedScores.set(key, current);
   }
 
-  const scoreRows = Array.from(groupedScores.values()).map((group) => {
-    const finalScore =
-      group.scores.length > 0
-        ? group.scores.reduce((sum, value) => sum + value, 0) /
-          group.scores.length
-        : null;
+  const scoreRows = input.skipScores
+    ? []
+    : Array.from(groupedScores.values()).map((group) => {
+          const finalScore =
+            group.scores.length > 0
+              ? group.scores.reduce((sum, value) => sum + value, 0) /
+                group.scores.length
+              : null;
 
-    return {
-      session_id: session.id,
-      team_id: teamId,
-      player_id: group.player_id,
-      session_date: input.session_date,
+          return {
+            session_id: session.id,
+            team_id: teamId,
+            player_id: group.player_id,
+            session_date: input.session_date,
 
-      player_name: group.player_name,
-      normalized_name: group.normalized_name,
-      position: group.position,
-      context: input.context,
+            player_name: group.player_name,
+            normalized_name: group.normalized_name,
+            position: group.position,
+            context: input.context,
 
-      capacity: group.capacity,
-      final_score: finalScore,
-      classification: getScoreClassification(finalScore),
-      used_variables: group.scores.length,
-      expected_variables: group.expected_variables,
-    };
-  });
+            capacity: group.capacity,
+            final_score: finalScore,
+            classification: getScoreClassification(finalScore),
+            used_variables: group.scores.length,
+            expected_variables: group.expected_variables,
+          };
+        });
 
-  const { data: insertedScores, error: scoresError } = await client
-    .from("test_scores")
-    .insert(scoreRows)
-    .select("*");
+  const { data: insertedScores, error: scoresError } =
+    scoreRows.length > 0
+      ? await client.from("test_scores").insert(scoreRows).select("*")
+      : { data: [], error: null };
 
   if (scoresError) {
     throw new Error(
