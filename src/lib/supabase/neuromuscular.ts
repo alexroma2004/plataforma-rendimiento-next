@@ -45,6 +45,7 @@ export type NeuromuscularRecordInput = {
 };
 
 export type CreateNeuromuscularSessionInput = {
+  team_id: string;
   session_date: string;
   microcycle: string;
   session_name?: string | null;
@@ -58,6 +59,13 @@ export type NeuromuscularTeamRow = {
   name: string;
   category: string | null;
   season: string | null;
+};
+
+export type NeuromuscularPlayerRow = {
+  id: string;
+  name: string;
+  normalized_name: string | null;
+  position: string | null;
 };
 
 type PlayerMatch = {
@@ -98,30 +106,6 @@ function toNumberOrNull(value: number | null | undefined) {
   const number = Number(value);
 
   return Number.isFinite(number) ? number : null;
-}
-
-async function getDefaultTeamId() {
-  const client = getSupabaseClient();
-
-  const { data, error } = await client
-    .from("teams")
-    .select("id")
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (error) {
-    throw new Error(`No se ha podido cargar el equipo: ${error.message}`);
-  }
-
-  const team = data?.[0];
-
-  if (!team?.id) {
-    throw new Error(
-      "No hay ningún equipo creado en Supabase. Primero debe existir un equipo.",
-    );
-  }
-
-  return team.id as string;
 }
 
 async function getPlayersByNormalizedName(teamId: string) {
@@ -180,6 +164,30 @@ export async function getNeuromuscularTeamsFromSupabase(): Promise<
   }
 
   return (data ?? []) as NeuromuscularTeamRow[];
+}
+
+export async function getNeuromuscularPlayersByTeamId(
+  teamId: string,
+): Promise<NeuromuscularPlayerRow[]> {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  if (!selectedTeamId) {
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("players")
+    .select("id, name, normalized_name, position")
+    .eq("team_id", selectedTeamId)
+    .eq("active", true)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los jugadores: ${error.message}`);
+  }
+
+  return (data ?? []) as NeuromuscularPlayerRow[];
 }
 
 export async function getNeuromuscularSessionsFromSupabase(
@@ -254,7 +262,11 @@ export async function createNeuromuscularSessionWithRecords(
     throw new Error("No hay registros neuromusculares para guardar.");
   }
 
-  const teamId = await getDefaultTeamId();
+  const teamId = cleanText(input.team_id);
+
+  if (!teamId) {
+    throw new Error("Selecciona un equipo antes de guardar datos neuromusculares.");
+  }
 
   const { data: session, error: sessionError } = await client
     .from("neuromuscular_sessions")

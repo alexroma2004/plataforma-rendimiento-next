@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
   createNeuromuscularSessionWithRecords,
+  getNeuromuscularPlayersByTeamId,
+  getNeuromuscularTeamsFromSupabase,
+  type NeuromuscularPlayerRow,
   type NeuromuscularRecordInput,
+  type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
 
 type ManualRecordForm = {
@@ -38,6 +42,24 @@ const emptyManualForm: ManualRecordForm = {
 };
 
 const microcycleOptions = ["MD+1", "MD+2", "MD-4", "MD-3", "MD-2", "MD-1"];
+
+function getTeamLabel(team: NeuromuscularTeamRow) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
+
+function summarizeNames(values: string[], limit = 5) {
+  if (values.length === 0) return "ninguno";
+
+  const remaining = values.length - limit;
+  return `${values.slice(0, limit).join(", ")}${
+    remaining > 0 ? ` y ${remaining} más` : ""
+  }`;
+}
 
 function getTodayInputDate() {
   return new Date().toISOString().slice(0, 10);
@@ -756,6 +778,12 @@ function SummaryCard({
 }
 
 export default function CargarNeuromuscularPage() {
+  const [teams, setTeams] = useState<NeuromuscularTeamRow[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [teamPlayers, setTeamPlayers] = useState<NeuromuscularPlayerRow[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingTeamPlayers, setLoadingTeamPlayers] = useState(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
   const [sessionDate, setSessionDate] = useState(getTodayInputDate());
   const [microcycle, setMicrocycle] = useState("MD-1");
   const [sessionName, setSessionName] = useState("Control neuromuscular");
@@ -769,6 +797,76 @@ export default function CargarNeuromuscularPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function resetPreparedData() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    setSourceFilename(null);
+    setDetectedHeaders([]);
+    setRecords([]);
+    setManualForm(emptyManualForm);
+    setError(null);
+    setSuccessMessage(null);
+  }
+
+  useEffect(() => {
+    async function loadTeams() {
+      try {
+        setLoadingTeams(true);
+        setTeamError(null);
+
+        const data = await getNeuromuscularTeamsFromSupabase();
+        const [onlyTeam] = data;
+
+        setTeams(data);
+        setSelectedTeamId(data.length === 1 && onlyTeam ? onlyTeam.id : "");
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Error desconocido al cargar equipos.";
+
+        setTeamError(message);
+      } finally {
+        setLoadingTeams(false);
+      }
+    }
+
+    loadTeams();
+  }, []);
+
+  useEffect(() => {
+    async function loadTeamPlayers() {
+      if (!selectedTeamId) {
+        setTeamPlayers([]);
+        return;
+      }
+
+      try {
+        setLoadingTeamPlayers(true);
+        setTeamError(null);
+
+        const data = await getNeuromuscularPlayersByTeamId(selectedTeamId);
+
+        setTeamPlayers(data);
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Error desconocido al cargar jugadores del equipo.";
+
+        setTeamError(message);
+        setTeamPlayers([]);
+      } finally {
+        setLoadingTeamPlayers(false);
+      }
+    }
+
+    loadTeamPlayers();
+  }, [selectedTeamId]);
 
   const summary = useMemo(() => {
     const total = records.length;
@@ -795,6 +893,13 @@ export default function CargarNeuromuscularPage() {
       withRpe,
     };
   }, [records]);
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
+
+  const canEnterData =
+    !loadingTeams && teams.length > 0 && selectedTeamId.length > 0;
 
   const previewAnalysis = useMemo(() => {
     const detectedVariables = [
@@ -944,6 +1049,7 @@ export default function CargarNeuromuscularPage() {
   }, [detectedHeaders, sourceFilename]);
 
   const validationMessages = [
+    ...(!selectedTeamId ? ["Falta seleccionar el equipo."] : []),
     ...csvWarnings,
     ...(!sessionDate ? ["Falta la fecha de la sesión."] : []),
     ...(!sessionName.trim() ? ["Falta el nombre de la sesión."] : []),
@@ -953,8 +1059,23 @@ export default function CargarNeuromuscularPage() {
     ...previewAnalysis.warnings,
   ];
 
+  function handleTeamChange(teamId: string) {
+    setSelectedTeamId(teamId);
+    resetPreparedData();
+  }
+
   async function handleFileUpload(file: File | null) {
     if (!file) return;
+
+    if (!selectedTeamId) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      setError("Selecciona un equipo antes de procesar el CSV neuromuscular.");
+      setSuccessMessage(null);
+      return;
+    }
 
     try {
       setError(null);
@@ -991,6 +1112,10 @@ export default function CargarNeuromuscularPage() {
       setError(null);
       setSuccessMessage(null);
 
+      if (!selectedTeamId) {
+        throw new Error("Selecciona un equipo antes de introducir datos manuales.");
+      }
+
       if (!manualForm.player_name.trim()) {
         throw new Error("El nombre del jugador es obligatorio.");
       }
@@ -1016,6 +1141,11 @@ export default function CargarNeuromuscularPage() {
   }
 
   async function handleSaveSession() {
+    if (!selectedTeamId) {
+      setError("Selecciona un equipo antes de guardar datos neuromusculares.");
+      return;
+    }
+
     if (records.length === 0) {
       setError("No hay registros para guardar.");
       return;
@@ -1027,6 +1157,7 @@ export default function CargarNeuromuscularPage() {
       setSuccessMessage(null);
 
       const result = await createNeuromuscularSessionWithRecords({
+        team_id: selectedTeamId,
         session_date: sessionDate,
         microcycle,
         session_name: sessionName,
@@ -1066,7 +1197,25 @@ export default function CargarNeuromuscularPage() {
     >
       <div className="space-y-8">
         <section className="rounded-2xl bg-white p-5 shadow sm:p-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+            <label className="text-sm font-bold text-slate-700">
+              Equipo
+              <select
+                value={selectedTeamId}
+                onChange={(event) => handleTeamChange(event.target.value)}
+                disabled={loadingTeams || teams.length === 0 || loading}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+              >
+                <option value="">Selecciona equipo</option>
+
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {getTeamLabel(team)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="text-sm font-bold text-slate-700">
               Fecha
               <input
@@ -1103,6 +1252,57 @@ export default function CargarNeuromuscularPage() {
               />
             </label>
           </div>
+
+          {loadingTeams && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando equipos">
+                Cargando equipos disponibles antes de introducir o importar
+                datos neuromusculares.
+              </StatusMessage>
+            </div>
+          )}
+
+          {teamError && (
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se han podido cargar equipos">
+                {teamError}
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingTeams && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="No hay equipos disponibles">
+                Crea o confirma un equipo antes de cargar controles
+                neuromusculares. No se guardará ninguna sesión sin equipo
+                seleccionado.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingTeams && teams.length > 1 && !selectedTeamId && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Selecciona un equipo">
+                Selecciona el equipo antes de introducir, procesar o guardar
+                datos para vincular jugadores y usar el `team_id` correcto.
+              </StatusMessage>
+            </div>
+          )}
+
+          {selectedTeam && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Equipo seleccionado">
+                {getTeamLabel(selectedTeam)} ·{" "}
+                {loadingTeamPlayers
+                  ? "cargando jugadores activos..."
+                  : `${teamPlayers.length} jugador${
+                      teamPlayers.length === 1 ? "" : "es"
+                    } activo${teamPlayers.length === 1 ? "" : "s"} para vincular: ${summarizeNames(
+                      teamPlayers.map((player) => player.name),
+                    )}.`}
+              </StatusMessage>
+            </div>
+          )}
 
           {error && (
   <div className="mt-6">
@@ -1160,12 +1360,14 @@ export default function CargarNeuromuscularPage() {
               </span>
 
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".csv,.txt"
+                disabled={!canEnterData || loading}
                 onChange={(event) =>
                   handleFileUpload(event.target.files?.[0] ?? null)
                 }
-                className="mt-4 block w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+                className="mt-4 block w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
               />
             </label>
 
@@ -1192,9 +1394,13 @@ export default function CargarNeuromuscularPage() {
               Añadir jugador
             </h2>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <fieldset
+              disabled={!canEnterData || loading}
+              className="mt-5 grid grid-cols-1 gap-3 disabled:opacity-70 md:grid-cols-2"
+            >
               <input
                 type="text"
+                list="neuromuscular-team-players"
                 value={manualForm.player_name}
                 onChange={(event) =>
                   setManualForm((current) => ({
@@ -1202,9 +1408,16 @@ export default function CargarNeuromuscularPage() {
                     player_name: event.target.value,
                   }))
                 }
-                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                disabled={!canEnterData || loading}
+                className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                 placeholder="Jugador"
               />
+
+              <datalist id="neuromuscular-team-players">
+                {teamPlayers.map((player) => (
+                  <option key={player.id} value={player.name} />
+                ))}
+              </datalist>
 
               <input
                 type="text"
@@ -1335,12 +1548,13 @@ export default function CargarNeuromuscularPage() {
                 className="rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500 md:col-span-2"
                 placeholder="Observaciones"
               />
-            </div>
+            </fieldset>
 
             <button
               type="button"
               onClick={handleAddManualRecord}
-              className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow hover:bg-slate-800"
+              disabled={!canEnterData || loading}
+              className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               Añadir registro
             </button>
@@ -1367,7 +1581,7 @@ export default function CargarNeuromuscularPage() {
             <button
               type="button"
               onClick={handleSaveSession}
-              disabled={loading || records.length === 0}
+              disabled={loading || !selectedTeamId || teams.length === 0 || records.length === 0}
               className="w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto md:shrink-0"
             >
               {loading ? "Guardando..." : "Guardar sesión"}
