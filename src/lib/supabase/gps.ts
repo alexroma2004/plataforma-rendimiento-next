@@ -10,6 +10,7 @@ import {
 export type RawGpsRow = Record<string, unknown>;
 
 export type SaveGpsSessionInput = {
+  teamId: string;
   sessionDate: string;
   microcycle: string;
   sessionName: string;
@@ -22,6 +23,8 @@ export type SaveGpsSessionInput = {
 export type SaveGpsSessionResult = {
   sessionId: string;
   insertedRecords: number;
+  matchedPlayers: number;
+  unmatchedPlayers: number;
 };
 
 export type GpsTeamRow = {
@@ -29,6 +32,20 @@ export type GpsTeamRow = {
   name: string;
   category: string | null;
   season: string | null;
+};
+
+export type GpsPlayerRow = {
+  id: string;
+  name: string;
+  normalized_name: string | null;
+  position: string | null;
+};
+
+type PlayerMatch = {
+  id: string;
+  name: string;
+  normalized_name: string;
+  position: string | null;
 };
 
 function cleanText(value: unknown): string | null {
@@ -60,44 +77,46 @@ function normalizeSafeName(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-async function getDefaultTeamId(): Promise<string> {
+async function getPlayersByNormalizedName(teamId: string) {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
   }
 
-  const { data: existingTeam, error: existingTeamError } = await supabase
-    .from("teams")
-    .select("id")
-    .limit(1)
-    .maybeSingle();
+  const { data, error } = await supabase
+    .from("players")
+    .select("id, name, normalized_name, position")
+    .eq("team_id", teamId)
+    .eq("active", true);
 
-  if (existingTeamError) {
-    throw new Error(
-      `No se ha podido leer el equipo por defecto: ${existingTeamError.message}`,
-    );
+  if (error) {
+    throw new Error(`No se han podido cargar los jugadores: ${error.message}`);
   }
 
-  if (existingTeam?.id) {
-    return existingTeam.id;
+  const playersMap = new Map<string, PlayerMatch>();
+
+  for (const player of data ?? []) {
+    const normalizedFromName = normalizeSafeName(player.name);
+    const normalizedFromDatabase = player.normalized_name
+      ? normalizeSafeName(player.normalized_name)
+      : "";
+
+    const playerMatch: PlayerMatch = {
+      id: player.id,
+      name: player.name,
+      normalized_name: normalizedFromName,
+      position: player.position ?? null,
+    };
+
+    if (normalizedFromName) {
+      playersMap.set(normalizedFromName, playerMatch);
+    }
+
+    if (normalizedFromDatabase) {
+      playersMap.set(normalizedFromDatabase, playerMatch);
+    }
   }
 
-  const { data: createdTeam, error: createdTeamError } = await supabase
-    .from("teams")
-    .insert({
-      name: "Equipo principal",
-    })
-    .select("id")
-    .single();
-
-  if (createdTeamError || !createdTeam?.id) {
-    throw new Error(
-      `No se ha podido crear el equipo por defecto: ${
-        createdTeamError?.message ?? "sin id devuelto"
-      }`,
-    );
-  }
-
-  return createdTeam.id;
+  return playersMap;
 }
 
 function validateParsedRows(rows: GpsParsedRow[]) {
@@ -141,10 +160,12 @@ function buildGpsRecordPayload(params: {
   parsedRow: GpsParsedRow;
   sessionId: string;
   teamId: string;
+  playerId: string | null;
   sessionDate: string;
   microcycle: string;
 }) {
-  const { parsedRow, sessionId, teamId, sessionDate, microcycle } = params;
+  const { parsedRow, sessionId, teamId, playerId, sessionDate, microcycle } =
+    params;
 
   const normalizedName =
     parsedRow.normalized_name || normalizeSafeName(parsedRow.player_name);
@@ -152,7 +173,7 @@ function buildGpsRecordPayload(params: {
   return {
     session_id: sessionId,
     team_id: teamId,
-    player_id: null,
+    player_id: playerId,
 
     session_date: sessionDate,
     microcycle,
@@ -188,7 +209,11 @@ export async function saveGpsSessionToSupabase(
 
   validateParsedRows(parsedRows);
 
-  const teamId = await getDefaultTeamId();
+  const teamId = cleanText(input.teamId);
+
+  if (!teamId) {
+    throw new Error("Selecciona un equipo antes de guardar GPS.");
+  }
 
   const { data: session, error: sessionError } = await supabase
     .from("gps_sessions")
@@ -213,16 +238,22 @@ export async function saveGpsSessionToSupabase(
   }
 
   const sessionId = session.id;
+  const playersMap = await getPlayersByNormalizedName(teamId);
 
-  const recordPayload = parsedRows.map((parsedRow) =>
-    buildGpsRecordPayload({
+  const recordPayload = parsedRows.map((parsedRow) => {
+    const normalizedName =
+      parsedRow.normalized_name || normalizeSafeName(parsedRow.player_name);
+    const matchedPlayer = playersMap.get(normalizedName) ?? null;
+
+    return buildGpsRecordPayload({
       parsedRow,
       sessionId,
       teamId,
+      playerId: matchedPlayer?.id ?? null,
       sessionDate: input.sessionDate,
       microcycle: input.microcycle,
-    }),
-  );
+    });
+  });
 
   const { error: recordsError } = await supabase
     .from("gps_records")
@@ -239,6 +270,10 @@ export async function saveGpsSessionToSupabase(
   return {
     sessionId,
     insertedRecords: recordPayload.length,
+    matchedPlayers: recordPayload.filter((row) => row.player_id !== null)
+      .length,
+    unmatchedPlayers: recordPayload.filter((row) => row.player_id === null)
+      .length,
   };
 }
 
@@ -315,6 +350,33 @@ export async function getGpsTeamsFromSupabase(): Promise<GpsTeamRow[]> {
   }
 
   return (data ?? []) as GpsTeamRow[];
+}
+
+export async function getGpsPlayersByTeamId(
+  teamId: string,
+): Promise<GpsPlayerRow[]> {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const selectedTeamId = cleanText(teamId);
+
+  if (!selectedTeamId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("players")
+    .select("id, name, normalized_name, position")
+    .eq("team_id", selectedTeamId)
+    .eq("active", true)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los jugadores: ${error.message}`);
+  }
+
+  return (data ?? []) as GpsPlayerRow[];
 }
 
 export async function getGpsSessionsFromSupabase(

@@ -1,11 +1,18 @@
 "use client";
 
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
-import { saveGpsSessionToSupabase, type RawGpsRow } from "@/lib/supabase/gps";
+import {
+  getGpsPlayersByTeamId,
+  getGpsTeamsFromSupabase,
+  saveGpsSessionToSupabase,
+  type GpsPlayerRow,
+  type GpsTeamRow,
+  type RawGpsRow,
+} from "@/lib/supabase/gps";
 
 type GpsPreviewRow = {
   jugador: string;
@@ -25,6 +32,24 @@ type GpsColumnGroup = {
   label: string;
   aliases: string[];
 };
+
+function getTeamLabel(team: GpsTeamRow) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
+
+function summarizeNames(values: string[], limit = 5) {
+  if (values.length === 0) return "ninguno";
+
+  const remaining = values.length - limit;
+  return `${values.slice(0, limit).join(", ")}${
+    remaining > 0 ? ` y ${remaining} más` : ""
+  }`;
+}
 
 const requiredColumnGroups: GpsColumnGroup[] = [
   {
@@ -383,6 +408,12 @@ function SummaryCard({
 }
 
 export default function CargarGpsPage() {
+  const [teams, setTeams] = useState<GpsTeamRow[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [teamPlayers, setTeamPlayers] = useState<GpsPlayerRow[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingTeamPlayers, setLoadingTeamPlayers] = useState(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
   const [gpsRows, setGpsRows] = useState<RawGpsRow[]>([]);
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
 
@@ -395,6 +426,79 @@ export default function CargarGpsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function resetPreparedGpsData() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    setGpsRows([]);
+    setSelectedFilename(null);
+    setSessionDate("");
+    setMicrocycle("MD-1");
+    setSessionName("");
+    setIsMatch(false);
+    setNotes("");
+    setSaveMessage(null);
+    setSaveError(null);
+  }
+
+  useEffect(() => {
+    async function loadTeams() {
+      try {
+        setLoadingTeams(true);
+        setTeamError(null);
+
+        const data = await getGpsTeamsFromSupabase();
+        const [onlyTeam] = data;
+
+        setTeams(data);
+        setSelectedTeamId(data.length === 1 && onlyTeam ? onlyTeam.id : "");
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Error desconocido al cargar equipos.";
+
+        setTeamError(message);
+      } finally {
+        setLoadingTeams(false);
+      }
+    }
+
+    loadTeams();
+  }, []);
+
+  useEffect(() => {
+    async function loadTeamPlayers() {
+      if (!selectedTeamId) {
+        setTeamPlayers([]);
+        return;
+      }
+
+      try {
+        setLoadingTeamPlayers(true);
+        setTeamError(null);
+
+        const data = await getGpsPlayersByTeamId(selectedTeamId);
+
+        setTeamPlayers(data);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Error desconocido al cargar jugadores del equipo.";
+
+        setTeamError(message);
+        setTeamPlayers([]);
+      } finally {
+        setLoadingTeamPlayers(false);
+      }
+    }
+
+    loadTeamPlayers();
+  }, [selectedTeamId]);
 
   const previewRows = useMemo(() => {
     return gpsRows.map(preparePreviewRow);
@@ -422,6 +526,13 @@ export default function CargarGpsPage() {
       },
     );
   }, [previewRows]);
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
+
+  const canProcessFile =
+    !loadingTeams && teams.length > 0 && selectedTeamId.length > 0;
 
   const fileAnalysis = useMemo(() => {
     const detectedHeaders = new Set(
@@ -513,9 +624,15 @@ export default function CargarGpsPage() {
     !sessionName.trim() ? "nombre de sesión" : null,
   ].filter((value): value is string => Boolean(value));
   const hasBlockingValidationIssues =
+    !selectedTeamId ||
     missingSessionFields.length > 0 ||
     fileAnalysis.missingRequiredColumns.length > 0 ||
     fileAnalysis.uniquePlayers === 0;
+
+  function handleTeamChange(teamId: string) {
+    setSelectedTeamId(teamId);
+    resetPreparedGpsData();
+  }
 
   function handleGpsFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -525,6 +642,13 @@ export default function CargarGpsPage() {
     setGpsRows([]);
 
     if (!file) return;
+
+    if (!selectedTeamId) {
+      event.target.value = "";
+      setSelectedFilename(null);
+      setSaveError("Selecciona un equipo antes de procesar el CSV GPS.");
+      return;
+    }
 
     setSelectedFilename(file.name);
 
@@ -560,6 +684,11 @@ export default function CargarGpsPage() {
     setSaveMessage(null);
     setSaveError(null);
 
+    if (!selectedTeamId) {
+      setSaveError("Selecciona un equipo antes de guardar GPS.");
+      return;
+    }
+
     if (gpsRows.length === 0) {
       setSaveError("Primero tienes que seleccionar un archivo GPS válido.");
       return;
@@ -584,6 +713,7 @@ export default function CargarGpsPage() {
       setIsSaving(true);
 
       const result = await saveGpsSessionToSupabase({
+        teamId: selectedTeamId,
         sessionDate,
         microcycle,
         sessionName,
@@ -594,7 +724,7 @@ export default function CargarGpsPage() {
       });
 
       setSaveMessage(
-        `Sesión GPS guardada correctamente. Registros insertados: ${result.insertedRecords}.`,
+        `Sesión GPS guardada correctamente. Registros insertados: ${result.insertedRecords}. Jugadores vinculados: ${result.matchedPlayers}. Sin vincular: ${result.unmatchedPlayers}.`,
       );
     } catch (error) {
       const message =
@@ -632,16 +762,94 @@ export default function CargarGpsPage() {
               </p>
             </div>
 
-            <label className="w-full cursor-pointer rounded-xl bg-slate-950 px-5 py-3 text-center text-sm font-bold text-white shadow hover:bg-slate-800 md:w-auto md:shrink-0">
-              Seleccionar CSV GPS
-              <input
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={handleGpsFileChange}
-              />
-            </label>
+            <div className="grid w-full gap-3 md:w-[360px] md:shrink-0">
+              <label className="text-sm font-bold text-slate-700">
+                Equipo
+                <select
+                  value={selectedTeamId}
+                  onChange={(event) => handleTeamChange(event.target.value)}
+                  disabled={loadingTeams || teams.length === 0 || isSaving}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  <option value="">Selecciona equipo</option>
+
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {getTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label
+                className={`w-full rounded-xl px-5 py-3 text-center text-sm font-bold text-white shadow md:shrink-0 ${
+                  canProcessFile
+                    ? "cursor-pointer bg-slate-950 hover:bg-slate-800"
+                    : "cursor-not-allowed bg-slate-400"
+                }`}
+              >
+                Seleccionar CSV GPS
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  disabled={!canProcessFile || isSaving}
+                  onChange={handleGpsFileChange}
+                />
+              </label>
+            </div>
           </div>
+
+          {loadingTeams && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Cargando equipos">
+                Cargando equipos disponibles antes de procesar el CSV GPS.
+              </StatusMessage>
+            </div>
+          )}
+
+          {teamError && (
+            <div className="mt-6">
+              <StatusMessage variant="error" title="No se han podido cargar equipos">
+                {teamError}
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingTeams && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="No hay equipos disponibles">
+                Crea o confirma un equipo antes de cargar GPS. No se guardará
+                ninguna sesión sin equipo seleccionado.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingTeams && teams.length > 1 && !selectedTeamId && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Selecciona un equipo">
+                Selecciona el equipo antes de procesar el CSV para vincular los
+                jugadores y guardar la sesión GPS y sus registros en el
+                `team_id` correcto.
+              </StatusMessage>
+            </div>
+          )}
+
+          {selectedTeam && (
+            <div className="mt-6">
+              <StatusMessage variant="info" title="Equipo seleccionado">
+                {getTeamLabel(selectedTeam)} ·{" "}
+                {loadingTeamPlayers
+                  ? "cargando jugadores activos..."
+                  : `${teamPlayers.length} jugador${
+                      teamPlayers.length === 1 ? "" : "es"
+                    } activo${teamPlayers.length === 1 ? "" : "s"} para vincular: ${summarizeNames(
+                      teamPlayers.map((player) => player.name),
+                    )}.`}
+              </StatusMessage>
+            </div>
+          )}
 
           <div className="mt-6">
             <StatusMessage variant="info" title="Formato CSV esperado">
