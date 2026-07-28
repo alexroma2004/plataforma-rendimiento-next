@@ -8,8 +8,11 @@ import {
   getGpsMatchReferenceRecordsFromSupabase,
   getGpsRecordsBySessionId,
   getGpsSessionsFromSupabase,
+  getGpsTeamsFromSupabase,
+  getGpsWeeklyEvaluationsFromSupabase,
   type GpsRecordRow,
   type GpsSessionRow,
+  type GpsTeamRow,
 } from "@/lib/supabase/gps";
 import { buildGpsMatchReference } from "@/lib/gps/match-reference";
 
@@ -33,10 +36,7 @@ import {
   type ObjectiveStatus,
 } from "@/lib/gps/objectives";
 
-import { supabase } from "@/lib/supabase/client";
-
 import {
-  fetchGpsWeeklyEvaluations,
   type GpsWeeklyEvaluationResult,
   type GpsWeeklyMetricEvaluation,
   type GpsWeeklyPlayerEvaluation,
@@ -165,6 +165,15 @@ const playerScopeOptions: {
     description: "Muestra únicamente porteros.",
   },
 ];
+
+function getTeamLabel(team: GpsTeamRow) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
 
 function getMetricValue(row: GpsRecordRow, metric: GpsMetricKey) {
   return Number(row[metric] ?? 0);
@@ -815,6 +824,8 @@ export default function GpsPage() {
   const [loadingWeeklyEvaluation, setLoadingWeeklyEvaluation] = useState(false);
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
 
+  const [teams, setTeams] = useState<GpsTeamRow[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [sessions, setSessions] = useState<GpsSessionRow[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [records, setRecords] = useState<GpsRecordRow[]>([]);
@@ -830,19 +841,38 @@ export default function GpsPage() {
   >([]);
   const [loadingMatchReference, setLoadingMatchReference] = useState(false);
 
+  async function loadSessionsForTeam(teamId: string) {
+    if (!teamId) {
+      setSessions([]);
+      setSelectedSessionId("");
+      return;
+    }
+
+    const data = await getGpsSessionsFromSupabase(teamId);
+
+    setSessions(data);
+    setSelectedSessionId(data[0]?.id ?? "");
+  }
+
   useEffect(() => {
-    async function loadSessions() {
+    async function loadInitialGpsData() {
       try {
         setLoadingSessions(true);
         setError(null);
 
-        const data = await getGpsSessionsFromSupabase();
+        const teamsData = await getGpsTeamsFromSupabase();
+        const [onlyTeam] = teamsData;
+        const resolvedTeamId =
+          teamsData.length === 1 && onlyTeam ? onlyTeam.id : "";
 
-        setSessions(data);
+        setTeams(teamsData);
+        setSelectedTeamId(resolvedTeamId);
+        setRecords([]);
+        setWeeklyEvaluation(null);
+        setSelectedWeeklyPlayer("");
+        setMatchReferenceRecords([]);
 
-        if (data.length > 0) {
-          setSelectedSessionId(data[0].id);
-        }
+        await loadSessionsForTeam(resolvedTeamId);
       } catch (err) {
         const message =
           err instanceof Error
@@ -855,18 +885,38 @@ export default function GpsPage() {
       }
     }
 
-    loadSessions();
+    loadInitialGpsData();
   }, []);
+
+  async function handleTeamChange(teamId: string) {
+    try {
+      setLoadingSessions(true);
+      setError(null);
+      setSelectedTeamId(teamId);
+      setSessions([]);
+      setSelectedSessionId("");
+      setRecords([]);
+      setWeeklyEvaluation(null);
+      setSelectedWeeklyPlayer("");
+      setWeeklyError(null);
+      setMatchReferenceRecords([]);
+
+      await loadSessionsForTeam(teamId);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al cargar sesiones GPS.";
+
+      setError(message);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
 
   useEffect(() => {
     async function loadWeeklyEvaluation() {
-      if (!weeklyDate) {
-        setWeeklyEvaluation(null);
-        return;
-      }
-
-      if (!supabase) {
-        setWeeklyError("Supabase no está configurado.");
+      if (!weeklyDate || !selectedTeamId) {
         setWeeklyEvaluation(null);
         return;
       }
@@ -875,7 +925,10 @@ export default function GpsPage() {
         setLoadingWeeklyEvaluation(true);
         setWeeklyError(null);
 
-        const data = await fetchGpsWeeklyEvaluations(supabase, weeklyDate);
+        const data = await getGpsWeeklyEvaluationsFromSupabase(
+          weeklyDate,
+          selectedTeamId,
+        );
 
         setWeeklyEvaluation(data);
       } catch (err) {
@@ -892,11 +945,11 @@ export default function GpsPage() {
     }
 
     loadWeeklyEvaluation();
-  }, [weeklyDate]);
+  }, [weeklyDate, selectedTeamId]);
 
   useEffect(() => {
     async function loadRecords() {
-      if (!selectedSessionId) {
+      if (!selectedSessionId || !selectedTeamId) {
         setRecords([]);
         return;
       }
@@ -905,7 +958,10 @@ export default function GpsPage() {
         setLoadingRecords(true);
         setError(null);
 
-        const data = await getGpsRecordsBySessionId(selectedSessionId);
+        const data = await getGpsRecordsBySessionId(
+          selectedSessionId,
+          selectedTeamId,
+        );
         setRecords(data);
       } catch (err) {
         const message =
@@ -920,14 +976,21 @@ export default function GpsPage() {
     }
 
     loadRecords();
-  }, [selectedSessionId]);
+  }, [selectedSessionId, selectedTeamId]);
 
   useEffect(() => {
     async function loadMatchReferenceRecords() {
+      if (!selectedTeamId) {
+        setMatchReferenceRecords([]);
+        return;
+      }
+
       try {
         setLoadingMatchReference(true);
 
-        const data = await getGpsMatchReferenceRecordsFromSupabase();
+        const data = await getGpsMatchReferenceRecordsFromSupabase(
+          selectedTeamId,
+        );
 
         setMatchReferenceRecords(data);
       } catch (err) {
@@ -939,11 +1002,15 @@ export default function GpsPage() {
     }
 
     loadMatchReferenceRecords();
-  }, []);
+  }, [selectedTeamId]);
 
   const selectedSession = useMemo(() => {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
 
   const selectedMicrocycle = selectedSession?.microcycle ?? "MD-1";
 
@@ -1351,16 +1418,44 @@ export default function GpsPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Selecciona una sesión para visualizar los registros importados.
               </p>
+
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {selectedTeam
+                  ? `Mostrando sesiones de ${getTeamLabel(selectedTeam)}.`
+                  : "Selecciona un equipo para evitar mezclar datos GPS."}
+              </p>
             </div>
 
-            <div className="w-full md:w-[420px]">
+            <div className="grid w-full gap-3 md:w-[520px]">
+              <label className="text-sm font-bold text-slate-700">
+                Equipo
+                <select
+                  value={selectedTeamId}
+                  onChange={(event) => {
+                    void handleTeamChange(event.target.value);
+                  }}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  disabled={loadingSessions || teams.length === 0}
+                >
+                  <option value="">Selecciona equipo</option>
+
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {getTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label className="text-sm font-bold text-slate-700">
                 Sesión
                 <select
                   value={selectedSessionId}
                   onChange={(event) => setSelectedSessionId(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                  disabled={loadingSessions || sessions.length === 0}
+                  disabled={
+                    loadingSessions || !selectedTeamId || sessions.length === 0
+                  }
                 >
                   {sessions.length === 0 && (
                     <option value="">No hay sesiones GPS guardadas</option>
@@ -1393,7 +1488,26 @@ export default function GpsPage() {
   </div>
 )}
 
-{!loadingSessions && sessions.length === 0 && (
+          {!loadingSessions && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="No hay equipos disponibles">
+                Crea o confirma un equipo antes de consultar sesiones GPS por
+                equipo.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingSessions && teams.length > 1 && !selectedTeamId && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Selecciona un equipo">
+                Para evitar mezclar datos de varios equipos, selecciona un
+                equipo antes de mostrar sesiones, registros, objetivos,
+                rankings y gráficos GPS.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingSessions && selectedTeamId && sessions.length === 0 && (
   <div className="mt-6">
     <EmptyState
       title="Sin sesiones GPS"

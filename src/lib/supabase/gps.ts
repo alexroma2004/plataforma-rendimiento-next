@@ -1,5 +1,11 @@
 import { supabase } from "@/lib/supabase/client";
 import { parseGpsRows, type GpsParsedRow } from "@/lib/parsers/gps";
+import {
+  buildGpsWeeklyEvaluations,
+  type GpsRecordForReference,
+  type GpsSessionForReference,
+  type GpsWeeklyEvaluationResult,
+} from "@/lib/gps/references";
 
 export type RawGpsRow = Record<string, unknown>;
 
@@ -16,6 +22,13 @@ export type SaveGpsSessionInput = {
 export type SaveGpsSessionResult = {
   sessionId: string;
   insertedRecords: number;
+};
+
+export type GpsTeamRow = {
+  id: string;
+  name: string;
+  category: string | null;
+  season: string | null;
 };
 
 function cleanText(value: unknown): string | null {
@@ -286,12 +299,33 @@ export type GpsRecordRow = {
   notes: string | null;
 };
 
-export async function getGpsSessionsFromSupabase(): Promise<GpsSessionRow[]> {
+export async function getGpsTeamsFromSupabase(): Promise<GpsTeamRow[]> {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
   }
 
   const { data, error } = await supabase
+    .from("teams")
+    .select("id, name, category, season")
+    .order("created_at", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los equipos: ${error.message}`);
+  }
+
+  return (data ?? []) as GpsTeamRow[];
+}
+
+export async function getGpsSessionsFromSupabase(
+  teamId?: string | null,
+): Promise<GpsSessionRow[]> {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const selectedTeamId = cleanText(teamId);
+  let query = supabase
     .from("gps_sessions")
     .select(
       `
@@ -306,7 +340,13 @@ export async function getGpsSessionsFromSupabase(): Promise<GpsSessionRow[]> {
       created_at,
       updated_at
     `,
-    )
+    );
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("session_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -319,15 +359,23 @@ export async function getGpsSessionsFromSupabase(): Promise<GpsSessionRow[]> {
 
 export async function getGpsRecordsBySessionId(
   sessionId: string,
+  teamId?: string | null,
 ): Promise<GpsRecordRow[]> {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
   }
 
-  const { data, error } = await supabase
+  const selectedTeamId = cleanText(teamId);
+  let query = supabase
     .from("gps_records")
     .select("*")
-    .eq("session_id", sessionId)
+    .eq("session_id", sessionId);
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("total_distance", { ascending: false });
 
   if (error) {
@@ -336,17 +384,24 @@ export async function getGpsRecordsBySessionId(
 
   return (data ?? []) as GpsRecordRow[];
 }
-export async function getGpsMatchReferenceRecordsFromSupabase(): Promise<
-  GpsRecordRow[]
-> {
+export async function getGpsMatchReferenceRecordsFromSupabase(
+  teamId?: string | null,
+): Promise<GpsRecordRow[]> {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
   }
 
-  const { data: matchSessions, error: sessionsError } = await supabase
+  const selectedTeamId = cleanText(teamId);
+  let sessionsQuery = supabase
     .from("gps_sessions")
     .select("id")
     .eq("is_match", true);
+
+  if (selectedTeamId) {
+    sessionsQuery = sessionsQuery.eq("team_id", selectedTeamId);
+  }
+
+  const { data: matchSessions, error: sessionsError } = await sessionsQuery;
 
   if (sessionsError) {
     throw new Error(
@@ -362,10 +417,16 @@ export async function getGpsMatchReferenceRecordsFromSupabase(): Promise<
     return [];
   }
 
-  const { data: records, error: recordsError } = await supabase
+  let recordsQuery = supabase
     .from("gps_records")
     .select("*")
     .in("session_id", sessionIds);
+
+  if (selectedTeamId) {
+    recordsQuery = recordsQuery.eq("team_id", selectedTeamId);
+  }
+
+  const { data: records, error: recordsError } = await recordsQuery;
 
   if (recordsError) {
     throw new Error(
@@ -374,4 +435,66 @@ export async function getGpsMatchReferenceRecordsFromSupabase(): Promise<
   }
 
   return (records ?? []) as GpsRecordRow[];
+}
+
+export async function getGpsWeeklyEvaluationsFromSupabase(
+  selectedDate: string,
+  teamId?: string | null,
+): Promise<GpsWeeklyEvaluationResult> {
+  if (!supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
+
+  const selectedTeamId = cleanText(teamId);
+  let sessionsQuery = supabase
+    .from("gps_sessions")
+    .select("id, session_date, microcycle, is_match");
+
+  if (selectedTeamId) {
+    sessionsQuery = sessionsQuery.eq("team_id", selectedTeamId);
+  }
+
+  const { data: sessions, error: sessionsError } = await sessionsQuery;
+
+  if (sessionsError) {
+    throw new Error(
+      `No se han podido leer las sesiones GPS para calcular la semana: ${sessionsError.message}`,
+    );
+  }
+
+  let recordsQuery = supabase.from("gps_records").select(
+    `
+      id,
+      session_id,
+      player_name,
+      normalized_name,
+      position,
+      is_goalkeeper,
+      time_played,
+      total_distance,
+      hsr,
+      distance_vrange6,
+      sprints,
+      num_acc,
+      num_dec
+    `,
+  );
+
+  if (selectedTeamId) {
+    recordsQuery = recordsQuery.eq("team_id", selectedTeamId);
+  }
+
+  const { data: records, error: recordsError } = await recordsQuery;
+
+  if (recordsError) {
+    throw new Error(
+      `No se han podido leer los registros GPS para calcular la semana: ${recordsError.message}`,
+    );
+  }
+
+  return buildGpsWeeklyEvaluations({
+    sessions: (sessions ?? []) as GpsSessionForReference[],
+    records: (records ?? []) as GpsRecordForReference[],
+    selectedDate,
+  });
 }
