@@ -13,6 +13,25 @@ import {
   type TestExecutionStage,
 } from "@/lib/domain/test-execution";
 import {
+  calculateAbalakovSummary,
+  ABALAKOV_DEVICE,
+  ABALAKOV_MAX_ATTEMPTS,
+  ABALAKOV_TEST_CATEGORY,
+  ABALAKOV_TEST_ID,
+  ABALAKOV_TEST_NAME,
+  ABALAKOV_UNIT_ASYMMETRY,
+  ABALAKOV_UNIT_BODY_MASS,
+  ABALAKOV_UNIT_HEIGHT,
+  ABALAKOV_VARIABLES,
+  getAbalakovAttemptVariable,
+  modalityIncludesAbalakovBipodal,
+  modalityIncludesAbalakovUnipodal,
+  parsePositiveAbalakovNumber,
+  validateAbalakovExecutionInput,
+  type AbalakovAttemptSide,
+  type AbalakovModality,
+} from "@/lib/domain/tests/abalakov";
+import {
   calculateCmjSummary,
   CMJ_DEVICE,
   CMJ_MAX_ATTEMPTS,
@@ -174,8 +193,8 @@ type CatalogMessage = {
   message: string;
 };
 
-type JumpModality = CmjModality | SjModality;
-type JumpAttemptSide = CmjAttemptSide | SjAttemptSide;
+type JumpModality = AbalakovModality | CmjModality | SjModality;
+type JumpAttemptSide = AbalakovAttemptSide | CmjAttemptSide | SjAttemptSide;
 
 type JumpFormState = {
   performedAt: string;
@@ -236,12 +255,27 @@ function createInitialSjForm(): JumpFormState {
   };
 }
 
+function createInitialAbalakovForm(): JumpFormState {
+  return {
+    performedAt: getTodayDateInputValue(),
+    bodyMassKg: "",
+    modality: "BIPODAL",
+    bipodalAttempts: [""],
+    rightAttempts: [""],
+    leftAttempts: [""],
+  };
+}
+
 function isCmjCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === CMJ_TEST_ID;
 }
 
 function isSjCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === SJ_TEST_ID;
+}
+
+function isAbalakovCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "") === ABALAKOV_TEST_ID;
 }
 
 function getCatalogTestName(name: string) {
@@ -387,13 +421,18 @@ export default function TestsPage() {
   const [sjForm, setSjForm] = useState<JumpFormState>(createInitialSjForm);
   const [sjErrors, setSjErrors] = useState<string[]>([]);
   const [savingSj, setSavingSj] = useState(false);
+  const [abalakovForm, setAbalakovForm] = useState<JumpFormState>(
+    createInitialAbalakovForm,
+  );
+  const [abalakovErrors, setAbalakovErrors] = useState<string[]>([]);
+  const [savingAbalakov, setSavingAbalakov] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const savingJumpTest = savingCmj || savingSj;
+  const savingJumpTest = savingCmj || savingSj || savingAbalakov;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -433,9 +472,16 @@ export default function TestsPage() {
     setSavingSj(false);
   }
 
+  function resetAbalakovState() {
+    setAbalakovForm(createInitialAbalakovForm());
+    setAbalakovErrors([]);
+    setSavingAbalakov(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
+    resetAbalakovState();
   }
 
   useEffect(() => {
@@ -631,6 +677,8 @@ export default function TestsPage() {
     setCmjErrors([]);
     setSjForm(createInitialSjForm());
     setSjErrors([]);
+    setAbalakovForm(createInitialAbalakovForm());
+    setAbalakovErrors([]);
     setCatalogMessage(null);
   }
 
@@ -1304,6 +1352,360 @@ export default function TestsPage() {
     }
   }
 
+  function updateAbalakovAttempts(
+    side: AbalakovAttemptSide,
+    updater: (attempts: string[]) => string[],
+  ) {
+    setAbalakovForm((currentForm) => {
+      if (side === "BIPODAL") {
+        return {
+          ...currentForm,
+          bipodalAttempts: updater(currentForm.bipodalAttempts),
+        };
+      }
+
+      if (side === "DERECHA") {
+        return {
+          ...currentForm,
+          rightAttempts: updater(currentForm.rightAttempts),
+        };
+      }
+
+      return {
+        ...currentForm,
+        leftAttempts: updater(currentForm.leftAttempts),
+      };
+    });
+  }
+
+  function handleAbalakovAttemptChange(
+    side: AbalakovAttemptSide,
+    index: number,
+    value: string,
+  ) {
+    updateAbalakovAttempts(side, (attempts) =>
+      attempts.map((attempt, attemptIndex) =>
+        attemptIndex === index ? value : attempt,
+      ),
+    );
+  }
+
+  function handleAddAbalakovAttempt(side: AbalakovAttemptSide) {
+    updateAbalakovAttempts(side, (attempts) =>
+      attempts.length >= ABALAKOV_MAX_ATTEMPTS ? attempts : [...attempts, ""],
+    );
+  }
+
+  function handleRemoveAbalakovAttempt(
+    side: AbalakovAttemptSide,
+    index: number,
+  ) {
+    updateAbalakovAttempts(side, (attempts) =>
+      attempts.length <= 1
+        ? attempts
+        : attempts.filter((_, attemptIndex) => attemptIndex !== index),
+    );
+  }
+
+  function handleReviewAbalakov() {
+    if (!executionDraft || !isTestExecutionContextComplete(executionDraft.context)) {
+      setAbalakovErrors(["El contexto de ejecucion esta incompleto."]);
+      return;
+    }
+
+    if (!selectedCatalogPlayer) {
+      setAbalakovErrors([
+        "Selecciona un jugador activo antes de revisar el Abalakov.",
+      ]);
+      return;
+    }
+
+    const validationErrors = validateAbalakovExecutionInput({
+      bodyMassKg: abalakovForm.bodyMassKg,
+      modality: abalakovForm.modality as AbalakovModality,
+      bipodalAttempts: abalakovForm.bipodalAttempts,
+      rightAttempts: abalakovForm.rightAttempts,
+      leftAttempts: abalakovForm.leftAttempts,
+    });
+
+    if (!abalakovForm.performedAt) {
+      validationErrors.unshift("La fecha del test es obligatoria.");
+    }
+
+    if (validationErrors.length > 0) {
+      setAbalakovErrors(validationErrors);
+      return;
+    }
+
+    setExecutionDraft({
+      ...executionDraft,
+      context: {
+        ...executionDraft.context,
+        performedAt: abalakovForm.performedAt,
+      },
+    });
+    setAbalakovErrors([]);
+    setCatalogMessage(null);
+    setExecutionStage("REVIEW");
+  }
+
+  function appendAbalakovAttemptRecords(
+    records: TestRecordInput[],
+    side: AbalakovAttemptSide,
+    attempts: readonly string[],
+    player: TestPlayerRow,
+  ) {
+    attempts.forEach((attempt, index) => {
+      const value = parsePositiveAbalakovNumber(attempt);
+
+      if (value === null) return;
+
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: getAbalakovAttemptVariable(side, index + 1),
+        value,
+        unit: ABALAKOV_UNIT_HEIGHT,
+        direction: side,
+        source: ABALAKOV_DEVICE,
+      });
+    });
+  }
+
+  function buildAbalakovRecords(
+    player: TestPlayerRow,
+    form: JumpFormState,
+    summary: ReturnType<typeof calculateAbalakovSummary>,
+  ): TestRecordInput[] {
+    const modality = form.modality as AbalakovModality;
+    const bodyMassKg = parsePositiveAbalakovNumber(form.bodyMassKg);
+    const records: TestRecordInput[] = [
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: ABALAKOV_VARIABLES.BODY_MASS,
+        value: bodyMassKg,
+        unit: ABALAKOV_UNIT_BODY_MASS,
+        direction: modality,
+        source: ABALAKOV_DEVICE,
+      },
+    ];
+
+    if (modalityIncludesAbalakovBipodal(modality)) {
+      appendAbalakovAttemptRecords(
+        records,
+        "BIPODAL",
+        form.bipodalAttempts,
+        player,
+      );
+    }
+
+    if (modalityIncludesAbalakovUnipodal(modality)) {
+      appendAbalakovAttemptRecords(
+        records,
+        "DERECHA",
+        form.rightAttempts,
+        player,
+      );
+      appendAbalakovAttemptRecords(
+        records,
+        "IZQUIERDA",
+        form.leftAttempts,
+        player,
+      );
+    }
+
+    if (summary.bestBipodal !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: ABALAKOV_VARIABLES.BEST_BIPODAL,
+        value: summary.bestBipodal,
+        unit: ABALAKOV_UNIT_HEIGHT,
+        direction: "BIPODAL",
+        source: ABALAKOV_DEVICE,
+      });
+    }
+
+    if (summary.bestRight !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: ABALAKOV_VARIABLES.BEST_RIGHT,
+        value: summary.bestRight,
+        unit: ABALAKOV_UNIT_HEIGHT,
+        direction: "DERECHA",
+        source: ABALAKOV_DEVICE,
+      });
+    }
+
+    if (summary.bestLeft !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: ABALAKOV_VARIABLES.BEST_LEFT,
+        value: summary.bestLeft,
+        unit: ABALAKOV_UNIT_HEIGHT,
+        direction: "IZQUIERDA",
+        source: ABALAKOV_DEVICE,
+      });
+    }
+
+    if (summary.asymmetry !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: ABALAKOV_VARIABLES.ASYMMETRY,
+        value: summary.asymmetry,
+        unit: ABALAKOV_UNIT_ASYMMETRY,
+        direction: summary.bestSide,
+        source: ABALAKOV_DEVICE,
+      });
+    }
+
+    if (summary.bestSide !== "NO_APLICA") {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: ABALAKOV_TEST_NAME,
+        variable: ABALAKOV_VARIABLES.BEST_SIDE,
+        value: null,
+        unit: null,
+        direction: summary.bestSide,
+        source: ABALAKOV_DEVICE,
+      });
+    }
+
+    return records;
+  }
+
+  async function handleSaveAbalakov() {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el Abalakov",
+        message: "Faltan equipo, jugador o contexto de ejecucion.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...abalakovForm,
+      bipodalAttempts: [...abalakovForm.bipodalAttempts],
+      rightAttempts: [...abalakovForm.rightAttempts],
+      leftAttempts: [...abalakovForm.leftAttempts],
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const abalakovSummarySnapshot = calculateAbalakovSummary({
+      bodyMassKg: formSnapshot.bodyMassKg,
+      modality: formSnapshot.modality as AbalakovModality,
+      bipodalAttempts: formSnapshot.bipodalAttempts,
+      rightAttempts: formSnapshot.rightAttempts,
+      leftAttempts: formSnapshot.leftAttempts,
+    });
+    const validationErrors = validateAbalakovExecutionInput({
+      bodyMassKg: formSnapshot.bodyMassKg,
+      modality: formSnapshot.modality as AbalakovModality,
+      bipodalAttempts: formSnapshot.bipodalAttempts,
+      rightAttempts: formSnapshot.rightAttempts,
+      leftAttempts: formSnapshot.leftAttempts,
+    });
+
+    if (!formSnapshot.performedAt) {
+      validationErrors.unshift("La fecha del test es obligatoria.");
+    }
+
+    if (validationErrors.length > 0) {
+      setAbalakovErrors(validationErrors);
+      setExecutionStage("EXECUTION");
+      return;
+    }
+
+    try {
+      setSavingAbalakov(true);
+      setCatalogMessage(null);
+
+      const bodyMassKg = parsePositiveAbalakovNumber(formSnapshot.bodyMassKg);
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${ABALAKOV_TEST_NAME} - ${
+          playerSnapshot.name
+        } - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: `${ABALAKOV_TEST_NAME} ejecutado con ${ABALAKOV_DEVICE}. Modalidad: ${formSnapshot.modality}.`,
+        tests: [
+          {
+            id: ABALAKOV_TEST_ID,
+            name: ABALAKOV_TEST_NAME,
+            category: ABALAKOV_TEST_CATEGORY,
+            device: ABALAKOV_DEVICE,
+            modality: formSnapshot.modality,
+            bodyMassKg,
+            summary: abalakovSummarySnapshot,
+          },
+        ],
+        records: buildAbalakovRecords(
+          playerSnapshot,
+          formSnapshot,
+          abalakovSummarySnapshot,
+        ),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setAbalakovErrors([]);
+      setCatalogMessage({
+        variant: "success",
+        title: "Abalakov guardado",
+        message:
+          "Se han guardado los intentos validos y los mejores resultados del Abalakov. El historico del equipo se ha recargado automaticamente.",
+      });
+      resetAbalakovState();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar el Abalakov.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el Abalakov",
+        message,
+      });
+    } finally {
+      setSavingAbalakov(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -1367,7 +1769,10 @@ export default function TestsPage() {
     teamPlayers.find((player) => player.id === selectedCatalogPlayerId) ?? null;
   const isCurrentExecutionCmj = isCmjCatalogTest(selectedCatalogTest);
   const isCurrentExecutionSj = isSjCatalogTest(selectedCatalogTest);
-  const isCurrentExecutionJump = isCurrentExecutionCmj || isCurrentExecutionSj;
+  const isCurrentExecutionAbalakov =
+    isAbalakovCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionJump =
+    isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
     bodyMassKg: cmjForm.bodyMassKg,
     modality: cmjForm.modality,
@@ -1382,16 +1787,50 @@ export default function TestsPage() {
     rightAttempts: sjForm.rightAttempts,
     leftAttempts: sjForm.leftAttempts,
   });
-  const activeJumpForm = isCurrentExecutionSj ? sjForm : cmjForm;
-  const activeJumpSummary = isCurrentExecutionSj ? sjSummary : cmjSummary;
-  const activeJumpErrors = isCurrentExecutionSj ? sjErrors : cmjErrors;
-  const activeJumpDevice = isCurrentExecutionSj ? SJ_DEVICE : CMJ_DEVICE;
-  const activeJumpMaxAttempts = isCurrentExecutionSj
-    ? SJ_MAX_ATTEMPTS
-    : CMJ_MAX_ATTEMPTS;
-  const activeJumpTitle = isCurrentExecutionSj ? SJ_TEST_NAME : CMJ_TEST_NAME;
+  const abalakovSummary = calculateAbalakovSummary({
+    bodyMassKg: abalakovForm.bodyMassKg,
+    modality: abalakovForm.modality as AbalakovModality,
+    bipodalAttempts: abalakovForm.bipodalAttempts,
+    rightAttempts: abalakovForm.rightAttempts,
+    leftAttempts: abalakovForm.leftAttempts,
+  });
+  const activeJumpForm = isCurrentExecutionAbalakov
+    ? abalakovForm
+    : isCurrentExecutionSj
+      ? sjForm
+      : cmjForm;
+  const activeJumpSummary = isCurrentExecutionAbalakov
+    ? abalakovSummary
+    : isCurrentExecutionSj
+      ? sjSummary
+      : cmjSummary;
+  const activeJumpErrors = isCurrentExecutionAbalakov
+    ? abalakovErrors
+    : isCurrentExecutionSj
+      ? sjErrors
+      : cmjErrors;
+  const activeJumpDevice = isCurrentExecutionAbalakov
+    ? ABALAKOV_DEVICE
+    : isCurrentExecutionSj
+      ? SJ_DEVICE
+      : CMJ_DEVICE;
+  const activeJumpMaxAttempts = isCurrentExecutionAbalakov
+    ? ABALAKOV_MAX_ATTEMPTS
+    : isCurrentExecutionSj
+      ? SJ_MAX_ATTEMPTS
+      : CMJ_MAX_ATTEMPTS;
+  const activeJumpTitle = isCurrentExecutionAbalakov
+    ? ABALAKOV_TEST_NAME
+    : isCurrentExecutionSj
+      ? SJ_TEST_NAME
+      : CMJ_TEST_NAME;
 
   function setActiveJumpForm(updater: (currentForm: JumpFormState) => JumpFormState) {
+    if (isCurrentExecutionAbalakov) {
+      setAbalakovForm(updater);
+      return;
+    }
+
     if (isCurrentExecutionSj) {
       setSjForm(updater);
       return;
@@ -1401,12 +1840,20 @@ export default function TestsPage() {
   }
 
   function activeJumpIncludesBipodal(modality: JumpModality) {
+    if (isCurrentExecutionAbalakov) {
+      return modalityIncludesAbalakovBipodal(modality as AbalakovModality);
+    }
+
     return isCurrentExecutionSj
       ? modalityIncludesSjBipodal(modality as SjModality)
       : modalityIncludesBipodal(modality as CmjModality);
   }
 
   function activeJumpIncludesUnipodal(modality: JumpModality) {
+    if (isCurrentExecutionAbalakov) {
+      return modalityIncludesAbalakovUnipodal(modality as AbalakovModality);
+    }
+
     return isCurrentExecutionSj
       ? modalityIncludesSjUnipodal(modality as SjModality)
       : modalityIncludesUnipodal(modality as CmjModality);
@@ -1417,6 +1864,11 @@ export default function TestsPage() {
     index: number,
     value: string,
   ) {
+    if (isCurrentExecutionAbalakov) {
+      handleAbalakovAttemptChange(side as AbalakovAttemptSide, index, value);
+      return;
+    }
+
     if (isCurrentExecutionSj) {
       handleSjAttemptChange(side as SjAttemptSide, index, value);
       return;
@@ -1426,6 +1878,11 @@ export default function TestsPage() {
   }
 
   function handleAddActiveJumpAttempt(side: JumpAttemptSide) {
+    if (isCurrentExecutionAbalakov) {
+      handleAddAbalakovAttempt(side as AbalakovAttemptSide);
+      return;
+    }
+
     if (isCurrentExecutionSj) {
       handleAddSjAttempt(side as SjAttemptSide);
       return;
@@ -1435,6 +1892,11 @@ export default function TestsPage() {
   }
 
   function handleRemoveActiveJumpAttempt(side: JumpAttemptSide, index: number) {
+    if (isCurrentExecutionAbalakov) {
+      handleRemoveAbalakovAttempt(side as AbalakovAttemptSide, index);
+      return;
+    }
+
     if (isCurrentExecutionSj) {
       handleRemoveSjAttempt(side as SjAttemptSide, index);
       return;
@@ -1444,6 +1906,11 @@ export default function TestsPage() {
   }
 
   function handleReviewActiveJump() {
+    if (isCurrentExecutionAbalakov) {
+      handleReviewAbalakov();
+      return;
+    }
+
     if (isCurrentExecutionSj) {
       handleReviewSj();
       return;
@@ -1453,6 +1920,11 @@ export default function TestsPage() {
   }
 
   async function handleSaveActiveJump() {
+    if (isCurrentExecutionAbalakov) {
+      await handleSaveAbalakov();
+      return;
+    }
+
     if (isCurrentExecutionSj) {
       await handleSaveSj();
       return;
