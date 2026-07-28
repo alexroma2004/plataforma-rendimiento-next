@@ -53,6 +53,13 @@ export type CreateNeuromuscularSessionInput = {
   records: NeuromuscularRecordInput[];
 };
 
+export type NeuromuscularTeamRow = {
+  id: string;
+  name: string;
+  category: string | null;
+  season: string | null;
+};
+
 type PlayerMatch = {
   id: string;
   name: string;
@@ -66,6 +73,14 @@ function getSupabaseClient() {
   }
 
   return supabase;
+}
+
+function cleanText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+
+  const text = String(value).trim();
+
+  return text.length > 0 ? text : null;
 }
 
 function normalizeName(value: string) {
@@ -149,12 +164,39 @@ async function getPlayersByNormalizedName(teamId: string) {
   return playersMap;
 }
 
-export async function getNeuromuscularSessionsFromSupabase() {
+export async function getNeuromuscularTeamsFromSupabase(): Promise<
+  NeuromuscularTeamRow[]
+> {
   const client = getSupabaseClient();
 
   const { data, error } = await client
+    .from("teams")
+    .select("id, name, category, season")
+    .order("created_at", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los equipos: ${error.message}`);
+  }
+
+  return (data ?? []) as NeuromuscularTeamRow[];
+}
+
+export async function getNeuromuscularSessionsFromSupabase(
+  teamId?: string | null,
+) {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  let query = client
     .from("neuromuscular_sessions")
-    .select("*")
+    .select("*");
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("session_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -167,13 +209,23 @@ export async function getNeuromuscularSessionsFromSupabase() {
   return (data ?? []) as NeuromuscularSessionRow[];
 }
 
-export async function getNeuromuscularRecordsBySessionId(sessionId: string) {
+export async function getNeuromuscularRecordsBySessionId(
+  sessionId: string,
+  teamId?: string | null,
+) {
   const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
 
-  const { data, error } = await client
+  let query = client
     .from("neuromuscular_records")
     .select("*")
-    .eq("session_id", sessionId)
+    .eq("session_id", sessionId);
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("player_name", { ascending: true });
 
   if (error) {

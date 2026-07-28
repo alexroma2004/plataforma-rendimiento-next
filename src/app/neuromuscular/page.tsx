@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -18,8 +18,10 @@ import {
 import {
   getNeuromuscularRecordsBySessionId,
   getNeuromuscularSessionsFromSupabase,
+  getNeuromuscularTeamsFromSupabase,
   type NeuromuscularRecordRow,
   type NeuromuscularSessionRow,
+  type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
 
 type NeuromuscularVariableKey = "cmj" | "rsimod" | "vmp";
@@ -51,6 +53,15 @@ const variableOptions: {
     unit: "m/s",
   },
 ];
+
+function getTeamLabel(team: NeuromuscularTeamRow) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
 
 function isFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -253,6 +264,8 @@ function MetricSummaryCard({
 
 
 export default function NeuromuscularPage() {
+  const [teams, setTeams] = useState<NeuromuscularTeamRow[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [sessions, setSessions] = useState<NeuromuscularSessionRow[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [records, setRecords] = useState<NeuromuscularRecordRow[]>([]);
@@ -262,20 +275,44 @@ export default function NeuromuscularPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sessionsRequestId = useRef(0);
+
+  async function loadSessionsForTeam(teamId: string) {
+    const requestId = sessionsRequestId.current + 1;
+    sessionsRequestId.current = requestId;
+
+    if (!teamId) {
+      setSessions([]);
+      setSelectedSessionId("");
+      return;
+    }
+
+    const data = await getNeuromuscularSessionsFromSupabase(teamId);
+
+    if (requestId !== sessionsRequestId.current) {
+      return;
+    }
+
+    setSessions(data);
+    setSelectedSessionId(data[0]?.id ?? "");
+  }
 
   useEffect(() => {
-    async function loadSessions() {
+    async function loadInitialNeuromuscularData() {
       try {
         setLoadingSessions(true);
         setError(null);
 
-        const data = await getNeuromuscularSessionsFromSupabase();
+        const teamsData = await getNeuromuscularTeamsFromSupabase();
+        const [onlyTeam] = teamsData;
+        const resolvedTeamId =
+          teamsData.length === 1 && onlyTeam ? onlyTeam.id : "";
 
-        setSessions(data);
+        setTeams(teamsData);
+        setSelectedTeamId(resolvedTeamId);
+        setRecords([]);
 
-        if (data.length > 0) {
-          setSelectedSessionId(data[0].id);
-        }
+        await loadSessionsForTeam(resolvedTeamId);
       } catch (err) {
         const message =
           err instanceof Error
@@ -288,12 +325,35 @@ export default function NeuromuscularPage() {
       }
     }
 
-    loadSessions();
+    loadInitialNeuromuscularData();
   }, []);
+
+  async function handleTeamChange(teamId: string) {
+    try {
+      setLoadingSessions(true);
+      setError(null);
+      setSelectedTeamId(teamId);
+      setSessions([]);
+      setSelectedSessionId("");
+      setRecords([]);
+      setLoadingRecords(false);
+
+      await loadSessionsForTeam(teamId);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al cargar sesiones neuromusculares.";
+
+      setError(message);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
 
   useEffect(() => {
     async function loadRecords() {
-      if (!selectedSessionId) {
+      if (!selectedSessionId || !selectedTeamId) {
         setRecords([]);
         return;
       }
@@ -304,10 +364,19 @@ export default function NeuromuscularPage() {
 
         const data = await getNeuromuscularRecordsBySessionId(
           selectedSessionId,
+          selectedTeamId,
         );
+
+        if (ignore) {
+          return;
+        }
 
         setRecords(data);
       } catch (err) {
+        if (ignore) {
+          return;
+        }
+
         const message =
           err instanceof Error
             ? err.message
@@ -315,16 +384,27 @@ export default function NeuromuscularPage() {
 
         setError(message);
       } finally {
-        setLoadingRecords(false);
+        if (!ignore) {
+          setLoadingRecords(false);
+        }
       }
     }
 
+    let ignore = false;
     loadRecords();
-  }, [selectedSessionId]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedSessionId, selectedTeamId]);
 
   const selectedSession = useMemo(() => {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
 
   const selectedVariableMeta = useMemo(() => {
     return (
@@ -554,16 +634,44 @@ export default function NeuromuscularPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Selecciona una sesión para visualizar los registros importados.
               </p>
+
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {selectedTeam
+                  ? `Mostrando sesiones de ${getTeamLabel(selectedTeam)}.`
+                  : "Selecciona un equipo para evitar mezclar datos neuromusculares."}
+              </p>
             </div>
 
-            <div className="w-full md:w-[440px]">
+            <div className="grid w-full gap-3 md:w-[480px]">
+              <label className="text-sm font-bold text-slate-700">
+                Equipo
+                <select
+                  value={selectedTeamId}
+                  onChange={(event) => {
+                    void handleTeamChange(event.target.value);
+                  }}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  disabled={loadingSessions || teams.length === 0}
+                >
+                  <option value="">Selecciona equipo</option>
+
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {getTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label className="text-sm font-bold text-slate-700">
                 Sesión
                 <select
                   value={selectedSessionId}
                   onChange={(event) => setSelectedSessionId(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
-                  disabled={loadingSessions || sessions.length === 0}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  disabled={
+                    loadingSessions || !selectedTeamId || sessions.length === 0
+                  }
                 >
                   {sessions.length === 0 && (
                     <option value="">
@@ -604,7 +712,29 @@ export default function NeuromuscularPage() {
             </div>
           )}
 
-          {!loadingSessions && sessions.length === 0 && (
+          {!loadingSessions && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage
+                variant="warning"
+                title="No hay equipos disponibles"
+              >
+                Crea o confirma un equipo antes de consultar datos
+                neuromusculares por equipo.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingSessions && teams.length > 1 && !selectedTeamId && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Selecciona un equipo">
+                Para evitar mezclar datos de varios equipos, selecciona un
+                equipo antes de mostrar sesiones, jugadores, rankings, gráficos
+                y lectura rápida neuromuscular.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingSessions && selectedTeamId && sessions.length === 0 && (
             <div className="mt-6">
               <EmptyState
                 title="Sin sesiones neuromusculares"
