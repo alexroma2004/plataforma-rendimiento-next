@@ -32,6 +32,25 @@ import {
   type CmjModality,
 } from "@/lib/domain/tests/cmj";
 import {
+  calculateSjSummary,
+  SJ_DEVICE,
+  SJ_MAX_ATTEMPTS,
+  SJ_TEST_CATEGORY,
+  SJ_TEST_ID,
+  SJ_TEST_NAME,
+  SJ_UNIT_ASYMMETRY,
+  SJ_UNIT_BODY_MASS,
+  SJ_UNIT_HEIGHT,
+  SJ_VARIABLES,
+  getSjAttemptVariable,
+  modalityIncludesSjBipodal,
+  modalityIncludesSjUnipodal,
+  parsePositiveSjNumber,
+  validateSjExecutionInput,
+  type SjAttemptSide,
+  type SjModality,
+} from "@/lib/domain/tests/sj";
+import {
   createTestSessionWithResults,
   getTestPlayersByTeamId,
   getTestResultsBySessionId,
@@ -155,10 +174,13 @@ type CatalogMessage = {
   message: string;
 };
 
-type CmjFormState = {
+type JumpModality = CmjModality | SjModality;
+type JumpAttemptSide = CmjAttemptSide | SjAttemptSide;
+
+type JumpFormState = {
   performedAt: string;
   bodyMassKg: string;
-  modality: CmjModality;
+  modality: JumpModality;
   bipodalAttempts: string[];
   rightAttempts: string[];
   leftAttempts: string[];
@@ -192,7 +214,18 @@ function getTodayDateInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function createInitialCmjForm(): CmjFormState {
+function createInitialCmjForm(): JumpFormState {
+  return {
+    performedAt: getTodayDateInputValue(),
+    bodyMassKg: "",
+    modality: "BIPODAL",
+    bipodalAttempts: [""],
+    rightAttempts: [""],
+    leftAttempts: [""],
+  };
+}
+
+function createInitialSjForm(): JumpFormState {
   return {
     performedAt: getTodayDateInputValue(),
     bodyMassKg: "",
@@ -205,6 +238,10 @@ function createInitialCmjForm(): CmjFormState {
 
 function isCmjCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === CMJ_TEST_ID;
+}
+
+function isSjCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "") === SJ_TEST_ID;
 }
 
 function getCatalogTestName(name: string) {
@@ -344,15 +381,19 @@ export default function TestsPage() {
     useState<TestExecutionStage>("CATALOG");
   const [executionDraft, setExecutionDraft] =
     useState<TestExecutionDraft | null>(null);
-  const [cmjForm, setCmjForm] = useState<CmjFormState>(createInitialCmjForm);
+  const [cmjForm, setCmjForm] = useState<JumpFormState>(createInitialCmjForm);
   const [cmjErrors, setCmjErrors] = useState<string[]>([]);
   const [savingCmj, setSavingCmj] = useState(false);
+  const [sjForm, setSjForm] = useState<JumpFormState>(createInitialSjForm);
+  const [sjErrors, setSjErrors] = useState<string[]>([]);
+  const [savingSj, setSavingSj] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savingJumpTest = savingCmj || savingSj;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -384,6 +425,17 @@ export default function TestsPage() {
     setCmjForm(createInitialCmjForm());
     setCmjErrors([]);
     setSavingCmj(false);
+  }
+
+  function resetSjState() {
+    setSjForm(createInitialSjForm());
+    setSjErrors([]);
+    setSavingSj(false);
+  }
+
+  function resetJumpTestState() {
+    resetCmjState();
+    resetSjState();
   }
 
   useEffect(() => {
@@ -420,7 +472,7 @@ export default function TestsPage() {
   }, []);
 
   async function handleTeamChange(teamId: string) {
-    if (savingCmj) return;
+    if (savingJumpTest) return;
 
     try {
       setLoadingSessions(true);
@@ -440,7 +492,7 @@ export default function TestsPage() {
       setCatalogMessage(null);
       setLoadingTeamPlayers(false);
       setLoadingData(false);
-      resetCmjState();
+      resetJumpTestState();
 
       await loadSessionsForTeam(teamId);
     } catch (err) {
@@ -456,7 +508,7 @@ export default function TestsPage() {
   }
 
   function handleViewChange(view: TestsView) {
-    if (savingCmj) return;
+    if (savingJumpTest) return;
 
     setActiveView(view);
 
@@ -468,11 +520,13 @@ export default function TestsPage() {
       setExecutionDraft(null);
       setCatalogMessage(null);
       setLoadingTeamPlayers(false);
-      resetCmjState();
+      resetJumpTestState();
     }
   }
 
   async function handleOpenCatalogTest(test: CatalogTest) {
+    if (savingJumpTest) return;
+
     if (!selectedTeamId) {
       setCatalogMessage({
         variant: "warning",
@@ -489,7 +543,7 @@ export default function TestsPage() {
     setExecutionStage("SETUP");
     setExecutionDraft(null);
     setTeamPlayers([]);
-    resetCmjState();
+    resetJumpTestState();
 
     const requestId = catalogPlayersRequestId.current + 1;
     catalogPlayersRequestId.current = requestId;
@@ -527,7 +581,7 @@ export default function TestsPage() {
   }
 
   function handleBackToCatalog() {
-    if (savingCmj) return;
+    if (savingJumpTest) return;
 
     catalogPlayersRequestId.current += 1;
     setSelectedCatalogTest(null);
@@ -536,10 +590,12 @@ export default function TestsPage() {
     setExecutionDraft(null);
     setCatalogMessage(null);
     setLoadingTeamPlayers(false);
-    resetCmjState();
+    resetJumpTestState();
   }
 
   function handleContinueCatalogTest() {
+    if (savingJumpTest) return;
+
     if (!selectedCatalogTest || !selectedCatalogPlayerId) {
       setCatalogMessage({
         variant: "warning",
@@ -573,18 +629,20 @@ export default function TestsPage() {
     setExecutionStage("EXECUTION");
     setCmjForm(createInitialCmjForm());
     setCmjErrors([]);
+    setSjForm(createInitialSjForm());
+    setSjErrors([]);
     setCatalogMessage(null);
   }
 
   function handleBackToTestSetup() {
-    if (savingCmj) return;
+    if (savingJumpTest) return;
 
     setExecutionStage("SETUP");
     setCatalogMessage(null);
   }
 
   function handleCancelExecution() {
-    if (savingCmj) return;
+    if (savingJumpTest) return;
 
     catalogPlayersRequestId.current += 1;
     setSelectedCatalogTest(null);
@@ -593,7 +651,7 @@ export default function TestsPage() {
     setExecutionDraft(null);
     setCatalogMessage(null);
     setLoadingTeamPlayers(false);
-    resetCmjState();
+    resetJumpTestState();
   }
 
   function updateCmjAttempts(
@@ -829,7 +887,7 @@ export default function TestsPage() {
   }
 
   async function handleSaveCmj() {
-    if (savingCmj) return;
+    if (savingJumpTest) return;
 
     if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
       setCatalogMessage({
@@ -916,6 +974,336 @@ export default function TestsPage() {
     }
   }
 
+  function updateSjAttempts(
+    side: SjAttemptSide,
+    updater: (attempts: string[]) => string[],
+  ) {
+    setSjForm((currentForm) => {
+      if (side === "BIPODAL") {
+        return {
+          ...currentForm,
+          bipodalAttempts: updater(currentForm.bipodalAttempts),
+        };
+      }
+
+      if (side === "DERECHA") {
+        return {
+          ...currentForm,
+          rightAttempts: updater(currentForm.rightAttempts),
+        };
+      }
+
+      return {
+        ...currentForm,
+        leftAttempts: updater(currentForm.leftAttempts),
+      };
+    });
+  }
+
+  function handleSjAttemptChange(
+    side: SjAttemptSide,
+    index: number,
+    value: string,
+  ) {
+    updateSjAttempts(side, (attempts) =>
+      attempts.map((attempt, attemptIndex) =>
+        attemptIndex === index ? value : attempt,
+      ),
+    );
+  }
+
+  function handleAddSjAttempt(side: SjAttemptSide) {
+    updateSjAttempts(side, (attempts) =>
+      attempts.length >= SJ_MAX_ATTEMPTS ? attempts : [...attempts, ""],
+    );
+  }
+
+  function handleRemoveSjAttempt(side: SjAttemptSide, index: number) {
+    updateSjAttempts(side, (attempts) =>
+      attempts.length <= 1
+        ? attempts
+        : attempts.filter((_, attemptIndex) => attemptIndex !== index),
+    );
+  }
+
+  function handleReviewSj() {
+    if (!executionDraft || !isTestExecutionContextComplete(executionDraft.context)) {
+      setSjErrors(["El contexto de ejecucion esta incompleto."]);
+      return;
+    }
+
+    if (!selectedCatalogPlayer) {
+      setSjErrors(["Selecciona un jugador activo antes de revisar el SJ."]);
+      return;
+    }
+
+    const validationErrors = validateSjExecutionInput({
+      bodyMassKg: sjForm.bodyMassKg,
+      modality: sjForm.modality as SjModality,
+      bipodalAttempts: sjForm.bipodalAttempts,
+      rightAttempts: sjForm.rightAttempts,
+      leftAttempts: sjForm.leftAttempts,
+    });
+
+    if (!sjForm.performedAt) {
+      validationErrors.unshift("La fecha del test es obligatoria.");
+    }
+
+    if (validationErrors.length > 0) {
+      setSjErrors(validationErrors);
+      return;
+    }
+
+    setExecutionDraft({
+      ...executionDraft,
+      context: {
+        ...executionDraft.context,
+        performedAt: sjForm.performedAt,
+      },
+    });
+    setSjErrors([]);
+    setCatalogMessage(null);
+    setExecutionStage("REVIEW");
+  }
+
+  function appendSjAttemptRecords(
+    records: TestRecordInput[],
+    side: SjAttemptSide,
+    attempts: readonly string[],
+    player: TestPlayerRow,
+  ) {
+    attempts.forEach((attempt, index) => {
+      const value = parsePositiveSjNumber(attempt);
+
+      if (value === null) return;
+
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: getSjAttemptVariable(side, index + 1),
+        value,
+        unit: SJ_UNIT_HEIGHT,
+        direction: side,
+        source: SJ_DEVICE,
+      });
+    });
+  }
+
+  function buildSjRecords(
+    player: TestPlayerRow,
+    form: JumpFormState,
+    summary: ReturnType<typeof calculateSjSummary>,
+  ): TestRecordInput[] {
+    const modality = form.modality as SjModality;
+    const bodyMassKg = parsePositiveSjNumber(form.bodyMassKg);
+    const records: TestRecordInput[] = [
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: SJ_VARIABLES.BODY_MASS,
+        value: bodyMassKg,
+        unit: SJ_UNIT_BODY_MASS,
+        direction: modality,
+        source: SJ_DEVICE,
+      },
+    ];
+
+    if (modalityIncludesSjBipodal(modality)) {
+      appendSjAttemptRecords(records, "BIPODAL", form.bipodalAttempts, player);
+    }
+
+    if (modalityIncludesSjUnipodal(modality)) {
+      appendSjAttemptRecords(records, "DERECHA", form.rightAttempts, player);
+      appendSjAttemptRecords(records, "IZQUIERDA", form.leftAttempts, player);
+    }
+
+    if (summary.bestBipodal !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: SJ_VARIABLES.BEST_BIPODAL,
+        value: summary.bestBipodal,
+        unit: SJ_UNIT_HEIGHT,
+        direction: "BIPODAL",
+        source: SJ_DEVICE,
+      });
+    }
+
+    if (summary.bestRight !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: SJ_VARIABLES.BEST_RIGHT,
+        value: summary.bestRight,
+        unit: SJ_UNIT_HEIGHT,
+        direction: "DERECHA",
+        source: SJ_DEVICE,
+      });
+    }
+
+    if (summary.bestLeft !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: SJ_VARIABLES.BEST_LEFT,
+        value: summary.bestLeft,
+        unit: SJ_UNIT_HEIGHT,
+        direction: "IZQUIERDA",
+        source: SJ_DEVICE,
+      });
+    }
+
+    if (summary.asymmetry !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: SJ_VARIABLES.ASYMMETRY,
+        value: summary.asymmetry,
+        unit: SJ_UNIT_ASYMMETRY,
+        direction: summary.bestSide,
+        source: SJ_DEVICE,
+      });
+    }
+
+    if (summary.bestSide !== "NO_APLICA") {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: SJ_TEST_NAME,
+        variable: SJ_VARIABLES.BEST_SIDE,
+        value: null,
+        unit: null,
+        direction: summary.bestSide,
+        source: SJ_DEVICE,
+      });
+    }
+
+    return records;
+  }
+
+  async function handleSaveSj() {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el SJ",
+        message: "Faltan equipo, jugador o contexto de ejecucion.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...sjForm,
+      bipodalAttempts: [...sjForm.bipodalAttempts],
+      rightAttempts: [...sjForm.rightAttempts],
+      leftAttempts: [...sjForm.leftAttempts],
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const sjSummarySnapshot = calculateSjSummary({
+      bodyMassKg: formSnapshot.bodyMassKg,
+      modality: formSnapshot.modality as SjModality,
+      bipodalAttempts: formSnapshot.bipodalAttempts,
+      rightAttempts: formSnapshot.rightAttempts,
+      leftAttempts: formSnapshot.leftAttempts,
+    });
+    const validationErrors = validateSjExecutionInput({
+      bodyMassKg: formSnapshot.bodyMassKg,
+      modality: formSnapshot.modality as SjModality,
+      bipodalAttempts: formSnapshot.bipodalAttempts,
+      rightAttempts: formSnapshot.rightAttempts,
+      leftAttempts: formSnapshot.leftAttempts,
+    });
+
+    if (!formSnapshot.performedAt) {
+      validationErrors.unshift("La fecha del test es obligatoria.");
+    }
+
+    if (validationErrors.length > 0) {
+      setSjErrors(validationErrors);
+      setExecutionStage("EXECUTION");
+      return;
+    }
+
+    try {
+      setSavingSj(true);
+      setCatalogMessage(null);
+
+      const bodyMassKg = parsePositiveSjNumber(formSnapshot.bodyMassKg);
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${SJ_TEST_NAME} - ${
+          playerSnapshot.name
+        } - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: `${SJ_TEST_NAME} ejecutado con ${SJ_DEVICE}. Modalidad: ${formSnapshot.modality}.`,
+        tests: [
+          {
+            id: SJ_TEST_ID,
+            name: SJ_TEST_NAME,
+            category: SJ_TEST_CATEGORY,
+            device: SJ_DEVICE,
+            modality: formSnapshot.modality,
+            bodyMassKg,
+            summary: sjSummarySnapshot,
+          },
+        ],
+        records: buildSjRecords(playerSnapshot, formSnapshot, sjSummarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setSjErrors([]);
+      setCatalogMessage({
+        variant: "success",
+        title: "SJ guardado",
+        message:
+          "Se han guardado los intentos validos y los mejores resultados del SJ. El historico del equipo se ha recargado automaticamente.",
+      });
+      resetSjState();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar el SJ.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el SJ",
+        message,
+      });
+    } finally {
+      setSavingSj(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -978,6 +1366,8 @@ export default function TestsPage() {
   const selectedCatalogPlayer =
     teamPlayers.find((player) => player.id === selectedCatalogPlayerId) ?? null;
   const isCurrentExecutionCmj = isCmjCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionSj = isSjCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionJump = isCurrentExecutionCmj || isCurrentExecutionSj;
   const cmjSummary = calculateCmjSummary({
     bodyMassKg: cmjForm.bodyMassKg,
     modality: cmjForm.modality,
@@ -985,6 +1375,91 @@ export default function TestsPage() {
     rightAttempts: cmjForm.rightAttempts,
     leftAttempts: cmjForm.leftAttempts,
   });
+  const sjSummary = calculateSjSummary({
+    bodyMassKg: sjForm.bodyMassKg,
+    modality: sjForm.modality as SjModality,
+    bipodalAttempts: sjForm.bipodalAttempts,
+    rightAttempts: sjForm.rightAttempts,
+    leftAttempts: sjForm.leftAttempts,
+  });
+  const activeJumpForm = isCurrentExecutionSj ? sjForm : cmjForm;
+  const activeJumpSummary = isCurrentExecutionSj ? sjSummary : cmjSummary;
+  const activeJumpErrors = isCurrentExecutionSj ? sjErrors : cmjErrors;
+  const activeJumpDevice = isCurrentExecutionSj ? SJ_DEVICE : CMJ_DEVICE;
+  const activeJumpMaxAttempts = isCurrentExecutionSj
+    ? SJ_MAX_ATTEMPTS
+    : CMJ_MAX_ATTEMPTS;
+  const activeJumpTitle = isCurrentExecutionSj ? SJ_TEST_NAME : CMJ_TEST_NAME;
+
+  function setActiveJumpForm(updater: (currentForm: JumpFormState) => JumpFormState) {
+    if (isCurrentExecutionSj) {
+      setSjForm(updater);
+      return;
+    }
+
+    setCmjForm(updater);
+  }
+
+  function activeJumpIncludesBipodal(modality: JumpModality) {
+    return isCurrentExecutionSj
+      ? modalityIncludesSjBipodal(modality as SjModality)
+      : modalityIncludesBipodal(modality as CmjModality);
+  }
+
+  function activeJumpIncludesUnipodal(modality: JumpModality) {
+    return isCurrentExecutionSj
+      ? modalityIncludesSjUnipodal(modality as SjModality)
+      : modalityIncludesUnipodal(modality as CmjModality);
+  }
+
+  function handleActiveJumpAttemptChange(
+    side: JumpAttemptSide,
+    index: number,
+    value: string,
+  ) {
+    if (isCurrentExecutionSj) {
+      handleSjAttemptChange(side as SjAttemptSide, index, value);
+      return;
+    }
+
+    handleCmjAttemptChange(side as CmjAttemptSide, index, value);
+  }
+
+  function handleAddActiveJumpAttempt(side: JumpAttemptSide) {
+    if (isCurrentExecutionSj) {
+      handleAddSjAttempt(side as SjAttemptSide);
+      return;
+    }
+
+    handleAddCmjAttempt(side as CmjAttemptSide);
+  }
+
+  function handleRemoveActiveJumpAttempt(side: JumpAttemptSide, index: number) {
+    if (isCurrentExecutionSj) {
+      handleRemoveSjAttempt(side as SjAttemptSide, index);
+      return;
+    }
+
+    handleRemoveCmjAttempt(side as CmjAttemptSide, index);
+  }
+
+  function handleReviewActiveJump() {
+    if (isCurrentExecutionSj) {
+      handleReviewSj();
+      return;
+    }
+
+    handleReviewCmj();
+  }
+
+  async function handleSaveActiveJump() {
+    if (isCurrentExecutionSj) {
+      await handleSaveSj();
+      return;
+    }
+
+    await handleSaveCmj();
+  }
 
   const capacityOptions = useMemo(() => {
     const capacities = new Set<string>();
@@ -1260,7 +1735,7 @@ export default function TestsPage() {
                   onChange={(event) => {
                     void handleTeamChange(event.target.value);
                   }}
-                  disabled={savingCmj || loadingSessions || teams.length === 0}
+                  disabled={savingJumpTest || loadingSessions || teams.length === 0}
                   className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                 >
                   <option value="">Selecciona equipo</option>
@@ -1279,7 +1754,7 @@ export default function TestsPage() {
                 value={selectedSessionId}
                 onChange={(event) => setSelectedSessionId(event.target.value)}
                 disabled={
-                  savingCmj ||
+                  savingJumpTest ||
                   loadingSessions ||
                   !selectedTeamId ||
                   sessions.length === 0
@@ -1387,7 +1862,7 @@ export default function TestsPage() {
               <button
                 key={option.id}
                 type="button"
-                disabled={savingCmj}
+                disabled={savingJumpTest}
                 onClick={() => handleViewChange(option.id)}
                 className={`rounded-xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   activeView === option.id
@@ -1489,7 +1964,7 @@ export default function TestsPage() {
                   </div>
                 )}
 
-                {isCurrentExecutionCmj && (
+                {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
                       <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
@@ -1498,49 +1973,49 @@ export default function TestsPage() {
                         </p>
 
                         <h3 className="mt-2 text-lg font-black text-slate-950">
-                          Resumen CMJ
+                          Resumen {activeJumpTitle}
                         </h3>
 
                         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                           <SummaryCard
                             title="Mejor bipodal"
                             value={
-                              cmjSummary.bestBipodal === null
+                              activeJumpSummary.bestBipodal === null
                                 ? "—"
-                                : `${formatNumber(cmjSummary.bestBipodal)} cm`
+                                : `${formatNumber(activeJumpSummary.bestBipodal)} cm`
                             }
                           />
 
                           <SummaryCard
                             title="Mejor derecha"
                             value={
-                              cmjSummary.bestRight === null
+                              activeJumpSummary.bestRight === null
                                 ? "—"
-                                : `${formatNumber(cmjSummary.bestRight)} cm`
+                                : `${formatNumber(activeJumpSummary.bestRight)} cm`
                             }
                           />
 
                           <SummaryCard
                             title="Mejor izquierda"
                             value={
-                              cmjSummary.bestLeft === null
+                              activeJumpSummary.bestLeft === null
                                 ? "—"
-                                : `${formatNumber(cmjSummary.bestLeft)} cm`
+                                : `${formatNumber(activeJumpSummary.bestLeft)} cm`
                             }
                           />
 
                           <SummaryCard
                             title="Asimetría"
                             value={
-                              cmjSummary.asymmetry === null
+                              activeJumpSummary.asymmetry === null
                                 ? "—"
-                                : `${formatNumber(cmjSummary.asymmetry)} %`
+                                : `${formatNumber(activeJumpSummary.asymmetry)} %`
                             }
                           />
 
                           <SummaryCard
                             title="Lado mayor"
-                            value={cmjSummary.bestSide}
+                            value={activeJumpSummary.bestSide}
                           />
                         </div>
 
@@ -1558,9 +2033,9 @@ export default function TestsPage() {
                             Fecha del test
                             <input
                               type="date"
-                              value={cmjForm.performedAt}
+                              value={activeJumpForm.performedAt}
                               onChange={(event) =>
-                                setCmjForm((currentForm) => ({
+                                setActiveJumpForm((currentForm) => ({
                                   ...currentForm,
                                   performedAt: event.target.value,
                                 }))
@@ -1575,9 +2050,9 @@ export default function TestsPage() {
                               type="number"
                               min="0"
                               step="0.1"
-                              value={cmjForm.bodyMassKg}
+                              value={activeJumpForm.bodyMassKg}
                               onChange={(event) =>
-                                setCmjForm((currentForm) => ({
+                                setActiveJumpForm((currentForm) => ({
                                   ...currentForm,
                                   bodyMassKg: event.target.value,
                                 }))
@@ -1590,11 +2065,11 @@ export default function TestsPage() {
                           <label className="text-sm font-bold text-slate-700">
                             Modalidad
                             <select
-                              value={cmjForm.modality}
+                              value={activeJumpForm.modality}
                               onChange={(event) =>
-                                setCmjForm((currentForm) => ({
+                                setActiveJumpForm((currentForm) => ({
                                   ...currentForm,
-                                  modality: event.target.value as CmjModality,
+                                  modality: event.target.value as JumpModality,
                                 }))
                               }
                               className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
@@ -1608,16 +2083,16 @@ export default function TestsPage() {
 
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
                           <p className="text-sm font-black text-slate-950">
-                            Dispositivo: {CMJ_DEVICE}
+                            Dispositivo: {activeJumpDevice}
                           </p>
                           <p className="mt-1 text-sm leading-6 text-slate-600">
                             Introduce altura de salto en centímetros. Puedes
-                            registrar entre 1 y {CMJ_MAX_ATTEMPTS} intentos por
+                            registrar entre 1 y {activeJumpMaxAttempts} intentos por
                             modalidad o lado.
                           </p>
                         </div>
 
-                        {modalityIncludesBipodal(cmjForm.modality) && (
+                        {activeJumpIncludesBipodal(activeJumpForm.modality) && (
                           <div className="rounded-2xl border border-slate-200 p-4 sm:p-5">
                             <div className="flex items-center justify-between gap-3">
                               <h3 className="text-sm font-black uppercase tracking-wide text-slate-700">
@@ -1625,10 +2100,10 @@ export default function TestsPage() {
                               </h3>
                               <button
                                 type="button"
-                                onClick={() => handleAddCmjAttempt("BIPODAL")}
+                                onClick={() => handleAddActiveJumpAttempt("BIPODAL")}
                                 disabled={
-                                  cmjForm.bipodalAttempts.length >=
-                                  CMJ_MAX_ATTEMPTS
+                                  activeJumpForm.bipodalAttempts.length >=
+                                  activeJumpMaxAttempts
                                 }
                                 className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                               >
@@ -1637,7 +2112,7 @@ export default function TestsPage() {
                             </div>
 
                             <div className="mt-4 grid gap-3 md:grid-cols-3">
-                              {cmjForm.bipodalAttempts.map((attempt, index) => (
+                              {activeJumpForm.bipodalAttempts.map((attempt, index) => (
                                 <label
                                   key={`bipodal-${index}`}
                                   className="text-sm font-bold text-slate-700"
@@ -1650,7 +2125,7 @@ export default function TestsPage() {
                                       step="0.1"
                                       value={attempt}
                                       onChange={(event) =>
-                                        handleCmjAttemptChange(
+                                        handleActiveJumpAttemptChange(
                                           "BIPODAL",
                                           index,
                                           event.target.value,
@@ -1661,13 +2136,13 @@ export default function TestsPage() {
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        handleRemoveCmjAttempt(
+                                        handleRemoveActiveJumpAttempt(
                                           "BIPODAL",
                                           index,
                                         )
                                       }
                                       disabled={
-                                        cmjForm.bipodalAttempts.length <= 1
+                                        activeJumpForm.bipodalAttempts.length <= 1
                                       }
                                       className="rounded-xl border border-slate-300 px-3 text-xs font-black text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
                                     >
@@ -1680,17 +2155,17 @@ export default function TestsPage() {
                           </div>
                         )}
 
-                        {modalityIncludesUnipodal(cmjForm.modality) && (
+                        {activeJumpIncludesUnipodal(activeJumpForm.modality) && (
                           <div className="grid gap-4 xl:grid-cols-2">
                             {[
                               {
                                 side: "DERECHA" as const,
-                                attempts: cmjForm.rightAttempts,
+                                attempts: activeJumpForm.rightAttempts,
                                 title: "Intentos derecha",
                               },
                               {
                                 side: "IZQUIERDA" as const,
-                                attempts: cmjForm.leftAttempts,
+                                attempts: activeJumpForm.leftAttempts,
                                 title: "Intentos izquierda",
                               },
                             ].map((group) => (
@@ -1705,10 +2180,10 @@ export default function TestsPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      handleAddCmjAttempt(group.side)
+                                      handleAddActiveJumpAttempt(group.side)
                                     }
                                     disabled={
-                                      group.attempts.length >= CMJ_MAX_ATTEMPTS
+                                      group.attempts.length >= activeJumpMaxAttempts
                                     }
                                     className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                                   >
@@ -1730,7 +2205,7 @@ export default function TestsPage() {
                                           step="0.1"
                                           value={attempt}
                                           onChange={(event) =>
-                                            handleCmjAttemptChange(
+                                            handleActiveJumpAttemptChange(
                                               group.side,
                                               index,
                                               event.target.value,
@@ -1741,7 +2216,7 @@ export default function TestsPage() {
                                         <button
                                           type="button"
                                           onClick={() =>
-                                            handleRemoveCmjAttempt(
+                                            handleRemoveActiveJumpAttempt(
                                               group.side,
                                               index,
                                             )
@@ -1769,50 +2244,50 @@ export default function TestsPage() {
                             <SummaryCard
                               title="Mejor bipodal"
                               value={
-                                cmjSummary.bestBipodal === null
+                                activeJumpSummary.bestBipodal === null
                                   ? "—"
-                                  : `${formatNumber(cmjSummary.bestBipodal)} cm`
+                                  : `${formatNumber(activeJumpSummary.bestBipodal)} cm`
                               }
                             />
                             <SummaryCard
                               title="Mejor derecha"
                               value={
-                                cmjSummary.bestRight === null
+                                activeJumpSummary.bestRight === null
                                   ? "—"
-                                  : `${formatNumber(cmjSummary.bestRight)} cm`
+                                  : `${formatNumber(activeJumpSummary.bestRight)} cm`
                               }
                             />
                             <SummaryCard
                               title="Mejor izquierda"
                               value={
-                                cmjSummary.bestLeft === null
+                                activeJumpSummary.bestLeft === null
                                   ? "—"
-                                  : `${formatNumber(cmjSummary.bestLeft)} cm`
+                                  : `${formatNumber(activeJumpSummary.bestLeft)} cm`
                               }
                             />
                             <SummaryCard
                               title="Asimetría"
                               value={
-                                cmjSummary.asymmetry === null
+                                activeJumpSummary.asymmetry === null
                                   ? "—"
-                                  : `${formatNumber(cmjSummary.asymmetry)} %`
+                                  : `${formatNumber(activeJumpSummary.asymmetry)} %`
                               }
                             />
                             <SummaryCard
                               title="Lado mayor"
-                              value={cmjSummary.bestSide}
+                              value={activeJumpSummary.bestSide}
                             />
                           </div>
                         </div>
 
-                        {cmjErrors.length > 0 && (
+                        {activeJumpErrors.length > 0 && (
                           <StatusMessage
                             variant="warning"
-                            title="Revisa el CMJ antes de continuar"
+                            title={`Revisa el ${activeJumpTitle} antes de continuar`}
                           >
                             <ul className="list-inside list-disc">
-                              {cmjErrors.map((cmjError) => (
-                                <li key={cmjError}>{cmjError}</li>
+                              {activeJumpErrors.map((jumpError) => (
+                                <li key={jumpError}>{jumpError}</li>
                               ))}
                             </ul>
                           </StatusMessage>
@@ -1828,7 +2303,7 @@ export default function TestsPage() {
                             ? () => setExecutionStage("EXECUTION")
                             : handleBackToTestSetup
                         }
-                        disabled={savingCmj}
+                        disabled={savingJumpTest}
                         className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
                       >
                         Volver
@@ -1837,7 +2312,7 @@ export default function TestsPage() {
                       <button
                         type="button"
                         onClick={handleCancelExecution}
-                        disabled={savingCmj}
+                        disabled={savingJumpTest}
                         className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
                       >
                         Cancelar
@@ -1847,18 +2322,18 @@ export default function TestsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            void handleSaveCmj();
+                            void handleSaveActiveJump();
                           }}
-                          disabled={savingCmj}
+                          disabled={savingJumpTest}
                           className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                         >
-                          {savingCmj ? "Guardando..." : "Confirmar y guardar"}
+                          {savingJumpTest ? "Guardando..." : "Confirmar y guardar"}
                         </button>
                       ) : (
                         <button
                           type="button"
-                          onClick={handleReviewCmj}
-                          disabled={savingCmj}
+                          onClick={handleReviewActiveJump}
+                          disabled={savingJumpTest}
                           className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                         >
                           Revisar
@@ -1868,7 +2343,7 @@ export default function TestsPage() {
                   </>
                 )}
 
-                {!isCurrentExecutionCmj && (
+                {!isCurrentExecutionJump && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
@@ -1885,7 +2360,7 @@ export default function TestsPage() {
                   <button
                     type="button"
                     onClick={handleBackToTestSetup}
-                    disabled={savingCmj}
+                    disabled={savingJumpTest}
                     className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
                     Volver
@@ -1894,7 +2369,7 @@ export default function TestsPage() {
                   <button
                     type="button"
                     onClick={handleCancelExecution}
-                    disabled={savingCmj}
+                    disabled={savingJumpTest}
                     className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                   >
                     Cancelar
@@ -1946,7 +2421,7 @@ export default function TestsPage() {
                       }
                       disabled={
                         loadingTeamPlayers ||
-                        savingCmj ||
+                        savingJumpTest ||
                         !selectedTeamId ||
                         teamPlayers.length === 0
                       }
@@ -1991,7 +2466,8 @@ export default function TestsPage() {
                   <button
                     type="button"
                     onClick={handleBackToCatalog}
-                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                    disabled={savingJumpTest}
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
                     Volver
                   </button>
@@ -1999,7 +2475,7 @@ export default function TestsPage() {
                   <button
                     type="button"
                     onClick={handleContinueCatalogTest}
-                    disabled={savingCmj || !selectedCatalogPlayerId}
+                    disabled={savingJumpTest || !selectedCatalogPlayerId}
                     className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                   >
                     Continuar
@@ -2078,7 +2554,8 @@ export default function TestsPage() {
                               onClick={() => {
                                 void handleOpenCatalogTest(test);
                               }}
-                              className="mt-5 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800"
+                              disabled={savingJumpTest}
+                              className="mt-5 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                             >
                               Abrir test
                             </button>
