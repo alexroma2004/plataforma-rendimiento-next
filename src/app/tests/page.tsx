@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -9,10 +9,21 @@ import {
   getTestResultsBySessionId,
   getTestScoresBySessionId,
   getTestSessionsFromSupabase,
+  getTestTeamsFromSupabase,
   type TestResultRow,
   type TestScoreRow,
   type TestSessionRow,
+  type TestTeamRow,
 } from "@/lib/supabase/tests";
+
+function getTeamLabel(team: TestTeamRow) {
+  const details = [team.category, team.season]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  return details ? `${team.name} · ${details}` : team.name;
+}
 
 function formatNumber(value: number | null | undefined, decimals = 1) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -131,6 +142,8 @@ function ClassificationBadge({
 }
 
 export default function TestsPage() {
+  const [teams, setTeams] = useState<TestTeamRow[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [sessions, setSessions] = useState<TestSessionRow[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
 
@@ -142,20 +155,46 @@ export default function TestsPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sessionsRequestId = useRef(0);
+
+  async function loadSessionsForTeam(teamId: string) {
+    const requestId = sessionsRequestId.current + 1;
+    sessionsRequestId.current = requestId;
+
+    if (!teamId) {
+      setSessions([]);
+      setSelectedSessionId("");
+      return;
+    }
+
+    const data = await getTestSessionsFromSupabase(teamId);
+
+    if (requestId !== sessionsRequestId.current) {
+      return;
+    }
+
+    setSessions(data);
+    setSelectedSessionId(data[0]?.id ?? "");
+  }
 
   useEffect(() => {
-    async function loadSessions() {
+    async function loadInitialTestsData() {
       try {
         setLoadingSessions(true);
         setError(null);
 
-        const data = await getTestSessionsFromSupabase();
+        const teamsData = await getTestTeamsFromSupabase();
+        const [onlyTeam] = teamsData;
+        const resolvedTeamId =
+          teamsData.length === 1 && onlyTeam ? onlyTeam.id : "";
 
-        setSessions(data);
+        setTeams(teamsData);
+        setSelectedTeamId(resolvedTeamId);
+        setResults([]);
+        setScores([]);
+        setSelectedCapacity("all");
 
-        if (data.length > 0) {
-          setSelectedSessionId(data[0].id);
-        }
+        await loadSessionsForTeam(resolvedTeamId);
       } catch (err) {
         const message =
           err instanceof Error
@@ -168,14 +207,40 @@ export default function TestsPage() {
       }
     }
 
-    loadSessions();
+    loadInitialTestsData();
   }, []);
+
+  async function handleTeamChange(teamId: string) {
+    try {
+      setLoadingSessions(true);
+      setError(null);
+      setSelectedTeamId(teamId);
+      setSessions([]);
+      setSelectedSessionId("");
+      setResults([]);
+      setScores([]);
+      setSelectedCapacity("all");
+      setLoadingData(false);
+
+      await loadSessionsForTeam(teamId);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al cargar las sesiones de tests.";
+
+      setError(message);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
 
   useEffect(() => {
     async function loadSessionData() {
-      if (!selectedSessionId) {
+      if (!selectedSessionId || !selectedTeamId) {
         setResults([]);
         setScores([]);
+        setSelectedCapacity("all");
         return;
       }
 
@@ -184,14 +249,22 @@ export default function TestsPage() {
         setError(null);
 
         const [resultsData, scoresData] = await Promise.all([
-          getTestResultsBySessionId(selectedSessionId),
-          getTestScoresBySessionId(selectedSessionId),
+          getTestResultsBySessionId(selectedSessionId, selectedTeamId),
+          getTestScoresBySessionId(selectedSessionId, selectedTeamId),
         ]);
+
+        if (ignore) {
+          return;
+        }
 
         setResults(resultsData);
         setScores(scoresData);
         setSelectedCapacity("all");
       } catch (err) {
+        if (ignore) {
+          return;
+        }
+
         const message =
           err instanceof Error
             ? err.message
@@ -199,16 +272,27 @@ export default function TestsPage() {
 
         setError(message);
       } finally {
-        setLoadingData(false);
+        if (!ignore) {
+          setLoadingData(false);
+        }
       }
     }
 
+    let ignore = false;
     loadSessionData();
-  }, [selectedSessionId]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedSessionId, selectedTeamId]);
 
   const selectedSession = useMemo(() => {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
+
+  const selectedTeam = useMemo(() => {
+    return teams.find((team) => team.id === selectedTeamId) ?? null;
+  }, [teams, selectedTeamId]);
 
   const capacityOptions = useMemo(() => {
     const capacities = new Set<string>();
@@ -468,15 +552,44 @@ export default function TestsPage() {
                 Selecciona una sesión para visualizar los resultados físicos
                 importados.
               </p>
+
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                {selectedTeam
+                  ? `Mostrando sesiones de ${getTeamLabel(selectedTeam)}.`
+                  : "Selecciona un equipo para evitar mezclar datos de tests."}
+              </p>
             </div>
 
-            <label className="w-full text-sm font-bold text-slate-700 md:w-[420px]">
+            <div className="grid w-full gap-3 md:w-[480px]">
+              <label className="text-sm font-bold text-slate-700">
+                Equipo
+                <select
+                  value={selectedTeamId}
+                  onChange={(event) => {
+                    void handleTeamChange(event.target.value);
+                  }}
+                  disabled={loadingSessions || teams.length === 0}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  <option value="">Selecciona equipo</option>
+
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {getTeamLabel(team)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm font-bold text-slate-700">
               Sesión
               <select
                 value={selectedSessionId}
                 onChange={(event) => setSelectedSessionId(event.target.value)}
-                disabled={loadingSessions || sessions.length === 0}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+                disabled={
+                  loadingSessions || !selectedTeamId || sessions.length === 0
+                }
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
               >
                 {sessions.length === 0 && (
                   <option value="">No hay sesiones de tests guardadas</option>
@@ -490,6 +603,7 @@ export default function TestsPage() {
                 ))}
               </select>
             </label>
+            </div>
           </div>
 
           {error && (
@@ -508,7 +622,28 @@ export default function TestsPage() {
             </div>
           )}
 
-          {!loadingSessions && sessions.length === 0 && (
+          {!loadingSessions && teams.length === 0 && (
+            <div className="mt-6">
+              <StatusMessage
+                variant="warning"
+                title="No hay equipos disponibles"
+              >
+                Crea o confirma un equipo antes de consultar tests por equipo.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingSessions && teams.length > 1 && !selectedTeamId && (
+            <div className="mt-6">
+              <StatusMessage variant="warning" title="Selecciona un equipo">
+                Para evitar mezclar datos de varios equipos, selecciona un
+                equipo antes de mostrar sesiones, jugadores, resultados,
+                puntuaciones, rankings, tablas y lectura rápida de tests.
+              </StatusMessage>
+            </div>
+          )}
+
+          {!loadingSessions && selectedTeamId && sessions.length === 0 && (
             <div className="mt-6">
               <EmptyState
                 title="Sin sesiones de tests"

@@ -56,6 +56,13 @@ export type TestScoreRow = {
   updated_at: string | null;
 };
 
+export type TestTeamRow = {
+  id: string;
+  name: string;
+  category: string | null;
+  season: string | null;
+};
+
 function getSupabaseClient() {
   if (!supabase) {
     throw new Error("Supabase no está configurado.");
@@ -64,12 +71,43 @@ function getSupabaseClient() {
   return supabase;
 }
 
-export async function getTestSessionsFromSupabase() {
+function cleanText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+
+  const text = String(value).trim();
+
+  return text.length > 0 ? text : null;
+}
+
+export async function getTestTeamsFromSupabase(): Promise<TestTeamRow[]> {
   const client = getSupabaseClient();
 
   const { data, error } = await client
+    .from("teams")
+    .select("id, name, category, season")
+    .order("created_at", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`No se han podido cargar los equipos: ${error.message}`);
+  }
+
+  return (data ?? []) as TestTeamRow[];
+}
+
+export async function getTestSessionsFromSupabase(teamId?: string | null) {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  let query = client
     .from("test_sessions")
-    .select("*")
+    .select("*");
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("session_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -80,13 +118,23 @@ export async function getTestSessionsFromSupabase() {
   return (data ?? []) as TestSessionRow[];
 }
 
-export async function getTestResultsBySessionId(sessionId: string) {
+export async function getTestResultsBySessionId(
+  sessionId: string,
+  teamId?: string | null,
+) {
   const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
 
-  const { data, error } = await client
+  let query = client
     .from("test_results")
     .select("*")
-    .eq("session_id", sessionId)
+    .eq("session_id", sessionId);
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("player_name", { ascending: true })
     .order("test_block", { ascending: true })
     .order("variable", { ascending: true });
@@ -98,13 +146,23 @@ export async function getTestResultsBySessionId(sessionId: string) {
   return (data ?? []) as TestResultRow[];
 }
 
-export async function getTestScoresBySessionId(sessionId: string) {
+export async function getTestScoresBySessionId(
+  sessionId: string,
+  teamId?: string | null,
+) {
   const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
 
-  const { data, error } = await client
+  let query = client
     .from("test_scores")
     .select("*")
-    .eq("session_id", sessionId)
+    .eq("session_id", sessionId);
+
+  if (selectedTeamId) {
+    query = query.eq("team_id", selectedTeamId);
+  }
+
+  const { data, error } = await query
     .order("player_name", { ascending: true })
     .order("capacity", { ascending: true });
 
