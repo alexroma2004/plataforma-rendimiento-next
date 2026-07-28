@@ -7,6 +7,12 @@ import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import { TEST_DEFINITIONS, type TestCategory } from "@/lib/domain/performance";
 import {
+  createEmptyTestExecutionDraft,
+  isTestExecutionContextComplete,
+  type TestExecutionDraft,
+  type TestExecutionStage,
+} from "@/lib/domain/test-execution";
+import {
   getTestPlayersByTeamId,
   getTestResultsBySessionId,
   getTestScoresBySessionId,
@@ -47,6 +53,17 @@ function formatValue(value: number | null | undefined, unit: string | null) {
   const formatted = formatNumber(value, 2);
 
   return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatExecutionDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("es-ES", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function getClassificationClass(classification: string | null | undefined) {
@@ -135,6 +152,10 @@ function getCatalogTestKey(name: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase();
+}
+
+function getCatalogTestId(test: CatalogTest) {
+  return `${test.category}:${getCatalogTestKey(test.name)}`;
 }
 
 function getCatalogTestName(name: string) {
@@ -270,6 +291,10 @@ export default function TestsPage() {
   const [selectedCatalogTest, setSelectedCatalogTest] =
     useState<CatalogTest | null>(null);
   const [selectedCatalogPlayerId, setSelectedCatalogPlayerId] = useState("");
+  const [executionStage, setExecutionStage] =
+    useState<TestExecutionStage>("CATALOG");
+  const [executionDraft, setExecutionDraft] =
+    useState<TestExecutionDraft | null>(null);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -277,6 +302,7 @@ export default function TestsPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionsRequestId = useRef(0);
+  const catalogPlayersRequestId = useRef(0);
 
   async function loadSessionsForTeam(teamId: string) {
     const requestId = sessionsRequestId.current + 1;
@@ -341,10 +367,14 @@ export default function TestsPage() {
       setResults([]);
       setScores([]);
       setSelectedCapacity("all");
+      catalogPlayersRequestId.current += 1;
       setTeamPlayers([]);
       setSelectedCatalogTest(null);
       setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
       setCatalogMessage(null);
+      setLoadingTeamPlayers(false);
       setLoadingData(false);
 
       await loadSessionsForTeam(teamId);
@@ -364,9 +394,13 @@ export default function TestsPage() {
     setActiveView(view);
 
     if (view === "history") {
+      catalogPlayersRequestId.current += 1;
       setSelectedCatalogTest(null);
       setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
       setCatalogMessage(null);
+      setLoadingTeamPlayers(false);
     }
   }
 
@@ -384,15 +418,28 @@ export default function TestsPage() {
     setCatalogMessage(null);
     setSelectedCatalogTest(test);
     setSelectedCatalogPlayerId("");
+    setExecutionStage("SETUP");
+    setExecutionDraft(null);
     setTeamPlayers([]);
+
+    const requestId = catalogPlayersRequestId.current + 1;
+    catalogPlayersRequestId.current = requestId;
 
     try {
       setLoadingTeamPlayers(true);
 
       const playersData = await getTestPlayersByTeamId(selectedTeamId);
 
+      if (requestId !== catalogPlayersRequestId.current) {
+        return;
+      }
+
       setTeamPlayers(playersData);
     } catch (err) {
+      if (requestId !== catalogPlayersRequestId.current) {
+        return;
+      }
+
       const message =
         err instanceof Error
           ? err.message
@@ -404,14 +451,20 @@ export default function TestsPage() {
         message,
       });
     } finally {
-      setLoadingTeamPlayers(false);
+      if (requestId === catalogPlayersRequestId.current) {
+        setLoadingTeamPlayers(false);
+      }
     }
   }
 
   function handleBackToCatalog() {
+    catalogPlayersRequestId.current += 1;
     setSelectedCatalogTest(null);
     setSelectedCatalogPlayerId("");
+    setExecutionStage("CATALOG");
+    setExecutionDraft(null);
     setCatalogMessage(null);
+    setLoadingTeamPlayers(false);
   }
 
   function handleContinueCatalogTest() {
@@ -425,19 +478,43 @@ export default function TestsPage() {
       return;
     }
 
-    const player = teamPlayers.find(
-      (candidate) => candidate.id === selectedCatalogPlayerId,
-    );
+    const context = {
+      teamId: selectedTeamId,
+      playerId: selectedCatalogPlayerId,
+      testId: getCatalogTestId(selectedCatalogTest),
+      testName: getCatalogTestName(selectedCatalogTest.name),
+      testCategory: selectedCatalogTest.category,
+      performedAt: new Date().toISOString(),
+    };
 
-    setCatalogMessage({
-      variant: "info",
-      title: "Test preparado",
-      message: `${getCatalogTestName(
-        selectedCatalogTest.name,
-      )} queda preparado para ${
-        player?.name ?? "el jugador seleccionado"
-      }. En este bloque todavía no se abre formulario específico ni se guardan resultados.`,
-    });
+    if (!isTestExecutionContextComplete(context)) {
+      setCatalogMessage({
+        variant: "warning",
+        title: "Contexto incompleto",
+        message:
+          "Revisa equipo, jugador y test seleccionado antes de continuar.",
+      });
+      return;
+    }
+
+    setExecutionDraft(createEmptyTestExecutionDraft(context));
+    setExecutionStage("EXECUTION");
+    setCatalogMessage(null);
+  }
+
+  function handleBackToTestSetup() {
+    setExecutionStage("SETUP");
+    setCatalogMessage(null);
+  }
+
+  function handleCancelExecution() {
+    catalogPlayersRequestId.current += 1;
+    setSelectedCatalogTest(null);
+    setSelectedCatalogPlayerId("");
+    setExecutionStage("CATALOG");
+    setExecutionDraft(null);
+    setCatalogMessage(null);
+    setLoadingTeamPlayers(false);
   }
 
   useEffect(() => {
@@ -498,6 +575,13 @@ export default function TestsPage() {
   const selectedTeam = useMemo(() => {
     return teams.find((team) => team.id === selectedTeamId) ?? null;
   }, [teams, selectedTeamId]);
+
+  const selectedCatalogPlayer = useMemo(() => {
+    return (
+      teamPlayers.find((player) => player.id === selectedCatalogPlayerId) ??
+      null
+    );
+  }, [teamPlayers, selectedCatalogPlayerId]);
 
   const capacityOptions = useMemo(() => {
     const capacities = new Set<string>();
@@ -912,7 +996,101 @@ export default function TestsPage() {
 
         {activeView === "catalog" && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
-            {selectedCatalogTest ? (
+            {executionStage === "EXECUTION" && executionDraft ? (
+              <>
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                      Ejecución de test
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                      {executionDraft.context.testName}
+                    </h2>
+
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      Contexto común preparado para ejecutar el test. Los
+                      campos específicos se añadirán en los siguientes bloques.
+                    </p>
+                  </div>
+
+                  <span className="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                    {executionStage}
+                  </span>
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">Equipo</p>
+                    <p className="mt-2 break-words text-sm font-black text-slate-950">
+                      {selectedTeam
+                        ? getTeamLabel(selectedTeam)
+                        : executionDraft.context.teamId}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">Jugador</p>
+                    <p className="mt-2 break-words text-sm font-black text-slate-950">
+                      {selectedCatalogPlayer?.name ??
+                        executionDraft.context.playerId}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">Test</p>
+                    <p className="mt-2 break-words text-sm font-black text-slate-950">
+                      {executionDraft.context.testName}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">
+                      Categoría
+                    </p>
+                    <p className="mt-2 break-words text-sm font-black text-slate-950">
+                      {executionDraft.context.testCategory}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-500">Fecha</p>
+                    <p className="mt-2 break-words text-sm font-black text-slate-950">
+                      {formatExecutionDate(executionDraft.context.performedAt)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <StatusMessage
+                    variant="info"
+                    title="Formulario específico pendiente"
+                  >
+                    Este bloque solo prepara el contrato común de ejecución. No
+                    se muestran campos inventados ni se guardan resultados en
+                    Supabase.
+                  </StatusMessage>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleBackToTestSetup}
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Volver
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCancelExecution}
+                    className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            ) : selectedCatalogTest ? (
               <>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
