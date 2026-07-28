@@ -5,11 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
+import { TEST_DEFINITIONS, type TestCategory } from "@/lib/domain/performance";
 import {
+  getTestPlayersByTeamId,
   getTestResultsBySessionId,
   getTestScoresBySessionId,
   getTestSessionsFromSupabase,
   getTestTeamsFromSupabase,
+  type TestPlayerRow,
   type TestResultRow,
   type TestScoreRow,
   type TestSessionRow,
@@ -101,6 +104,116 @@ type QuickReadingCard = {
   message: string;
 };
 
+type TestsView = "catalog" | "history";
+
+type CatalogTest = {
+  category: TestCategory;
+  name: string;
+};
+
+type CatalogMessage = {
+  title: string;
+  variant: "info" | "warning";
+  message: string;
+};
+
+const TEST_VIEW_OPTIONS = [
+  { id: "catalog", label: "Realizar tests" },
+  { id: "history", label: "Resultados e histórico" },
+] as const satisfies readonly { id: TestsView; label: string }[];
+
+const TEST_CATALOG_GROUPS = TEST_DEFINITIONS.map((group) => ({
+  category: group.category,
+  tests: group.tests.map((name) => ({
+    category: group.category,
+    name,
+  })),
+}));
+
+function getCatalogTestKey(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
+function getCatalogTestName(name: string) {
+  const key = getCatalogTestKey(name);
+
+  if (key.includes("PERFIL CARGA")) return "Perfil carga-velocidad";
+  if (key.includes("PERFIL FUERZA")) return "Perfil fuerza-velocidad";
+  if (key.includes("VMP SENTADILLA")) return "VMP sentadilla";
+  if (key.includes("VMP HIP THRUST")) return "VMP hip thrust";
+  if (key.includes("SPRINT 30")) return "Sprint 30 m";
+  if (key.includes("ACELERACI")) return "Aceleración 5 m";
+  if (key.includes("ABALAKOV")) return "Abalakov";
+  if (key.includes("DROP JUMP")) return "Drop Jump";
+  if (key.includes("30-15")) return "30-15 IFT";
+  if (key.includes("RSA")) return "RSA 6 × 30 m";
+  if (key.includes("ILLINOIS")) return "Illinois Test";
+  if (key === "CMJ" || key === "SJ") return key;
+
+  return name;
+}
+
+function getCatalogTestDescription(name: string) {
+  const key = getCatalogTestKey(name);
+
+  if (key.includes("PERFIL CARGA")) {
+    return "Relación orientativa entre carga externa y velocidad de ejecución.";
+  }
+
+  if (key.includes("PERFIL FUERZA")) {
+    return "Lectura inicial del perfil fuerza-velocidad con datos disponibles.";
+  }
+
+  if (key.includes("VMP SENTADILLA")) {
+    return "Registro de velocidad media propulsiva en sentadilla.";
+  }
+
+  if (key.includes("VMP HIP THRUST")) {
+    return "Registro de velocidad media propulsiva en hip thrust.";
+  }
+
+  if (key.includes("SPRINT 30")) {
+    return "Medición de velocidad lineal en 30 metros.";
+  }
+
+  if (key.includes("ACELERACI")) {
+    return "Medición de aceleración inicial en 5 metros.";
+  }
+
+  if (key === "CMJ") {
+    return "Salto con contramovimiento para valorar expresión neuromuscular.";
+  }
+
+  if (key === "SJ") {
+    return "Salto sin contramovimiento para observar componente concéntrico.";
+  }
+
+  if (key.includes("ABALAKOV")) {
+    return "Salto con acción libre de brazos para observar capacidad de salto.";
+  }
+
+  if (key.includes("DROP JUMP")) {
+    return "Salto reactivo para observar respuesta elástica y contacto.";
+  }
+
+  if (key.includes("30-15")) {
+    return "Prueba intermitente para estimar capacidad aeróbica específica.";
+  }
+
+  if (key.includes("RSA")) {
+    return "Repetición de sprints para observar tolerancia a esfuerzos repetidos.";
+  }
+
+  if (key.includes("ILLINOIS")) {
+    return "Prueba de agilidad con cambios de dirección.";
+  }
+
+  return "Test disponible para preparar una toma de datos posterior.";
+}
+
 function SummaryCard({
   title,
   value,
@@ -151,6 +264,14 @@ export default function TestsPage() {
   const [scores, setScores] = useState<TestScoreRow[]>([]);
 
   const [selectedCapacity, setSelectedCapacity] = useState("all");
+  const [activeView, setActiveView] = useState<TestsView>("catalog");
+  const [teamPlayers, setTeamPlayers] = useState<TestPlayerRow[]>([]);
+  const [loadingTeamPlayers, setLoadingTeamPlayers] = useState(false);
+  const [selectedCatalogTest, setSelectedCatalogTest] =
+    useState<CatalogTest | null>(null);
+  const [selectedCatalogPlayerId, setSelectedCatalogPlayerId] = useState("");
+  const [catalogMessage, setCatalogMessage] =
+    useState<CatalogMessage | null>(null);
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
@@ -220,6 +341,10 @@ export default function TestsPage() {
       setResults([]);
       setScores([]);
       setSelectedCapacity("all");
+      setTeamPlayers([]);
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setCatalogMessage(null);
       setLoadingData(false);
 
       await loadSessionsForTeam(teamId);
@@ -233,6 +358,86 @@ export default function TestsPage() {
     } finally {
       setLoadingSessions(false);
     }
+  }
+
+  function handleViewChange(view: TestsView) {
+    setActiveView(view);
+
+    if (view === "history") {
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setCatalogMessage(null);
+    }
+  }
+
+  async function handleOpenCatalogTest(test: CatalogTest) {
+    if (!selectedTeamId) {
+      setCatalogMessage({
+        variant: "warning",
+        title: "Selecciona un equipo",
+        message:
+          "Elige un equipo antes de abrir un test para trabajar solo con sus jugadores activos.",
+      });
+      return;
+    }
+
+    setCatalogMessage(null);
+    setSelectedCatalogTest(test);
+    setSelectedCatalogPlayerId("");
+    setTeamPlayers([]);
+
+    try {
+      setLoadingTeamPlayers(true);
+
+      const playersData = await getTestPlayersByTeamId(selectedTeamId);
+
+      setTeamPlayers(playersData);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al cargar jugadores del equipo.";
+
+      setCatalogMessage({
+        variant: "warning",
+        title: "No se han podido cargar jugadores",
+        message,
+      });
+    } finally {
+      setLoadingTeamPlayers(false);
+    }
+  }
+
+  function handleBackToCatalog() {
+    setSelectedCatalogTest(null);
+    setSelectedCatalogPlayerId("");
+    setCatalogMessage(null);
+  }
+
+  function handleContinueCatalogTest() {
+    if (!selectedCatalogTest || !selectedCatalogPlayerId) {
+      setCatalogMessage({
+        variant: "warning",
+        title: "Selecciona un jugador",
+        message:
+          "Elige un jugador activo del equipo antes de continuar con el test.",
+      });
+      return;
+    }
+
+    const player = teamPlayers.find(
+      (candidate) => candidate.id === selectedCatalogPlayerId,
+    );
+
+    setCatalogMessage({
+      variant: "info",
+      title: "Test preparado",
+      message: `${getCatalogTestName(
+        selectedCatalogTest.name,
+      )} queda preparado para ${
+        player?.name ?? "el jugador seleccionado"
+      }. En este bloque todavía no se abre formulario específico ni se guardan resultados.`,
+    });
   }
 
   useEffect(() => {
@@ -660,7 +865,7 @@ export default function TestsPage() {
             </div>
           )}
 
-          {selectedSession && (
+          {activeView === "history" && selectedSession && (
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-bold text-slate-500">Fecha</p>
@@ -686,7 +891,217 @@ export default function TestsPage() {
           )}
         </section>
 
-        {selectedSessionId && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {TEST_VIEW_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => handleViewChange(option.id)}
+                className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                  activeView === option.id
+                    ? "bg-slate-950 text-white shadow"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {activeView === "catalog" && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+            {selectedCatalogTest ? (
+              <>
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                      Test seleccionado
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                      {getCatalogTestName(selectedCatalogTest.name)}
+                    </h2>
+
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      {getCatalogTestDescription(selectedCatalogTest.name)}
+                    </p>
+                  </div>
+
+                  <span className="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                    {selectedCatalogTest.category}
+                  </span>
+                </div>
+
+                {catalogMessage && (
+                  <div className="mt-6">
+                    <StatusMessage
+                      variant={catalogMessage.variant}
+                      title={catalogMessage.title}
+                    >
+                      {catalogMessage.message}
+                    </StatusMessage>
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-2xl bg-slate-50 p-4 sm:p-5">
+                  <label className="text-sm font-bold text-slate-700">
+                    Jugador del equipo seleccionado
+                    <select
+                      value={selectedCatalogPlayerId}
+                      onChange={(event) =>
+                        setSelectedCatalogPlayerId(event.target.value)
+                      }
+                      disabled={
+                        loadingTeamPlayers ||
+                        !selectedTeamId ||
+                        teamPlayers.length === 0
+                      }
+                      className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    >
+                      <option value="">
+                        {loadingTeamPlayers
+                          ? "Cargando jugadores activos"
+                          : "Selecciona jugador"}
+                      </option>
+
+                      {teamPlayers.map((player) => (
+                        <option key={player.id} value={player.id}>
+                          {player.name}
+                          {player.position ? ` · ${player.position}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <p className="mt-2 text-xs font-bold text-slate-500">
+                    {selectedTeam
+                      ? `Mostrando solo jugadores activos de ${getTeamLabel(
+                          selectedTeam,
+                        )}.`
+                      : "Selecciona un equipo para cargar sus jugadores activos."}
+                  </p>
+                </div>
+
+                {selectedTeamId &&
+                  !loadingTeamPlayers &&
+                  teamPlayers.length === 0 && (
+                    <div className="mt-6">
+                      <EmptyState
+                        title="Sin jugadores activos"
+                        description="No hay jugadores activos disponibles para iniciar este test en el equipo seleccionado."
+                      />
+                    </div>
+                  )}
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleBackToCatalog}
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Volver
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleContinueCatalogTest}
+                    disabled={!selectedCatalogPlayerId}
+                    className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                  >
+                    Continuar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
+                      Catálogo ejecutable
+                    </p>
+
+                    <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
+                      Realizar tests
+                    </h2>
+
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      Selecciona un test del catálogo para preparar la toma de
+                      datos. En este bloque todavía no se guardan resultados ni
+                      se abren formularios específicos.
+                    </p>
+                  </div>
+                </div>
+
+                {!selectedTeamId && (
+                  <div className="mt-6">
+                    <StatusMessage variant="warning" title="Selecciona un equipo">
+                      Para abrir un test, selecciona antes un equipo y trabaja
+                      solo con sus jugadores activos.
+                    </StatusMessage>
+                  </div>
+                )}
+
+                {catalogMessage && (
+                  <div className="mt-6">
+                    <StatusMessage
+                      variant={catalogMessage.variant}
+                      title={catalogMessage.title}
+                    >
+                      {catalogMessage.message}
+                    </StatusMessage>
+                  </div>
+                )}
+
+                <div className="mt-6 space-y-7">
+                  {TEST_CATALOG_GROUPS.map((group) => (
+                    <div key={group.category}>
+                      <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
+                        {group.category}
+                      </h3>
+
+                      <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        {group.tests.map((test) => (
+                          <article
+                            key={`${test.category}-${test.name}`}
+                            className="flex h-full flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                          >
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+                                {test.category}
+                              </p>
+
+                              <h4 className="mt-2 text-base font-black text-slate-950">
+                                {getCatalogTestName(test.name)}
+                              </h4>
+
+                              <p className="mt-2 text-sm leading-6 text-slate-600">
+                                {getCatalogTestDescription(test.name)}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleOpenCatalogTest(test);
+                              }}
+                              className="mt-5 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800"
+                            >
+                              Abrir test
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {activeView === "history" && selectedSessionId && (
           <section>
             {loadingData ? (
               <StatusMessage variant="info" title="Cargando resultados de tests">
