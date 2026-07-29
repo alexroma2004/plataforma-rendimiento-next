@@ -7,6 +7,7 @@ import Acceleration5ExecutionForm from "@/components/tests/Acceleration5Executio
 import DropJumpExecutionForm, {
   type DropJumpFormState,
 } from "@/components/tests/DropJumpExecutionForm";
+import IllinoisExecutionForm from "@/components/tests/IllinoisExecutionForm";
 import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
 import Sprint30ExecutionForm from "@/components/tests/Sprint30ExecutionForm";
 import ThirtyFifteenExecutionForm from "@/components/tests/ThirtyFifteenExecutionForm";
@@ -120,6 +121,18 @@ import {
   type ThirtyFifteenIftFormState,
   type ThirtyFifteenIftSummary,
 } from "@/lib/domain/tests/thirty-fifteen-ift";
+import {
+  ILLINOIS_ATTEMPT_VARIABLES,
+  ILLINOIS_TEST_CATEGORY,
+  ILLINOIS_TEST_ID,
+  ILLINOIS_TEST_NAME,
+  ILLINOIS_UNIT_ATTEMPT,
+  ILLINOIS_UNIT_PERCENTAGE,
+  ILLINOIS_UNIT_TIME,
+  ILLINOIS_VARIABLES,
+  type IllinoisFormState,
+  type IllinoisSummary,
+} from "@/lib/domain/tests/illinois";
 import {
   RSA_6X30_SPRINT_VARIABLES,
   RSA_6X30_TEST_CATEGORY,
@@ -381,6 +394,10 @@ function isAcceleration5mCatalogTest(test: CatalogTest | null) {
   );
 }
 
+function isIllinoisCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "").includes(ILLINOIS_TEST_ID);
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -534,6 +551,7 @@ export default function TestsPage() {
   const [savingRsa6x30, setSavingRsa6x30] = useState(false);
   const [savingSprint30, setSavingSprint30] = useState(false);
   const [savingAcceleration5m, setSavingAcceleration5m] = useState(false);
+  const [savingIllinois, setSavingIllinois] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -548,7 +566,8 @@ export default function TestsPage() {
     savingThirtyFifteenIft ||
     savingRsa6x30 ||
     savingSprint30 ||
-    savingAcceleration5m;
+    savingAcceleration5m ||
+    savingIllinois;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -614,6 +633,10 @@ export default function TestsPage() {
     setSavingAcceleration5m(false);
   }
 
+  function resetIllinoisState() {
+    setSavingIllinois(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
@@ -623,6 +646,7 @@ export default function TestsPage() {
     resetRsa6x30State();
     resetSprint30State();
     resetAcceleration5mState();
+    resetIllinoisState();
   }
 
   useEffect(() => {
@@ -2742,6 +2766,147 @@ export default function TestsPage() {
     }
   }
 
+  function buildIllinoisRecords(
+    player: TestPlayerRow,
+    summary: IllinoisSummary,
+  ): TestRecordInput[] {
+    const createRecord = (variable: string, value: number, unit: string) => ({
+      player_id: player.id,
+      player_name: player.name,
+      normalized_name: player.normalized_name,
+      position: player.position,
+      test_block: ILLINOIS_TEST_NAME,
+      variable,
+      value,
+      unit,
+    });
+    const records = summary.validAttempts.flatMap((attempt) => {
+      const variable = ILLINOIS_ATTEMPT_VARIABLES[attempt.attemptNumber - 1];
+
+      return variable
+        ? [createRecord(variable, attempt.time, ILLINOIS_UNIT_TIME)]
+        : [];
+    });
+
+    if (
+      !summary.bestAttempt ||
+      !summary.worstAttempt ||
+      summary.meanTime === null ||
+      summary.absoluteDifference === null ||
+      summary.bestWorstVariation === null
+    ) {
+      return records;
+    }
+
+    records.push(
+      createRecord(
+        ILLINOIS_VARIABLES.BEST_TIME,
+        summary.bestAttempt.time,
+        ILLINOIS_UNIT_TIME,
+      ),
+      createRecord(
+        ILLINOIS_VARIABLES.BEST_ATTEMPT,
+        summary.bestAttempt.attemptNumber,
+        ILLINOIS_UNIT_ATTEMPT,
+      ),
+      createRecord(
+        ILLINOIS_VARIABLES.WORST_TIME,
+        summary.worstAttempt.time,
+        ILLINOIS_UNIT_TIME,
+      ),
+      createRecord(
+        ILLINOIS_VARIABLES.MEAN_TIME,
+        summary.meanTime,
+        ILLINOIS_UNIT_TIME,
+      ),
+      createRecord(
+        ILLINOIS_VARIABLES.ABSOLUTE_DIFFERENCE,
+        summary.absoluteDifference,
+        ILLINOIS_UNIT_TIME,
+      ),
+      createRecord(
+        ILLINOIS_VARIABLES.BEST_WORST_VARIATION,
+        summary.bestWorstVariation,
+        ILLINOIS_UNIT_PERCENTAGE,
+      ),
+    );
+
+    return records;
+  }
+
+  async function handleSaveIllinois(
+    form: IllinoisFormState,
+    summary: IllinoisSummary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar Illinois",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...form,
+      attempts: form.attempts.map((attempt) => ({ ...attempt })),
+      observations: form.observations.trim(),
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const summarySnapshot = summary;
+
+    try {
+      setSavingIllinois(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${ILLINOIS_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [
+          {
+            id: ILLINOIS_TEST_ID,
+            name: ILLINOIS_TEST_NAME,
+            category: ILLINOIS_TEST_CATEGORY,
+            summary: summarySnapshot,
+          },
+        ],
+        records: buildIllinoisRecords(playerSnapshot, summarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "Illinois guardado",
+        message:
+          "Se han guardado los intentos y los indicadores calculados. El histórico del equipo se ha recargado automáticamente.",
+      });
+      resetIllinoisState();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Error desconocido al guardar Illinois.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar Illinois",
+        message,
+      });
+    } finally {
+      setSavingIllinois(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -2815,6 +2980,7 @@ export default function TestsPage() {
   const isCurrentExecutionSprint30 = isSprint30CatalogTest(selectedCatalogTest);
   const isCurrentExecutionAcceleration5m =
     isAcceleration5mCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionIllinois = isIllinoisCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3630,6 +3796,36 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionIllinois && (
+                  <IllinoisExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveIllinois(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -4014,7 +4210,8 @@ export default function TestsPage() {
                   !isCurrentExecutionThirtyFifteenIft &&
                   !isCurrentExecutionRsa6x30 &&
                   !isCurrentExecutionSprint30 &&
-                  !isCurrentExecutionAcceleration5m && (
+                  !isCurrentExecutionAcceleration5m &&
+                  !isCurrentExecutionIllinois && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
