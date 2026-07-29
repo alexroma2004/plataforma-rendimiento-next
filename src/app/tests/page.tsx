@@ -8,6 +8,7 @@ import DropJumpExecutionForm, {
   type DropJumpFormState,
 } from "@/components/tests/DropJumpExecutionForm";
 import IllinoisExecutionForm from "@/components/tests/IllinoisExecutionForm";
+import HipThrustVmpExecutionForm from "@/components/tests/HipThrustVmpExecutionForm";
 import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
 import SquatVmpExecutionForm from "@/components/tests/SquatVmpExecutionForm";
 import Sprint30ExecutionForm from "@/components/tests/Sprint30ExecutionForm";
@@ -122,6 +123,15 @@ import {
   type ThirtyFifteenIftFormState,
   type ThirtyFifteenIftSummary,
 } from "@/lib/domain/tests/thirty-fifteen-ift";
+import {
+  createHipThrustVmpResults,
+  HIP_THRUST_VMP_DEVICE,
+  HIP_THRUST_VMP_TEST_CATEGORY,
+  HIP_THRUST_VMP_TEST_ID,
+  HIP_THRUST_VMP_TEST_NAME,
+  type HipThrustVmpFormState,
+  type HipThrustVmpSummary,
+} from "@/lib/domain/tests/hip-thrust-vmp";
 import {
   ILLINOIS_ATTEMPT_VARIABLES,
   ILLINOIS_TEST_CATEGORY,
@@ -412,6 +422,10 @@ function isSquatVmpCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === SQUAT_VMP_TEST_ID;
 }
 
+function isHipThrustVmpCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "") === HIP_THRUST_VMP_TEST_ID;
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -567,6 +581,7 @@ export default function TestsPage() {
   const [savingAcceleration5m, setSavingAcceleration5m] = useState(false);
   const [savingIllinois, setSavingIllinois] = useState(false);
   const [savingSquatVmp, setSavingSquatVmp] = useState(false);
+  const [savingHipThrustVmp, setSavingHipThrustVmp] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -583,7 +598,8 @@ export default function TestsPage() {
     savingSprint30 ||
     savingAcceleration5m ||
     savingIllinois ||
-    savingSquatVmp;
+    savingSquatVmp ||
+    savingHipThrustVmp;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -657,6 +673,10 @@ export default function TestsPage() {
     setSavingSquatVmp(false);
   }
 
+  function resetHipThrustVmpState() {
+    setSavingHipThrustVmp(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
@@ -668,6 +688,7 @@ export default function TestsPage() {
     resetAcceleration5mState();
     resetIllinoisState();
     resetSquatVmpState();
+    resetHipThrustVmpState();
   }
 
   useEffect(() => {
@@ -2995,6 +3016,23 @@ export default function TestsPage() {
     }
   }
 
+  function buildHipThrustVmpRecords(player: TestPlayerRow, summary: HipThrustVmpSummary): TestRecordInput[] {
+    return createHipThrustVmpResults(summary).map((result) => ({ player_id: player.id, player_name: player.name, normalized_name: player.normalized_name, position: player.position, test_block: HIP_THRUST_VMP_TEST_NAME, variable: result.variable, value: result.value, unit: result.unit, source: HIP_THRUST_VMP_DEVICE }));
+  }
+
+  async function handleSaveHipThrustVmp(form: HipThrustVmpFormState, summary: HipThrustVmpSummary) {
+    if (savingJumpTest) return;
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) { setCatalogMessage({ variant: "error", title: "No se puede guardar VMP Hip Thrust", message: "Faltan equipo, jugador o contexto de ejecución." }); return; }
+    const formSnapshot = { ...form, observations: form.observations.trim() };
+    const playerSnapshot = selectedCatalogPlayer; const teamIdSnapshot = selectedTeamId; const summarySnapshot = summary;
+    try {
+      setSavingHipThrustVmp(true); setCatalogMessage(null);
+      const saved = await createTestSessionWithResults({ team_id: teamIdSnapshot, session_date: formSnapshot.performedAt, session_name: `${HIP_THRUST_VMP_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`, context: "Semi-profesional", notes: summarySnapshot.observations || null, tests: [{ id: HIP_THRUST_VMP_TEST_ID, name: HIP_THRUST_VMP_TEST_NAME, category: HIP_THRUST_VMP_TEST_CATEGORY, device: HIP_THRUST_VMP_DEVICE, summary: summarySnapshot }], records: buildHipThrustVmpRecords(playerSnapshot, summarySnapshot), skipScores: true });
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id); setActiveView("history"); setSelectedCatalogTest(null); setSelectedCatalogPlayerId(""); setExecutionStage("CATALOG"); setExecutionDraft(null);
+      setCatalogMessage({ variant: "success", title: "VMP Hip Thrust guardada", message: "Se han guardado la carga, la VMP de la repetición y la VMP máxima. El histórico del equipo se ha recargado automáticamente." }); resetHipThrustVmpState();
+    } catch (err) { setCatalogMessage({ variant: "error", title: "No se ha podido guardar VMP Hip Thrust", message: err instanceof Error ? err.message : "Error desconocido al guardar VMP Hip Thrust." }); } finally { setSavingHipThrustVmp(false); }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -3070,6 +3108,7 @@ export default function TestsPage() {
     isAcceleration5mCatalogTest(selectedCatalogTest);
   const isCurrentExecutionIllinois = isIllinoisCatalogTest(selectedCatalogTest);
   const isCurrentExecutionSquatVmp = isSquatVmpCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionHipThrustVmp = isHipThrustVmpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3933,6 +3972,20 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionHipThrustVmp && (
+                  <HipThrustVmpExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => { setExecutionDraft((currentDraft) => currentDraft ? { ...currentDraft, context: { ...currentDraft.context, performedAt } } : currentDraft); setCatalogMessage(null); setExecutionStage("REVIEW"); }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => { void handleSaveHipThrustVmp(form, summary); }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -4319,7 +4372,8 @@ export default function TestsPage() {
                   !isCurrentExecutionSprint30 &&
                   !isCurrentExecutionAcceleration5m &&
                   !isCurrentExecutionIllinois &&
-                  !isCurrentExecutionSquatVmp && (
+                  !isCurrentExecutionSquatVmp &&
+                  !isCurrentExecutionHipThrustVmp && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
