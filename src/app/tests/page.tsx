@@ -10,6 +10,7 @@ import DropJumpExecutionForm, {
 import IllinoisExecutionForm from "@/components/tests/IllinoisExecutionForm";
 import HipThrustVmpExecutionForm from "@/components/tests/HipThrustVmpExecutionForm";
 import LoadVelocityProfileExecutionForm from "@/components/tests/LoadVelocityProfileExecutionForm";
+import VerticalForceVelocityExecutionForm from "@/components/tests/VerticalForceVelocityExecutionForm";
 import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
 import SquatVmpExecutionForm from "@/components/tests/SquatVmpExecutionForm";
 import Sprint30ExecutionForm from "@/components/tests/Sprint30ExecutionForm";
@@ -133,6 +134,17 @@ import {
   type LoadVelocityProfileFormState,
   type LoadVelocityProfileSummary,
 } from "@/lib/domain/tests/load-velocity-profile";
+import {
+  createVerticalForceVelocityResults,
+  VERTICAL_FORCE_VELOCITY_DEVICE,
+  VERTICAL_FORCE_VELOCITY_GRAVITY,
+  VERTICAL_FORCE_VELOCITY_PROTOCOL,
+  VERTICAL_FORCE_VELOCITY_TEST_CATEGORY,
+  VERTICAL_FORCE_VELOCITY_TEST_ID,
+  VERTICAL_FORCE_VELOCITY_TEST_NAME,
+  type VerticalForceVelocityFormState,
+  type VerticalForceVelocitySummary,
+} from "@/lib/domain/tests/vertical-force-velocity";
 import {
   createHipThrustVmpResults,
   HIP_THRUST_VMP_DEVICE,
@@ -436,6 +448,7 @@ function isHipThrustVmpCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === HIP_THRUST_VMP_TEST_ID;
 }
 function isLoadVelocityProfileCatalogTest(test: CatalogTest | null) { return getCatalogTestKey(test?.name ?? "") === LOAD_VELOCITY_PROFILE_TEST_ID; }
+function isVerticalForceVelocityCatalogTest(test: CatalogTest | null) { return getCatalogTestKey(test?.name ?? "") === VERTICAL_FORCE_VELOCITY_TEST_ID; }
 
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
@@ -594,6 +607,7 @@ export default function TestsPage() {
   const [savingSquatVmp, setSavingSquatVmp] = useState(false);
   const [savingHipThrustVmp, setSavingHipThrustVmp] = useState(false);
   const [savingLoadVelocityProfile, setSavingLoadVelocityProfile] = useState(false);
+  const [savingVerticalForceVelocity, setSavingVerticalForceVelocity] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -611,7 +625,7 @@ export default function TestsPage() {
     savingAcceleration5m ||
     savingIllinois ||
     savingSquatVmp ||
-    savingHipThrustVmp || savingLoadVelocityProfile;
+    savingHipThrustVmp || savingLoadVelocityProfile || savingVerticalForceVelocity;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -689,6 +703,7 @@ export default function TestsPage() {
     setSavingHipThrustVmp(false);
   }
   function resetLoadVelocityProfileState() { setSavingLoadVelocityProfile(false); }
+  function resetVerticalForceVelocityState() { setSavingVerticalForceVelocity(false); }
 
   function resetJumpTestState() {
     resetCmjState();
@@ -703,6 +718,7 @@ export default function TestsPage() {
     resetSquatVmpState();
     resetHipThrustVmpState();
     resetLoadVelocityProfileState();
+    resetVerticalForceVelocityState();
   }
 
   useEffect(() => {
@@ -3056,6 +3072,102 @@ export default function TestsPage() {
     try { setSavingLoadVelocityProfile(true); setCatalogMessage(null); const saved = await createTestSessionWithResults({ team_id: teamId, session_date: form.performedAt, session_name: `${LOAD_VELOCITY_PROFILE_TEST_NAME} - ${player.name} - ${new Date().toLocaleTimeString("es-ES")}`, context: "Semi-profesional", notes: form.observations.trim() || null, tests: [{ id: LOAD_VELOCITY_PROFILE_TEST_ID, name: LOAD_VELOCITY_PROFILE_TEST_NAME, category: LOAD_VELOCITY_PROFILE_TEST_CATEGORY, device: LOAD_VELOCITY_PROFILE_DEVICE, exercise: form.exercise, targetSpeed: summary.targetSpeed, loadCount: summary.rows.length, summary }], records, skipScores: true }); await loadSessionsForTeam(teamId, saved.session.id); setActiveView("history"); setSelectedCatalogTest(null); setSelectedCatalogPlayerId(""); setExecutionStage("CATALOG"); setExecutionDraft(null); setCatalogMessage({ variant: "success", title: "Perfil Carga–Velocidad guardado", message: "Se han guardado las cargas, repeticiones y resultados de regresión. El histórico se ha recargado." }); resetLoadVelocityProfileState(); } catch (err) { setCatalogMessage({ variant: "error", title: "No se ha podido guardar el perfil", message: err instanceof Error ? err.message : "Error desconocido." }); } finally { setSavingLoadVelocityProfile(false); }
   }
 
+  async function handleSaveVerticalForceVelocity(
+    form: VerticalForceVelocityFormState,
+    summary: VerticalForceVelocitySummary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el perfil",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const records = createVerticalForceVelocityResults(summary).map((result) => ({
+      player_id: selectedCatalogPlayer.id,
+      player_name: selectedCatalogPlayer.name,
+      normalized_name: selectedCatalogPlayer.normalized_name,
+      position: selectedCatalogPlayer.position,
+      test_block: VERTICAL_FORCE_VELOCITY_TEST_NAME,
+      variable: result.variable,
+      value: result.value,
+      unit: result.unit,
+      source: VERTICAL_FORCE_VELOCITY_DEVICE,
+    }));
+
+    if (records.length === 0) {
+      setCatalogMessage({
+        variant: "error",
+        title: "Perfil no válido",
+        message:
+          summary.mathematicalError ??
+          "No se han podido generar resultados válidos.",
+      });
+      return;
+    }
+
+    const teamIdSnapshot = selectedTeamId;
+    const playerSnapshot = selectedCatalogPlayer;
+    const formSnapshot = { ...form, observations: form.observations.trim() };
+    const summarySnapshot = summary;
+
+    try {
+      setSavingVerticalForceVelocity(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${VERTICAL_FORCE_VELOCITY_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [
+          {
+            id: VERTICAL_FORCE_VELOCITY_TEST_ID,
+            name: VERTICAL_FORCE_VELOCITY_TEST_NAME,
+            category: VERTICAL_FORCE_VELOCITY_TEST_CATEGORY,
+            protocol: VERTICAL_FORCE_VELOCITY_PROTOCOL,
+            device: VERTICAL_FORCE_VELOCITY_DEVICE,
+            bodyMassKg: summarySnapshot.bodyMassKg,
+            pushOffDistanceCm: summarySnapshot.pushOffDistanceCm,
+            conditionCount: summarySnapshot.conditions.length,
+            gravity: VERTICAL_FORCE_VELOCITY_GRAVITY,
+            summary: summarySnapshot,
+          },
+        ],
+        records,
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "Perfil Fuerza–Velocidad guardado",
+        message:
+          "Se han guardado las condiciones de carga y el resumen del perfil. El histórico se ha recargado.",
+      });
+      resetVerticalForceVelocityState();
+    } catch (err) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el perfil",
+        message:
+          err instanceof Error ? err.message : "Error desconocido al guardar el perfil.",
+      });
+    } finally {
+      setSavingVerticalForceVelocity(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -3133,6 +3245,8 @@ export default function TestsPage() {
   const isCurrentExecutionSquatVmp = isSquatVmpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionHipThrustVmp = isHipThrustVmpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionLoadVelocityProfile = isLoadVelocityProfileCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionVerticalForceVelocity =
+    isVerticalForceVelocityCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -4011,6 +4125,36 @@ export default function TestsPage() {
                 )}
                 {isCurrentExecutionLoadVelocityProfile && <LoadVelocityProfileExecutionForm key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`} context={executionDraft.context} hasSelectedPlayer={Boolean(selectedCatalogPlayer)} isSaving={savingJumpTest} onBack={handleBackToTestSetup} onCancel={handleCancelExecution} onReview={(performedAt)=>{setExecutionDraft(current=>current?{...current,context:{...current.context,performedAt}}:current);setCatalogMessage(null);setExecutionStage("REVIEW")}} onReturnToExecution={()=>setExecutionStage("EXECUTION")} onSave={(form,summary)=>{void handleSaveLoadVelocityProfile(form,summary)}} />}
 
+                {isCurrentExecutionVerticalForceVelocity && (
+                  <VerticalForceVelocityExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveVerticalForceVelocity(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -4399,7 +4543,8 @@ export default function TestsPage() {
                   !isCurrentExecutionIllinois &&
                   !isCurrentExecutionSquatVmp &&
                   !isCurrentExecutionHipThrustVmp &&
-                  !isCurrentExecutionLoadVelocityProfile && (
+                  !isCurrentExecutionLoadVelocityProfile &&
+                  !isCurrentExecutionVerticalForceVelocity && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
