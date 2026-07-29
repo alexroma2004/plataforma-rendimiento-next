@@ -7,6 +7,7 @@ import DropJumpExecutionForm, {
   type DropJumpFormState,
 } from "@/components/tests/DropJumpExecutionForm";
 import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
+import Sprint30ExecutionForm from "@/components/tests/Sprint30ExecutionForm";
 import ThirtyFifteenExecutionForm from "@/components/tests/ThirtyFifteenExecutionForm";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -117,6 +118,18 @@ import {
   type Rsa6x30FormState,
   type Rsa6x30Summary,
 } from "@/lib/domain/tests/rsa-6x30";
+import {
+  getSprint30Attempt30mVariable,
+  getSprint30Attempt5mVariable,
+  SPRINT_30M_TEST_CATEGORY,
+  SPRINT_30M_TEST_ID,
+  SPRINT_30M_TEST_NAME,
+  SPRINT_30M_UNIT_ATTEMPT,
+  SPRINT_30M_UNIT_TIME,
+  SPRINT_30M_VARIABLES,
+  type Sprint30FormState,
+  type Sprint30Summary,
+} from "@/lib/domain/tests/sprint-30m";
 import {
   createTestSessionWithResults,
   getTestPlayersByTeamId,
@@ -341,6 +354,13 @@ function isRsa6x30CatalogTest(test: CatalogTest | null) {
   );
 }
 
+function isSprint30CatalogTest(test: CatalogTest | null) {
+  return (
+    getCatalogTestKey(test?.name ?? "").replace(/\s+/g, "") ===
+    SPRINT_30M_TEST_ID.replace(/\s+/g, "")
+  );
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -492,6 +512,7 @@ export default function TestsPage() {
   const [savingDropJump, setSavingDropJump] = useState(false);
   const [savingThirtyFifteenIft, setSavingThirtyFifteenIft] = useState(false);
   const [savingRsa6x30, setSavingRsa6x30] = useState(false);
+  const [savingSprint30, setSavingSprint30] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -504,7 +525,8 @@ export default function TestsPage() {
     savingAbalakov ||
     savingDropJump ||
     savingThirtyFifteenIft ||
-    savingRsa6x30;
+    savingRsa6x30 ||
+    savingSprint30;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -562,6 +584,10 @@ export default function TestsPage() {
     setSavingRsa6x30(false);
   }
 
+  function resetSprint30State() {
+    setSavingSprint30(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
@@ -569,6 +595,7 @@ export default function TestsPage() {
     resetDropJumpState();
     resetThirtyFifteenIftState();
     resetRsa6x30State();
+    resetSprint30State();
   }
 
   useEffect(() => {
@@ -2385,6 +2412,165 @@ export default function TestsPage() {
     }
   }
 
+  function buildSprint30Records(
+    player: TestPlayerRow,
+    summary: Sprint30Summary,
+  ): TestRecordInput[] {
+    const createRecord = (variable: string, value: number, unit: string) => ({
+      player_id: player.id,
+      player_name: player.name,
+      normalized_name: player.normalized_name,
+      position: player.position,
+      test_block: SPRINT_30M_TEST_NAME,
+      variable,
+      value,
+      unit,
+    });
+    const records = summary.validAttempts.flatMap((attempt) => [
+      createRecord(
+        getSprint30Attempt5mVariable(attempt.attemptNumber),
+        attempt.time5m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+      createRecord(
+        getSprint30Attempt30mVariable(attempt.attemptNumber),
+        attempt.time30m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+    ]);
+
+    if (
+      !summary.best5m ||
+      !summary.best30m ||
+      summary.mean5m === null ||
+      summary.mean30m === null ||
+      summary.time5mAssociatedBest30m === null ||
+      summary.time30mAssociatedBest5m === null
+    ) {
+      return records;
+    }
+
+    records.push(
+      createRecord(
+        SPRINT_30M_VARIABLES.BEST_TIME_5M,
+        summary.best5m.time5m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.BEST_TIME_30M,
+        summary.best30m.time30m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.BEST_ATTEMPT_5M,
+        summary.best5m.attemptNumber,
+        SPRINT_30M_UNIT_ATTEMPT,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.BEST_ATTEMPT_30M,
+        summary.best30m.attemptNumber,
+        SPRINT_30M_UNIT_ATTEMPT,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.TIME_5M_ASSOCIATED_BEST_30M,
+        summary.time5mAssociatedBest30m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.TIME_30M_ASSOCIATED_BEST_5M,
+        summary.time30mAssociatedBest5m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.MEAN_TIME_5M,
+        summary.mean5m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+      createRecord(
+        SPRINT_30M_VARIABLES.MEAN_TIME_30M,
+        summary.mean30m,
+        SPRINT_30M_UNIT_TIME,
+      ),
+    );
+
+    return records;
+  }
+
+  async function handleSaveSprint30(
+    form: Sprint30FormState,
+    summary: Sprint30Summary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el Sprint 30M",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...form,
+      attempts: form.attempts.map((attempt) => ({ ...attempt })),
+      observations: form.observations.trim(),
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const summarySnapshot = summary;
+
+    try {
+      setSavingSprint30(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${SPRINT_30M_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [
+          {
+            id: SPRINT_30M_TEST_ID,
+            name: SPRINT_30M_TEST_NAME,
+            category: SPRINT_30M_TEST_CATEGORY,
+            summary: summarySnapshot,
+          },
+        ],
+        records: buildSprint30Records(playerSnapshot, summarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "Sprint 30M guardado",
+        message:
+          "Se han guardado los intentos de 5 m y 30 m, junto con los mejores valores y promedios. El histórico del equipo se ha recargado automáticamente.",
+      });
+      resetSprint30State();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar el Sprint 30M.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el Sprint 30M",
+        message,
+      });
+    } finally {
+      setSavingSprint30(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -2455,6 +2641,7 @@ export default function TestsPage() {
   const isCurrentExecutionThirtyFifteenIft =
     isThirtyFifteenIftCatalogTest(selectedCatalogTest);
   const isCurrentExecutionRsa6x30 = isRsa6x30CatalogTest(selectedCatalogTest);
+  const isCurrentExecutionSprint30 = isSprint30CatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3210,6 +3397,36 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionSprint30 && (
+                  <Sprint30ExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveSprint30(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -3592,7 +3809,8 @@ export default function TestsPage() {
                 {!isCurrentExecutionJump &&
                   !isCurrentExecutionDropJump &&
                   !isCurrentExecutionThirtyFifteenIft &&
-                  !isCurrentExecutionRsa6x30 && (
+                  !isCurrentExecutionRsa6x30 &&
+                  !isCurrentExecutionSprint30 && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
