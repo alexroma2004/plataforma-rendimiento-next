@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import Acceleration5ExecutionForm from "@/components/tests/Acceleration5ExecutionForm";
 import DropJumpExecutionForm, {
   type DropJumpFormState,
 } from "@/components/tests/DropJumpExecutionForm";
@@ -18,6 +19,18 @@ import {
   type TestExecutionDraft,
   type TestExecutionStage,
 } from "@/lib/domain/test-execution";
+import {
+  ACCELERATION_5M_ATTEMPT_VARIABLES,
+  ACCELERATION_5M_TEST_CATEGORY,
+  ACCELERATION_5M_TEST_ID,
+  ACCELERATION_5M_TEST_NAME,
+  ACCELERATION_5M_UNIT_ATTEMPT,
+  ACCELERATION_5M_UNIT_PERCENTAGE,
+  ACCELERATION_5M_UNIT_TIME,
+  ACCELERATION_5M_VARIABLES,
+  type Acceleration5mFormState,
+  type Acceleration5mSummary,
+} from "@/lib/domain/tests/acceleration-5m";
 import {
   calculateAbalakovSummary,
   ABALAKOV_DEVICE,
@@ -361,6 +374,13 @@ function isSprint30CatalogTest(test: CatalogTest | null) {
   );
 }
 
+function isAcceleration5mCatalogTest(test: CatalogTest | null) {
+  return (
+    getCatalogTestKey(test?.name ?? "").replace(/\s+/g, "") ===
+    ACCELERATION_5M_TEST_ID.replace(/\s+/g, "")
+  );
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -513,6 +533,7 @@ export default function TestsPage() {
   const [savingThirtyFifteenIft, setSavingThirtyFifteenIft] = useState(false);
   const [savingRsa6x30, setSavingRsa6x30] = useState(false);
   const [savingSprint30, setSavingSprint30] = useState(false);
+  const [savingAcceleration5m, setSavingAcceleration5m] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -526,7 +547,8 @@ export default function TestsPage() {
     savingDropJump ||
     savingThirtyFifteenIft ||
     savingRsa6x30 ||
-    savingSprint30;
+    savingSprint30 ||
+    savingAcceleration5m;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -588,6 +610,10 @@ export default function TestsPage() {
     setSavingSprint30(false);
   }
 
+  function resetAcceleration5mState() {
+    setSavingAcceleration5m(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
@@ -596,6 +622,7 @@ export default function TestsPage() {
     resetThirtyFifteenIftState();
     resetRsa6x30State();
     resetSprint30State();
+    resetAcceleration5mState();
   }
 
   useEffect(() => {
@@ -2571,6 +2598,150 @@ export default function TestsPage() {
     }
   }
 
+  function buildAcceleration5mRecords(
+    player: TestPlayerRow,
+    summary: Acceleration5mSummary,
+  ): TestRecordInput[] {
+    const createRecord = (variable: string, value: number, unit: string) => ({
+      player_id: player.id,
+      player_name: player.name,
+      normalized_name: player.normalized_name,
+      position: player.position,
+      test_block: ACCELERATION_5M_TEST_NAME,
+      variable,
+      value,
+      unit,
+    });
+    const records = summary.validAttempts.flatMap((attempt) => {
+      const variable =
+        ACCELERATION_5M_ATTEMPT_VARIABLES[attempt.attemptNumber - 1];
+
+      return variable
+        ? [createRecord(variable, attempt.time, ACCELERATION_5M_UNIT_TIME)]
+        : [];
+    });
+
+    if (
+      !summary.bestAttempt ||
+      !summary.worstAttempt ||
+      summary.meanTime === null ||
+      summary.absoluteDifference === null ||
+      summary.bestWorstVariation === null
+    ) {
+      return records;
+    }
+
+    records.push(
+      createRecord(
+        ACCELERATION_5M_VARIABLES.BEST_TIME,
+        summary.bestAttempt.time,
+        ACCELERATION_5M_UNIT_TIME,
+      ),
+      createRecord(
+        ACCELERATION_5M_VARIABLES.BEST_ATTEMPT,
+        summary.bestAttempt.attemptNumber,
+        ACCELERATION_5M_UNIT_ATTEMPT,
+      ),
+      createRecord(
+        ACCELERATION_5M_VARIABLES.WORST_TIME,
+        summary.worstAttempt.time,
+        ACCELERATION_5M_UNIT_TIME,
+      ),
+      createRecord(
+        ACCELERATION_5M_VARIABLES.MEAN_TIME,
+        summary.meanTime,
+        ACCELERATION_5M_UNIT_TIME,
+      ),
+      createRecord(
+        ACCELERATION_5M_VARIABLES.ABSOLUTE_DIFFERENCE,
+        summary.absoluteDifference,
+        ACCELERATION_5M_UNIT_TIME,
+      ),
+      createRecord(
+        ACCELERATION_5M_VARIABLES.BEST_WORST_VARIATION,
+        summary.bestWorstVariation,
+        ACCELERATION_5M_UNIT_PERCENTAGE,
+      ),
+    );
+
+    return records;
+  }
+
+  async function handleSaveAcceleration5m(
+    form: Acceleration5mFormState,
+    summary: Acceleration5mSummary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar la Aceleración 5 m",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...form,
+      attempts: form.attempts.map((attempt) => ({ ...attempt })),
+      observations: form.observations.trim(),
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const summarySnapshot = summary;
+
+    try {
+      setSavingAcceleration5m(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${ACCELERATION_5M_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [
+          {
+            id: ACCELERATION_5M_TEST_ID,
+            name: ACCELERATION_5M_TEST_NAME,
+            category: ACCELERATION_5M_TEST_CATEGORY,
+            summary: summarySnapshot,
+          },
+        ],
+        records: buildAcceleration5mRecords(playerSnapshot, summarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "Aceleración 5 m guardada",
+        message:
+          "Se han guardado los intentos y los indicadores calculados. El histórico del equipo se ha recargado automáticamente.",
+      });
+      resetAcceleration5mState();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar la Aceleración 5 m.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar la Aceleración 5 m",
+        message,
+      });
+    } finally {
+      setSavingAcceleration5m(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -2642,6 +2813,8 @@ export default function TestsPage() {
     isThirtyFifteenIftCatalogTest(selectedCatalogTest);
   const isCurrentExecutionRsa6x30 = isRsa6x30CatalogTest(selectedCatalogTest);
   const isCurrentExecutionSprint30 = isSprint30CatalogTest(selectedCatalogTest);
+  const isCurrentExecutionAcceleration5m =
+    isAcceleration5mCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3427,6 +3600,36 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionAcceleration5m && (
+                  <Acceleration5ExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveAcceleration5m(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -3810,7 +4013,8 @@ export default function TestsPage() {
                   !isCurrentExecutionDropJump &&
                   !isCurrentExecutionThirtyFifteenIft &&
                   !isCurrentExecutionRsa6x30 &&
-                  !isCurrentExecutionSprint30 && (
+                  !isCurrentExecutionSprint30 &&
+                  !isCurrentExecutionAcceleration5m && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
