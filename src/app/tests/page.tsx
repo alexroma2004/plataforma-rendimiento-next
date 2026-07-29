@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import DropJumpExecutionForm, {
+  type DropJumpFormState,
+} from "@/components/tests/DropJumpExecutionForm";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import { TEST_DEFINITIONS, type TestCategory } from "@/lib/domain/performance";
@@ -50,6 +53,29 @@ import {
   type CmjAttemptSide,
   type CmjModality,
 } from "@/lib/domain/tests/cmj";
+import {
+  DROP_JUMP_DEVICE,
+  DROP_JUMP_TEST_CATEGORY,
+  DROP_JUMP_TEST_ID,
+  DROP_JUMP_TEST_NAME,
+  DROP_JUMP_UNIT_ASYMMETRY,
+  DROP_JUMP_UNIT_BODY_MASS,
+  DROP_JUMP_UNIT_CONTACT,
+  DROP_JUMP_UNIT_HEIGHT,
+  DROP_JUMP_UNIT_RSI,
+  DROP_JUMP_VARIABLES,
+  getDropJumpAttemptContactVariable,
+  getDropJumpAttemptHeightVariable,
+  getDropJumpAttemptRsiVariable,
+  getValidDropJumpAttempts,
+  modalityIncludesDropJumpBipodal,
+  modalityIncludesDropJumpUnipodal,
+  parsePositiveDropJumpNumber,
+  type DropJumpAttemptInput,
+  type DropJumpAttemptSide,
+  type DropJumpSummary,
+  type DropJumpValidAttempt,
+} from "@/lib/domain/tests/drop-jump";
 import {
   calculateSjSummary,
   SJ_DEVICE,
@@ -278,6 +304,10 @@ function isAbalakovCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === ABALAKOV_TEST_ID;
 }
 
+function isDropJumpCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "") === DROP_JUMP_TEST_ID;
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -426,13 +456,15 @@ export default function TestsPage() {
   );
   const [abalakovErrors, setAbalakovErrors] = useState<string[]>([]);
   const [savingAbalakov, setSavingAbalakov] = useState(false);
+  const [savingDropJump, setSavingDropJump] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const savingJumpTest = savingCmj || savingSj || savingAbalakov;
+  const savingJumpTest =
+    savingCmj || savingSj || savingAbalakov || savingDropJump;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -478,10 +510,15 @@ export default function TestsPage() {
     setSavingAbalakov(false);
   }
 
+  function resetDropJumpState() {
+    setSavingDropJump(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
     resetAbalakovState();
+    resetDropJumpState();
   }
 
   useEffect(() => {
@@ -1706,6 +1743,334 @@ export default function TestsPage() {
     }
   }
 
+  function appendDropJumpAttemptRecords(
+    records: TestRecordInput[],
+    side: DropJumpAttemptSide,
+    attempts: readonly DropJumpAttemptInput[],
+    player: TestPlayerRow,
+  ) {
+    getValidDropJumpAttempts(attempts).forEach((attempt) => {
+      records.push(
+        {
+          player_id: player.id,
+          player_name: player.name,
+          normalized_name: player.normalized_name,
+          position: player.position,
+          test_block: DROP_JUMP_TEST_NAME,
+          variable: getDropJumpAttemptHeightVariable(
+            side,
+            attempt.attemptNumber,
+          ),
+          value: attempt.heightCm,
+          unit: DROP_JUMP_UNIT_HEIGHT,
+          direction: side,
+          source: DROP_JUMP_DEVICE,
+        },
+        {
+          player_id: player.id,
+          player_name: player.name,
+          normalized_name: player.normalized_name,
+          position: player.position,
+          test_block: DROP_JUMP_TEST_NAME,
+          variable: getDropJumpAttemptContactVariable(
+            side,
+            attempt.attemptNumber,
+          ),
+          value: attempt.contactMs,
+          unit: DROP_JUMP_UNIT_CONTACT,
+          direction: side,
+          source: DROP_JUMP_DEVICE,
+        },
+        {
+          player_id: player.id,
+          player_name: player.name,
+          normalized_name: player.normalized_name,
+          position: player.position,
+          test_block: DROP_JUMP_TEST_NAME,
+          variable: getDropJumpAttemptRsiVariable(side, attempt.attemptNumber),
+          value: attempt.rsi,
+          unit: DROP_JUMP_UNIT_RSI,
+          direction: side,
+          source: DROP_JUMP_DEVICE,
+        },
+      );
+    });
+  }
+
+  function appendDropJumpBestRecords(
+    records: TestRecordInput[],
+    side: DropJumpAttemptSide,
+    bestAttempt: DropJumpValidAttempt | null,
+    player: TestPlayerRow,
+  ) {
+    if (!bestAttempt) return;
+
+    const variablesBySide = {
+      BIPODAL: {
+        rsi: DROP_JUMP_VARIABLES.BEST_RSI_BIPODAL,
+        height: DROP_JUMP_VARIABLES.BEST_HEIGHT_BIPODAL,
+        contact: DROP_JUMP_VARIABLES.BEST_CONTACT_BIPODAL,
+        attempt: DROP_JUMP_VARIABLES.BEST_ATTEMPT_BIPODAL,
+      },
+      DERECHA: {
+        rsi: DROP_JUMP_VARIABLES.BEST_RSI_RIGHT,
+        height: DROP_JUMP_VARIABLES.BEST_HEIGHT_RIGHT,
+        contact: DROP_JUMP_VARIABLES.BEST_CONTACT_RIGHT,
+        attempt: DROP_JUMP_VARIABLES.BEST_ATTEMPT_RIGHT,
+      },
+      IZQUIERDA: {
+        rsi: DROP_JUMP_VARIABLES.BEST_RSI_LEFT,
+        height: DROP_JUMP_VARIABLES.BEST_HEIGHT_LEFT,
+        contact: DROP_JUMP_VARIABLES.BEST_CONTACT_LEFT,
+        attempt: DROP_JUMP_VARIABLES.BEST_ATTEMPT_LEFT,
+      },
+    }[side];
+
+    records.push(
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: variablesBySide.rsi,
+        value: bestAttempt.rsi,
+        unit: DROP_JUMP_UNIT_RSI,
+        direction: side,
+        source: DROP_JUMP_DEVICE,
+      },
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: variablesBySide.height,
+        value: bestAttempt.heightCm,
+        unit: DROP_JUMP_UNIT_HEIGHT,
+        direction: side,
+        source: DROP_JUMP_DEVICE,
+      },
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: variablesBySide.contact,
+        value: bestAttempt.contactMs,
+        unit: DROP_JUMP_UNIT_CONTACT,
+        direction: side,
+        source: DROP_JUMP_DEVICE,
+      },
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: variablesBySide.attempt,
+        value: bestAttempt.attemptNumber,
+        unit: null,
+        direction: side,
+        source: DROP_JUMP_DEVICE,
+      },
+    );
+  }
+
+  function buildDropJumpRecords(
+    player: TestPlayerRow,
+    form: DropJumpFormState,
+    summary: DropJumpSummary,
+  ): TestRecordInput[] {
+    const bodyMassKg = parsePositiveDropJumpNumber(form.bodyMassKg);
+    const boxHeightCm = parsePositiveDropJumpNumber(form.boxHeightCm);
+    const records: TestRecordInput[] = [
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: DROP_JUMP_VARIABLES.BODY_MASS,
+        value: bodyMassKg,
+        unit: DROP_JUMP_UNIT_BODY_MASS,
+        direction: form.modality,
+        source: DROP_JUMP_DEVICE,
+      },
+      {
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: DROP_JUMP_VARIABLES.BOX_HEIGHT,
+        value: boxHeightCm,
+        unit: DROP_JUMP_UNIT_HEIGHT,
+        direction: form.modality,
+        source: DROP_JUMP_DEVICE,
+      },
+    ];
+
+    if (modalityIncludesDropJumpBipodal(form.modality)) {
+      appendDropJumpAttemptRecords(
+        records,
+        "BIPODAL",
+        form.bipodalAttempts,
+        player,
+      );
+      appendDropJumpBestRecords(records, "BIPODAL", summary.bestBipodal, player);
+    }
+
+    if (modalityIncludesDropJumpUnipodal(form.modality)) {
+      appendDropJumpAttemptRecords(
+        records,
+        "DERECHA",
+        form.rightAttempts,
+        player,
+      );
+      appendDropJumpAttemptRecords(
+        records,
+        "IZQUIERDA",
+        form.leftAttempts,
+        player,
+      );
+      appendDropJumpBestRecords(records, "DERECHA", summary.bestRight, player);
+      appendDropJumpBestRecords(
+        records,
+        "IZQUIERDA",
+        summary.bestLeft,
+        player,
+      );
+    }
+
+    if (summary.asymmetry !== null) {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: DROP_JUMP_VARIABLES.ASYMMETRY,
+        value: summary.asymmetry,
+        unit: DROP_JUMP_UNIT_ASYMMETRY,
+        direction: summary.bestSide,
+        source: DROP_JUMP_DEVICE,
+      });
+    }
+
+    if (summary.bestSide !== "NO_APLICA") {
+      records.push({
+        player_id: player.id,
+        player_name: player.name,
+        normalized_name: player.normalized_name,
+        position: player.position,
+        test_block: DROP_JUMP_TEST_NAME,
+        variable: DROP_JUMP_VARIABLES.BEST_SIDE,
+        value: null,
+        unit: null,
+        direction: summary.bestSide,
+        source: DROP_JUMP_DEVICE,
+      });
+    }
+
+    return records;
+  }
+
+  async function handleSaveDropJump(
+    form: DropJumpFormState,
+    summary: DropJumpSummary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el Drop Jump",
+        message: "Faltan equipo, jugador o contexto de ejecucion.",
+      });
+      return;
+    }
+
+    const formSnapshot: DropJumpFormState = {
+      ...form,
+      bipodalAttempts: form.bipodalAttempts.map((attempt) => ({
+        ...attempt,
+      })),
+      rightAttempts: form.rightAttempts.map((attempt) => ({
+        ...attempt,
+      })),
+      leftAttempts: form.leftAttempts.map((attempt) => ({
+        ...attempt,
+      })),
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const dropJumpSummarySnapshot = summary;
+
+    try {
+      setSavingDropJump(true);
+      setCatalogMessage(null);
+
+      const bodyMassKg = parsePositiveDropJumpNumber(formSnapshot.bodyMassKg);
+      const boxHeightCm = parsePositiveDropJumpNumber(formSnapshot.boxHeightCm);
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${DROP_JUMP_TEST_NAME} - ${
+          playerSnapshot.name
+        } - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: `${DROP_JUMP_TEST_NAME} ejecutado con ${DROP_JUMP_DEVICE}. Modalidad: ${formSnapshot.modality}. Cajon: ${boxHeightCm} cm.`,
+        tests: [
+          {
+            id: DROP_JUMP_TEST_ID,
+            name: DROP_JUMP_TEST_NAME,
+            category: DROP_JUMP_TEST_CATEGORY,
+            device: DROP_JUMP_DEVICE,
+            modality: formSnapshot.modality,
+            bodyMassKg,
+            boxHeightCm,
+            summary: dropJumpSummarySnapshot,
+          },
+        ],
+        records: buildDropJumpRecords(
+          playerSnapshot,
+          formSnapshot,
+          dropJumpSummarySnapshot,
+        ),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "Drop Jump guardado",
+        message:
+          "Se han guardado los intentos validos, RSI y mejores resultados del Drop Jump. El historico del equipo se ha recargado automaticamente.",
+      });
+      resetDropJumpState();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar el Drop Jump.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el Drop Jump",
+        message,
+      });
+    } finally {
+      setSavingDropJump(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -1771,6 +2136,8 @@ export default function TestsPage() {
   const isCurrentExecutionSj = isSjCatalogTest(selectedCatalogTest);
   const isCurrentExecutionAbalakov =
     isAbalakovCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionDropJump =
+    isDropJumpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -2436,6 +2803,36 @@ export default function TestsPage() {
                   </div>
                 )}
 
+                {isCurrentExecutionDropJump && (
+                  <DropJumpExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveDropJump(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -2815,7 +3212,7 @@ export default function TestsPage() {
                   </>
                 )}
 
-                {!isCurrentExecutionJump && (
+                {!isCurrentExecutionJump && !isCurrentExecutionDropJump && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
