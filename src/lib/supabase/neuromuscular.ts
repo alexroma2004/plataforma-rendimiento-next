@@ -1,4 +1,12 @@
 import { supabase } from "@/lib/supabase/client";
+import {
+  createNeuromuscularHistoryPoints,
+  isIsoDate,
+  type NeuromuscularHistoryPoint,
+  type NeuromuscularHistoryRecord,
+  type NeuromuscularMetric,
+  type NeuromuscularMoment,
+} from "@/lib/domain/neuromuscular";
 
 export type NeuromuscularSessionRow = {
   id: string;
@@ -66,6 +74,15 @@ export type NeuromuscularPlayerRow = {
   name: string;
   normalized_name: string | null;
   position: string | null;
+};
+
+export type LoadPlayerNeuromuscularHistoryInput = {
+  teamId: string;
+  playerId: string;
+  metric?: NeuromuscularMetric;
+  moment?: NeuromuscularMoment;
+  dateFrom?: string;
+  dateTo?: string;
 };
 
 type PlayerMatch = {
@@ -243,6 +260,66 @@ export async function getNeuromuscularRecordsBySessionId(
   }
 
   return (data ?? []) as NeuromuscularRecordRow[];
+}
+
+export async function loadPlayerNeuromuscularHistory(
+  input: LoadPlayerNeuromuscularHistoryInput,
+): Promise<NeuromuscularHistoryPoint[]> {
+  const client = getSupabaseClient();
+  const teamId = cleanText(input.teamId);
+  const playerId = cleanText(input.playerId);
+
+  if (!teamId) {
+    throw new Error("El equipo es obligatorio para cargar el histórico neuromuscular.");
+  }
+
+  if (!playerId) {
+    throw new Error("El jugador es obligatorio para cargar el histórico neuromuscular.");
+  }
+
+  if (input.dateFrom && !isIsoDate(input.dateFrom)) {
+    throw new Error("La fecha inicial debe usar el formato ISO YYYY-MM-DD.");
+  }
+
+  if (input.dateTo && !isIsoDate(input.dateTo)) {
+    throw new Error("La fecha final debe usar el formato ISO YYYY-MM-DD.");
+  }
+
+  if (input.dateFrom && input.dateTo && input.dateFrom > input.dateTo) {
+    throw new Error("La fecha inicial no puede ser posterior a la fecha final.");
+  }
+
+  let query = client
+    .from("neuromuscular_records")
+    .select(
+      "id, session_id, team_id, player_id, session_date, microcycle, cmj_pre, cmj_post, rsimod_pre, rsimod_post, vmp_pre, vmp_post",
+    )
+    .eq("team_id", teamId)
+    .eq("player_id", playerId);
+
+  if (input.dateFrom) {
+    query = query.gte("session_date", input.dateFrom);
+  }
+
+  if (input.dateTo) {
+    query = query.lte("session_date", input.dateTo);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(
+      `No se ha podido cargar el histórico neuromuscular: ${error.message}`,
+    );
+  }
+
+  return createNeuromuscularHistoryPoints(
+    (data ?? []) as NeuromuscularHistoryRecord[],
+    {
+      metric: input.metric,
+      moment: input.moment ?? "PRE",
+    },
+  );
 }
 
 export async function createNeuromuscularSessionWithRecords(
