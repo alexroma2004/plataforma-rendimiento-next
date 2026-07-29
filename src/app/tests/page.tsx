@@ -9,6 +9,7 @@ import DropJumpExecutionForm, {
 } from "@/components/tests/DropJumpExecutionForm";
 import IllinoisExecutionForm from "@/components/tests/IllinoisExecutionForm";
 import HipThrustVmpExecutionForm from "@/components/tests/HipThrustVmpExecutionForm";
+import LoadVelocityProfileExecutionForm from "@/components/tests/LoadVelocityProfileExecutionForm";
 import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
 import SquatVmpExecutionForm from "@/components/tests/SquatVmpExecutionForm";
 import Sprint30ExecutionForm from "@/components/tests/Sprint30ExecutionForm";
@@ -123,6 +124,15 @@ import {
   type ThirtyFifteenIftFormState,
   type ThirtyFifteenIftSummary,
 } from "@/lib/domain/tests/thirty-fifteen-ift";
+import {
+  createLoadVelocityProfileResults,
+  LOAD_VELOCITY_PROFILE_DEVICE,
+  LOAD_VELOCITY_PROFILE_TEST_CATEGORY,
+  LOAD_VELOCITY_PROFILE_TEST_ID,
+  LOAD_VELOCITY_PROFILE_TEST_NAME,
+  type LoadVelocityProfileFormState,
+  type LoadVelocityProfileSummary,
+} from "@/lib/domain/tests/load-velocity-profile";
 import {
   createHipThrustVmpResults,
   HIP_THRUST_VMP_DEVICE,
@@ -425,6 +435,7 @@ function isSquatVmpCatalogTest(test: CatalogTest | null) {
 function isHipThrustVmpCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === HIP_THRUST_VMP_TEST_ID;
 }
+function isLoadVelocityProfileCatalogTest(test: CatalogTest | null) { return getCatalogTestKey(test?.name ?? "") === LOAD_VELOCITY_PROFILE_TEST_ID; }
 
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
@@ -582,6 +593,7 @@ export default function TestsPage() {
   const [savingIllinois, setSavingIllinois] = useState(false);
   const [savingSquatVmp, setSavingSquatVmp] = useState(false);
   const [savingHipThrustVmp, setSavingHipThrustVmp] = useState(false);
+  const [savingLoadVelocityProfile, setSavingLoadVelocityProfile] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -599,7 +611,7 @@ export default function TestsPage() {
     savingAcceleration5m ||
     savingIllinois ||
     savingSquatVmp ||
-    savingHipThrustVmp;
+    savingHipThrustVmp || savingLoadVelocityProfile;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -676,6 +688,7 @@ export default function TestsPage() {
   function resetHipThrustVmpState() {
     setSavingHipThrustVmp(false);
   }
+  function resetLoadVelocityProfileState() { setSavingLoadVelocityProfile(false); }
 
   function resetJumpTestState() {
     resetCmjState();
@@ -689,6 +702,7 @@ export default function TestsPage() {
     resetIllinoisState();
     resetSquatVmpState();
     resetHipThrustVmpState();
+    resetLoadVelocityProfileState();
   }
 
   useEffect(() => {
@@ -3033,6 +3047,15 @@ export default function TestsPage() {
     } catch (err) { setCatalogMessage({ variant: "error", title: "No se ha podido guardar VMP Hip Thrust", message: err instanceof Error ? err.message : "Error desconocido al guardar VMP Hip Thrust." }); } finally { setSavingHipThrustVmp(false); }
   }
 
+  async function handleSaveLoadVelocityProfile(form: LoadVelocityProfileFormState, summary: LoadVelocityProfileSummary) {
+    if (savingJumpTest) return;
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) { setCatalogMessage({ variant: "error", title: "No se puede guardar el perfil", message: "Faltan equipo, jugador o contexto de ejecución." }); return; }
+    const records = createLoadVelocityProfileResults(summary).map((result) => ({ player_id: selectedCatalogPlayer.id, player_name: selectedCatalogPlayer.name, normalized_name: selectedCatalogPlayer.normalized_name, position: selectedCatalogPlayer.position, test_block: LOAD_VELOCITY_PROFILE_TEST_NAME, variable: result.variable, value: result.value, unit: result.unit, source: LOAD_VELOCITY_PROFILE_DEVICE }));
+    if (records.length === 0) { setCatalogMessage({ variant: "error", title: "Perfil no válido", message: summary.mathematicalError ?? "No se han podido generar resultados válidos." }); return; }
+    const teamId = selectedTeamId; const player = selectedCatalogPlayer;
+    try { setSavingLoadVelocityProfile(true); setCatalogMessage(null); const saved = await createTestSessionWithResults({ team_id: teamId, session_date: form.performedAt, session_name: `${LOAD_VELOCITY_PROFILE_TEST_NAME} - ${player.name} - ${new Date().toLocaleTimeString("es-ES")}`, context: "Semi-profesional", notes: form.observations.trim() || null, tests: [{ id: LOAD_VELOCITY_PROFILE_TEST_ID, name: LOAD_VELOCITY_PROFILE_TEST_NAME, category: LOAD_VELOCITY_PROFILE_TEST_CATEGORY, device: LOAD_VELOCITY_PROFILE_DEVICE, exercise: form.exercise, targetSpeed: summary.targetSpeed, loadCount: summary.rows.length, summary }], records, skipScores: true }); await loadSessionsForTeam(teamId, saved.session.id); setActiveView("history"); setSelectedCatalogTest(null); setSelectedCatalogPlayerId(""); setExecutionStage("CATALOG"); setExecutionDraft(null); setCatalogMessage({ variant: "success", title: "Perfil Carga–Velocidad guardado", message: "Se han guardado las cargas, repeticiones y resultados de regresión. El histórico se ha recargado." }); resetLoadVelocityProfileState(); } catch (err) { setCatalogMessage({ variant: "error", title: "No se ha podido guardar el perfil", message: err instanceof Error ? err.message : "Error desconocido." }); } finally { setSavingLoadVelocityProfile(false); }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -3109,6 +3132,7 @@ export default function TestsPage() {
   const isCurrentExecutionIllinois = isIllinoisCatalogTest(selectedCatalogTest);
   const isCurrentExecutionSquatVmp = isSquatVmpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionHipThrustVmp = isHipThrustVmpCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionLoadVelocityProfile = isLoadVelocityProfileCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3985,6 +4009,7 @@ export default function TestsPage() {
                     onSave={(form, summary) => { void handleSaveHipThrustVmp(form, summary); }}
                   />
                 )}
+                {isCurrentExecutionLoadVelocityProfile && <LoadVelocityProfileExecutionForm key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`} context={executionDraft.context} hasSelectedPlayer={Boolean(selectedCatalogPlayer)} isSaving={savingJumpTest} onBack={handleBackToTestSetup} onCancel={handleCancelExecution} onReview={(performedAt)=>{setExecutionDraft(current=>current?{...current,context:{...current.context,performedAt}}:current);setCatalogMessage(null);setExecutionStage("REVIEW")}} onReturnToExecution={()=>setExecutionStage("EXECUTION")} onSave={(form,summary)=>{void handleSaveLoadVelocityProfile(form,summary)}} />}
 
                 {isCurrentExecutionJump && (
                   <>
@@ -4373,7 +4398,8 @@ export default function TestsPage() {
                   !isCurrentExecutionAcceleration5m &&
                   !isCurrentExecutionIllinois &&
                   !isCurrentExecutionSquatVmp &&
-                  !isCurrentExecutionHipThrustVmp && (
+                  !isCurrentExecutionHipThrustVmp &&
+                  !isCurrentExecutionLoadVelocityProfile && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
