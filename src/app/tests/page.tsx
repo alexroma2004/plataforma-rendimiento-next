@@ -9,6 +9,7 @@ import DropJumpExecutionForm, {
 } from "@/components/tests/DropJumpExecutionForm";
 import IllinoisExecutionForm from "@/components/tests/IllinoisExecutionForm";
 import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
+import SquatVmpExecutionForm from "@/components/tests/SquatVmpExecutionForm";
 import Sprint30ExecutionForm from "@/components/tests/Sprint30ExecutionForm";
 import ThirtyFifteenExecutionForm from "@/components/tests/ThirtyFifteenExecutionForm";
 import StatusMessage from "@/components/ui/StatusMessage";
@@ -144,6 +145,15 @@ import {
   type Rsa6x30FormState,
   type Rsa6x30Summary,
 } from "@/lib/domain/tests/rsa-6x30";
+import {
+  createSquatVmpResults,
+  SQUAT_VMP_DEVICE,
+  SQUAT_VMP_TEST_CATEGORY,
+  SQUAT_VMP_TEST_ID,
+  SQUAT_VMP_TEST_NAME,
+  type SquatVmpFormState,
+  type SquatVmpSummary,
+} from "@/lib/domain/tests/squat-vmp";
 import {
   getSprint30Attempt30mVariable,
   getSprint30Attempt5mVariable,
@@ -398,6 +408,10 @@ function isIllinoisCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "").includes(ILLINOIS_TEST_ID);
 }
 
+function isSquatVmpCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "") === SQUAT_VMP_TEST_ID;
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -552,6 +566,7 @@ export default function TestsPage() {
   const [savingSprint30, setSavingSprint30] = useState(false);
   const [savingAcceleration5m, setSavingAcceleration5m] = useState(false);
   const [savingIllinois, setSavingIllinois] = useState(false);
+  const [savingSquatVmp, setSavingSquatVmp] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -567,7 +582,8 @@ export default function TestsPage() {
     savingRsa6x30 ||
     savingSprint30 ||
     savingAcceleration5m ||
-    savingIllinois;
+    savingIllinois ||
+    savingSquatVmp;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -637,6 +653,10 @@ export default function TestsPage() {
     setSavingIllinois(false);
   }
 
+  function resetSquatVmpState() {
+    setSavingSquatVmp(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
@@ -647,6 +667,7 @@ export default function TestsPage() {
     resetSprint30State();
     resetAcceleration5mState();
     resetIllinoisState();
+    resetSquatVmpState();
   }
 
   useEffect(() => {
@@ -2907,6 +2928,73 @@ export default function TestsPage() {
     }
   }
 
+  function buildSquatVmpRecords(
+    player: TestPlayerRow,
+    summary: SquatVmpSummary,
+  ): TestRecordInput[] {
+    return createSquatVmpResults(summary).map((result) => ({
+      player_id: player.id,
+      player_name: player.name,
+      normalized_name: player.normalized_name,
+      position: player.position,
+      test_block: SQUAT_VMP_TEST_NAME,
+      variable: result.variable,
+      value: result.value,
+      unit: result.unit,
+      source: SQUAT_VMP_DEVICE,
+    }));
+  }
+
+  async function handleSaveSquatVmp(
+    form: SquatVmpFormState,
+    summary: SquatVmpSummary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar VMP Sentadilla",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const formSnapshot = { ...form, observations: form.observations.trim() };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const summarySnapshot = summary;
+
+    try {
+      setSavingSquatVmp(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${SQUAT_VMP_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [{ id: SQUAT_VMP_TEST_ID, name: SQUAT_VMP_TEST_NAME, category: SQUAT_VMP_TEST_CATEGORY, device: SQUAT_VMP_DEVICE, summary: summarySnapshot }],
+        records: buildSquatVmpRecords(playerSnapshot, summarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({ variant: "success", title: "VMP Sentadilla guardada", message: "Se han guardado la carga, la VMP de la repetición y la VMP máxima. El histórico del equipo se ha recargado automáticamente." });
+      resetSquatVmpState();
+    } catch (err) {
+      setCatalogMessage({ variant: "error", title: "No se ha podido guardar VMP Sentadilla", message: err instanceof Error ? err.message : "Error desconocido al guardar VMP Sentadilla." });
+    } finally {
+      setSavingSquatVmp(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -2981,6 +3069,7 @@ export default function TestsPage() {
   const isCurrentExecutionAcceleration5m =
     isAcceleration5mCatalogTest(selectedCatalogTest);
   const isCurrentExecutionIllinois = isIllinoisCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionSquatVmp = isSquatVmpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3826,6 +3915,24 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionSquatVmp && (
+                  <SquatVmpExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) => currentDraft ? { ...currentDraft, context: { ...currentDraft.context, performedAt } } : currentDraft);
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => { void handleSaveSquatVmp(form, summary); }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -4211,7 +4318,8 @@ export default function TestsPage() {
                   !isCurrentExecutionRsa6x30 &&
                   !isCurrentExecutionSprint30 &&
                   !isCurrentExecutionAcceleration5m &&
-                  !isCurrentExecutionIllinois && (
+                  !isCurrentExecutionIllinois &&
+                  !isCurrentExecutionSquatVmp && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
