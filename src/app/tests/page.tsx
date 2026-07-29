@@ -6,6 +6,7 @@ import AppShell from "@/components/layout/AppShell";
 import DropJumpExecutionForm, {
   type DropJumpFormState,
 } from "@/components/tests/DropJumpExecutionForm";
+import ThirtyFifteenExecutionForm from "@/components/tests/ThirtyFifteenExecutionForm";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import { TEST_DEFINITIONS, type TestCategory } from "@/lib/domain/performance";
@@ -95,6 +96,15 @@ import {
   type SjAttemptSide,
   type SjModality,
 } from "@/lib/domain/tests/sj";
+import {
+  THIRTY_FIFTEEN_IFT_TEST_CATEGORY,
+  THIRTY_FIFTEEN_IFT_TEST_ID,
+  THIRTY_FIFTEEN_IFT_TEST_NAME,
+  THIRTY_FIFTEEN_IFT_UNIT_SPEED,
+  THIRTY_FIFTEEN_IFT_VARIABLES,
+  type ThirtyFifteenIftFormState,
+  type ThirtyFifteenIftSummary,
+} from "@/lib/domain/tests/thirty-fifteen-ift";
 import {
   createTestSessionWithResults,
   getTestPlayersByTeamId,
@@ -308,6 +318,10 @@ function isDropJumpCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === DROP_JUMP_TEST_ID;
 }
 
+function isThirtyFifteenIftCatalogTest(test: CatalogTest | null) {
+  return getCatalogTestKey(test?.name ?? "") === THIRTY_FIFTEEN_IFT_TEST_ID;
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -457,6 +471,7 @@ export default function TestsPage() {
   const [abalakovErrors, setAbalakovErrors] = useState<string[]>([]);
   const [savingAbalakov, setSavingAbalakov] = useState(false);
   const [savingDropJump, setSavingDropJump] = useState(false);
+  const [savingThirtyFifteenIft, setSavingThirtyFifteenIft] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -464,7 +479,11 @@ export default function TestsPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savingJumpTest =
-    savingCmj || savingSj || savingAbalakov || savingDropJump;
+    savingCmj ||
+    savingSj ||
+    savingAbalakov ||
+    savingDropJump ||
+    savingThirtyFifteenIft;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -514,11 +533,16 @@ export default function TestsPage() {
     setSavingDropJump(false);
   }
 
+  function resetThirtyFifteenIftState() {
+    setSavingThirtyFifteenIft(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
     resetAbalakovState();
     resetDropJumpState();
+    resetThirtyFifteenIftState();
   }
 
   useEffect(() => {
@@ -2071,6 +2095,126 @@ export default function TestsPage() {
     }
   }
 
+  function buildThirtyFifteenIftRecords(
+    player: TestPlayerRow,
+    summary: ThirtyFifteenIftSummary,
+  ): TestRecordInput[] {
+    const createRecord = (variable: string, value: number): TestRecordInput => ({
+      player_id: player.id,
+      player_name: player.name,
+      normalized_name: player.normalized_name,
+      position: player.position,
+      test_block: THIRTY_FIFTEEN_IFT_TEST_NAME,
+      variable,
+      value,
+      unit: THIRTY_FIFTEEN_IFT_UNIT_SPEED,
+    });
+
+    const records: TestRecordInput[] = [];
+
+    if (summary.lastCompletedLevel !== null) {
+      records.push(
+        createRecord(
+          THIRTY_FIFTEEN_IFT_VARIABLES.LAST_COMPLETED_LEVEL,
+          summary.lastCompletedLevel,
+        ),
+      );
+    }
+
+    if (summary.withdrawalLevel !== null) {
+      records.push(
+        createRecord(
+          THIRTY_FIFTEEN_IFT_VARIABLES.WITHDRAWAL_LEVEL,
+          summary.withdrawalLevel,
+        ),
+      );
+    }
+
+    if (summary.vift !== null) {
+      records.push(
+        createRecord(THIRTY_FIFTEEN_IFT_VARIABLES.VIFT, summary.vift),
+      );
+    }
+
+    return records;
+  }
+
+  async function handleSaveThirtyFifteenIft(
+    form: ThirtyFifteenIftFormState,
+    summary: ThirtyFifteenIftSummary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el 30-15 IFT",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...form,
+      observations: form.observations.trim(),
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const summarySnapshot = summary;
+
+    try {
+      setSavingThirtyFifteenIft(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${THIRTY_FIFTEEN_IFT_TEST_NAME} - ${
+          playerSnapshot.name
+        } - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [
+          {
+            id: THIRTY_FIFTEEN_IFT_TEST_ID,
+            name: THIRTY_FIFTEEN_IFT_TEST_NAME,
+            category: THIRTY_FIFTEEN_IFT_TEST_CATEGORY,
+            summary: summarySnapshot,
+          },
+        ],
+        records: buildThirtyFifteenIftRecords(playerSnapshot, summarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "30-15 IFT guardado",
+        message:
+          "Se han guardado el último nivel completado, el abandono si se indicó y la VIFT. El histórico del equipo se ha recargado automáticamente.",
+      });
+      resetThirtyFifteenIftState();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar el 30-15 IFT.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el 30-15 IFT",
+        message,
+      });
+    } finally {
+      setSavingThirtyFifteenIft(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -2138,6 +2282,8 @@ export default function TestsPage() {
     isAbalakovCatalogTest(selectedCatalogTest);
   const isCurrentExecutionDropJump =
     isDropJumpCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionThirtyFifteenIft =
+    isThirtyFifteenIftCatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -2833,6 +2979,36 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionThirtyFifteenIft && (
+                  <ThirtyFifteenExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveThirtyFifteenIft(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -3212,7 +3388,9 @@ export default function TestsPage() {
                   </>
                 )}
 
-                {!isCurrentExecutionJump && !isCurrentExecutionDropJump && (
+                {!isCurrentExecutionJump &&
+                  !isCurrentExecutionDropJump &&
+                  !isCurrentExecutionThirtyFifteenIft && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
