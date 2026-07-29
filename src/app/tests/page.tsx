@@ -6,6 +6,7 @@ import AppShell from "@/components/layout/AppShell";
 import DropJumpExecutionForm, {
   type DropJumpFormState,
 } from "@/components/tests/DropJumpExecutionForm";
+import Rsa6x30ExecutionForm from "@/components/tests/Rsa6x30ExecutionForm";
 import ThirtyFifteenExecutionForm from "@/components/tests/ThirtyFifteenExecutionForm";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -105,6 +106,17 @@ import {
   type ThirtyFifteenIftFormState,
   type ThirtyFifteenIftSummary,
 } from "@/lib/domain/tests/thirty-fifteen-ift";
+import {
+  RSA_6X30_SPRINT_VARIABLES,
+  RSA_6X30_TEST_CATEGORY,
+  RSA_6X30_TEST_ID,
+  RSA_6X30_TEST_NAME,
+  RSA_6X30_UNIT_PERCENTAGE,
+  RSA_6X30_UNIT_TIME,
+  RSA_6X30_VARIABLES,
+  type Rsa6x30FormState,
+  type Rsa6x30Summary,
+} from "@/lib/domain/tests/rsa-6x30";
 import {
   createTestSessionWithResults,
   getTestPlayersByTeamId,
@@ -322,6 +334,13 @@ function isThirtyFifteenIftCatalogTest(test: CatalogTest | null) {
   return getCatalogTestKey(test?.name ?? "") === THIRTY_FIFTEEN_IFT_TEST_ID;
 }
 
+function isRsa6x30CatalogTest(test: CatalogTest | null) {
+  return (
+    getCatalogTestKey(test?.name ?? "").replace(/\s+/g, "") ===
+    RSA_6X30_TEST_ID.replace(/\s+/g, "")
+  );
+}
+
 function getCatalogTestName(name: string) {
   const key = getCatalogTestKey(name);
 
@@ -472,6 +491,7 @@ export default function TestsPage() {
   const [savingAbalakov, setSavingAbalakov] = useState(false);
   const [savingDropJump, setSavingDropJump] = useState(false);
   const [savingThirtyFifteenIft, setSavingThirtyFifteenIft] = useState(false);
+  const [savingRsa6x30, setSavingRsa6x30] = useState(false);
   const [catalogMessage, setCatalogMessage] =
     useState<CatalogMessage | null>(null);
 
@@ -483,7 +503,8 @@ export default function TestsPage() {
     savingSj ||
     savingAbalakov ||
     savingDropJump ||
-    savingThirtyFifteenIft;
+    savingThirtyFifteenIft ||
+    savingRsa6x30;
   const sessionsRequestId = useRef(0);
   const catalogPlayersRequestId = useRef(0);
 
@@ -537,12 +558,17 @@ export default function TestsPage() {
     setSavingThirtyFifteenIft(false);
   }
 
+  function resetRsa6x30State() {
+    setSavingRsa6x30(false);
+  }
+
   function resetJumpTestState() {
     resetCmjState();
     resetSjState();
     resetAbalakovState();
     resetDropJumpState();
     resetThirtyFifteenIftState();
+    resetRsa6x30State();
   }
 
   useEffect(() => {
@@ -2215,6 +2241,150 @@ export default function TestsPage() {
     }
   }
 
+  function buildRsa6x30Records(
+    player: TestPlayerRow,
+    summary: Rsa6x30Summary,
+  ): TestRecordInput[] {
+    const createRecord = (variable: string, value: number, unit: string) => ({
+      player_id: player.id,
+      player_name: player.name,
+      normalized_name: player.normalized_name,
+      position: player.position,
+      test_block: RSA_6X30_TEST_NAME,
+      variable,
+      value,
+      unit,
+    });
+    const records = summary.sprintTimes.flatMap((time, index) => {
+      const variable = RSA_6X30_SPRINT_VARIABLES[index];
+
+      return variable
+        ? [createRecord(variable, time, RSA_6X30_UNIT_TIME)]
+        : [];
+    });
+
+    if (
+      summary.bestTime === null ||
+      summary.worstTime === null ||
+      summary.meanTime === null ||
+      summary.totalTime === null ||
+      summary.decrement === null ||
+      summary.absoluteDifference === null
+    ) {
+      return records;
+    }
+
+    records.push(
+      createRecord(
+        RSA_6X30_VARIABLES.BEST_TIME,
+        summary.bestTime,
+        RSA_6X30_UNIT_TIME,
+      ),
+      createRecord(
+        RSA_6X30_VARIABLES.WORST_TIME,
+        summary.worstTime,
+        RSA_6X30_UNIT_TIME,
+      ),
+      createRecord(
+        RSA_6X30_VARIABLES.MEAN_TIME,
+        summary.meanTime,
+        RSA_6X30_UNIT_TIME,
+      ),
+      createRecord(
+        RSA_6X30_VARIABLES.TOTAL_TIME,
+        summary.totalTime,
+        RSA_6X30_UNIT_TIME,
+      ),
+      createRecord(
+        RSA_6X30_VARIABLES.DECREMENT,
+        summary.decrement,
+        RSA_6X30_UNIT_PERCENTAGE,
+      ),
+      createRecord(
+        RSA_6X30_VARIABLES.ABSOLUTE_DIFFERENCE,
+        summary.absoluteDifference,
+        RSA_6X30_UNIT_TIME,
+      ),
+    );
+
+    return records;
+  }
+
+  async function handleSaveRsa6x30(
+    form: Rsa6x30FormState,
+    summary: Rsa6x30Summary,
+  ) {
+    if (savingJumpTest) return;
+
+    if (!executionDraft || !selectedCatalogPlayer || !selectedTeamId) {
+      setCatalogMessage({
+        variant: "error",
+        title: "No se puede guardar el RSA 6 X 30M",
+        message: "Faltan equipo, jugador o contexto de ejecución.",
+      });
+      return;
+    }
+
+    const formSnapshot = {
+      ...form,
+      sprintTimes: [...form.sprintTimes] as Rsa6x30FormState["sprintTimes"],
+      observations: form.observations.trim(),
+    };
+    const playerSnapshot = selectedCatalogPlayer;
+    const teamIdSnapshot = selectedTeamId;
+    const summarySnapshot = summary;
+
+    try {
+      setSavingRsa6x30(true);
+      setCatalogMessage(null);
+
+      const saved = await createTestSessionWithResults({
+        team_id: teamIdSnapshot,
+        session_date: formSnapshot.performedAt,
+        session_name: `${RSA_6X30_TEST_NAME} - ${playerSnapshot.name} - ${new Date().toLocaleTimeString("es-ES")}`,
+        context: "Semi-profesional",
+        notes: summarySnapshot.observations || null,
+        tests: [
+          {
+            id: RSA_6X30_TEST_ID,
+            name: RSA_6X30_TEST_NAME,
+            category: RSA_6X30_TEST_CATEGORY,
+            summary: summarySnapshot,
+          },
+        ],
+        records: buildRsa6x30Records(playerSnapshot, summarySnapshot),
+        skipScores: true,
+      });
+
+      await loadSessionsForTeam(teamIdSnapshot, saved.session.id);
+      setActiveView("history");
+      setSelectedCatalogTest(null);
+      setSelectedCatalogPlayerId("");
+      setExecutionStage("CATALOG");
+      setExecutionDraft(null);
+      setCatalogMessage({
+        variant: "success",
+        title: "RSA 6 X 30M guardado",
+        message:
+          "Se han guardado los seis sprints y los indicadores calculados. El histórico del equipo se ha recargado automáticamente.",
+      });
+      resetRsa6x30State();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Error desconocido al guardar el RSA 6 X 30M.";
+
+      setCatalogMessage({
+        variant: "error",
+        title: "No se ha podido guardar el RSA 6 X 30M",
+        message,
+      });
+    } finally {
+      setSavingRsa6x30(false);
+    }
+  }
+
   useEffect(() => {
     async function loadSessionData() {
       if (!selectedSessionId || !selectedTeamId) {
@@ -2284,6 +2454,7 @@ export default function TestsPage() {
     isDropJumpCatalogTest(selectedCatalogTest);
   const isCurrentExecutionThirtyFifteenIft =
     isThirtyFifteenIftCatalogTest(selectedCatalogTest);
+  const isCurrentExecutionRsa6x30 = isRsa6x30CatalogTest(selectedCatalogTest);
   const isCurrentExecutionJump =
     isCurrentExecutionCmj || isCurrentExecutionSj || isCurrentExecutionAbalakov;
   const cmjSummary = calculateCmjSummary({
@@ -3009,6 +3180,36 @@ export default function TestsPage() {
                   />
                 )}
 
+                {isCurrentExecutionRsa6x30 && (
+                  <Rsa6x30ExecutionForm
+                    key={`${executionDraft.context.teamId}:${executionDraft.context.playerId}:${executionDraft.context.testId}`}
+                    context={executionDraft.context}
+                    hasSelectedPlayer={Boolean(selectedCatalogPlayer)}
+                    isSaving={savingJumpTest}
+                    onBack={handleBackToTestSetup}
+                    onCancel={handleCancelExecution}
+                    onReview={(performedAt) => {
+                      setExecutionDraft((currentDraft) =>
+                        currentDraft
+                          ? {
+                              ...currentDraft,
+                              context: {
+                                ...currentDraft.context,
+                                performedAt,
+                              },
+                            }
+                          : currentDraft,
+                      );
+                      setCatalogMessage(null);
+                      setExecutionStage("REVIEW");
+                    }}
+                    onReturnToExecution={() => setExecutionStage("EXECUTION")}
+                    onSave={(form, summary) => {
+                      void handleSaveRsa6x30(form, summary);
+                    }}
+                  />
+                )}
+
                 {isCurrentExecutionJump && (
                   <>
                     {executionStage === "REVIEW" ? (
@@ -3390,7 +3591,8 @@ export default function TestsPage() {
 
                 {!isCurrentExecutionJump &&
                   !isCurrentExecutionDropJump &&
-                  !isCurrentExecutionThirtyFifteenIft && (
+                  !isCurrentExecutionThirtyFifteenIft &&
+                  !isCurrentExecutionRsa6x30 && (
                   <>
                     <div className="mt-6">
                   <StatusMessage
