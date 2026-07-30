@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
@@ -16,13 +17,18 @@ import {
 } from "recharts";
 
 import {
+  getNeuromuscularPlayersByTeamId,
   getNeuromuscularRecordsBySessionId,
   getNeuromuscularSessionsFromSupabase,
   getNeuromuscularTeamsFromSupabase,
+  loadPlayerNeuromuscularHistory,
+  type NeuromuscularPlayerRow,
   type NeuromuscularRecordRow,
   type NeuromuscularSessionRow,
   type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
+import { calculateNeuromuscularReadiness } from "@/lib/domain/neuromuscular-readiness";
+import type { NeuromuscularHistoryPoint } from "@/lib/domain/neuromuscular";
 
 type NeuromuscularVariableKey = "cmj" | "rsimod" | "vmp";
 
@@ -271,11 +277,31 @@ export default function NeuromuscularPage() {
   const [records, setRecords] = useState<NeuromuscularRecordRow[]>([]);
   const [selectedVariable, setSelectedVariable] =
     useState<NeuromuscularVariableKey>("cmj");
+  const [teamPlayers, setTeamPlayers] = useState<NeuromuscularPlayerRow[]>([]);
+  const [selectedPlayerId, setSelectedPlayerId] = useState("");
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [playersError, setPlayersError] = useState<string | null>(null);
+  const [playerHistory, setPlayerHistory] = useState<NeuromuscularHistoryPoint[]>(
+    [],
+  );
+  const [loadingPlayerHistory, setLoadingPlayerHistory] = useState(false);
+  const [playerHistoryError, setPlayerHistoryError] = useState<string | null>(
+    null,
+  );
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionsRequestId = useRef(0);
+
+  function resetIndividualReadiness() {
+    setTeamPlayers([]);
+    setSelectedPlayerId("");
+    setPlayersError(null);
+    setPlayerHistory([]);
+    setPlayerHistoryError(null);
+    setLoadingPlayerHistory(false);
+  }
 
   async function loadSessionsForTeam(teamId: string) {
     const requestId = sessionsRequestId.current + 1;
@@ -337,6 +363,7 @@ export default function NeuromuscularPage() {
       setSelectedSessionId("");
       setRecords([]);
       setLoadingRecords(false);
+      resetIndividualReadiness();
 
       await loadSessionsForTeam(teamId);
     } catch (err) {
@@ -398,6 +425,95 @@ export default function NeuromuscularPage() {
     };
   }, [selectedSessionId, selectedTeamId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTeamPlayers() {
+      setTeamPlayers([]);
+      setSelectedPlayerId("");
+      setPlayerHistory([]);
+      setPlayerHistoryError(null);
+
+      if (!selectedTeamId) {
+        setLoadingPlayers(false);
+        setPlayersError(null);
+        return;
+      }
+
+      try {
+        setLoadingPlayers(true);
+        setPlayersError(null);
+
+        const players = await getNeuromuscularPlayersByTeamId(selectedTeamId);
+
+        if (cancelled) return;
+
+        setTeamPlayers(players);
+        setSelectedPlayerId(players.length === 1 ? players[0].id : "");
+      } catch (err) {
+        if (cancelled) return;
+
+        setPlayersError(
+          err instanceof Error
+            ? err.message
+            : "Error desconocido al cargar los jugadores del equipo.",
+        );
+      } finally {
+        if (!cancelled) setLoadingPlayers(false);
+      }
+    }
+
+    void loadTeamPlayers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTeamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlayerHistory() {
+      setPlayerHistory([]);
+      setPlayerHistoryError(null);
+
+      if (!selectedTeamId || !selectedPlayerId) {
+        setLoadingPlayerHistory(false);
+        return;
+      }
+
+      try {
+        setLoadingPlayerHistory(true);
+
+        const history = await loadPlayerNeuromuscularHistory({
+          teamId: selectedTeamId,
+          playerId: selectedPlayerId,
+          moment: "PRE",
+        });
+
+        if (cancelled) return;
+
+        setPlayerHistory(history);
+      } catch (err) {
+        if (cancelled) return;
+
+        setPlayerHistoryError(
+          err instanceof Error
+            ? err.message
+            : "Error desconocido al cargar el histórico neuromuscular.",
+        );
+      } finally {
+        if (!cancelled) setLoadingPlayerHistory(false);
+      }
+    }
+
+    void loadPlayerHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlayerId, selectedTeamId]);
+
   const selectedSession = useMemo(() => {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
@@ -405,6 +521,27 @@ export default function NeuromuscularPage() {
   const selectedTeam = useMemo(() => {
     return teams.find((team) => team.id === selectedTeamId) ?? null;
   }, [teams, selectedTeamId]);
+
+  const selectedPlayer = useMemo(() => {
+    return teamPlayers.find((player) => player.id === selectedPlayerId) ?? null;
+  }, [selectedPlayerId, teamPlayers]);
+
+  const selectedPlayerReadinessSeries = useMemo(() => {
+    if (!selectedTeamId || !selectedPlayerId || playerHistory.length === 0) {
+      return null;
+    }
+
+    return (
+      calculateNeuromuscularReadiness(playerHistory).find(
+        (series) =>
+          series.teamId === selectedTeamId &&
+          series.playerId === selectedPlayerId,
+      ) ?? null
+    );
+  }, [playerHistory, selectedPlayerId, selectedTeamId]);
+
+  const latestPlayerReadiness =
+    selectedPlayerReadinessSeries?.latestAvailableReadinessPoint ?? null;
 
   const selectedVariableMeta = useMemo(() => {
     return (
@@ -643,9 +780,13 @@ export default function NeuromuscularPage() {
             </div>
 
             <div className="grid w-full gap-3 md:w-[480px]">
-              <label className="text-sm font-bold text-slate-700">
+              <label
+                htmlFor="neuromuscular-team"
+                className="text-sm font-bold text-slate-700"
+              >
                 Equipo
                 <select
+                  id="neuromuscular-team"
                   value={selectedTeamId}
                   onChange={(event) => {
                     void handleTeamChange(event.target.value);
@@ -663,9 +804,13 @@ export default function NeuromuscularPage() {
                 </select>
               </label>
 
-              <label className="text-sm font-bold text-slate-700">
+              <label
+                htmlFor="neuromuscular-session"
+                className="text-sm font-bold text-slate-700"
+              >
                 Sesión
                 <select
+                  id="neuromuscular-session"
                   value={selectedSessionId}
                   onChange={(event) => setSelectedSessionId(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
@@ -683,6 +828,42 @@ export default function NeuromuscularPage() {
                     <option key={session.id} value={session.id}>
                       {session.session_date} · {session.microcycle ?? "N/A"} ·{" "}
                       {session.session_name ?? "Sesión neuromuscular"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label
+                htmlFor="neuromuscular-player"
+                className="text-sm font-bold text-slate-700"
+              >
+                Jugador para resumen longitudinal
+                <select
+                  id="neuromuscular-player"
+                  value={selectedPlayerId}
+                  onChange={(event) => {
+                    setSelectedPlayerId(event.target.value);
+                    setPlayerHistory([]);
+                    setPlayerHistoryError(null);
+                  }}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  disabled={
+                    !selectedTeamId ||
+                    loadingPlayers ||
+                    teamPlayers.length === 0
+                  }
+                >
+                  <option value="">
+                    {!selectedTeamId
+                      ? "Selecciona equipo primero"
+                      : loadingPlayers
+                        ? "Cargando jugadores..."
+                        : "Selecciona jugador"}
+                  </option>
+
+                  {teamPlayers.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
                     </option>
                   ))}
                 </select>
@@ -773,6 +954,56 @@ export default function NeuromuscularPage() {
                 </p>
               </div>
             </div>
+          )}
+        </section>
+
+        <section aria-label="Resumen longitudinal individual">
+          {!selectedTeamId ? (
+            <StatusMessage variant="info" title="Readiness individual">
+              Selecciona un equipo para consultar el readiness individual.
+            </StatusMessage>
+          ) : loadingPlayers ? (
+            <StatusMessage variant="info" title="Cargando jugadores">
+              Cargando los jugadores activos del equipo seleccionado.
+            </StatusMessage>
+          ) : playersError ? (
+            <StatusMessage variant="error" title="No se han podido cargar los jugadores">
+              {playersError}
+            </StatusMessage>
+          ) : teamPlayers.length === 0 ? (
+            <EmptyState
+              title="Sin jugadores activos"
+              description="No hay jugadores activos disponibles en este equipo."
+            />
+          ) : !selectedPlayerId ? (
+            <StatusMessage variant="info" title="Selecciona un jugador">
+              Selecciona un jugador para consultar su evolución neuromuscular.
+            </StatusMessage>
+          ) : loadingPlayerHistory ? (
+            <StatusMessage variant="info" title="Cargando histórico individual">
+              Cargando los registros PRE del jugador seleccionado.
+            </StatusMessage>
+          ) : playerHistoryError ? (
+            <StatusMessage variant="error" title="No se ha podido cargar el histórico individual">
+              {playerHistoryError}
+            </StatusMessage>
+          ) : playerHistory.length === 0 ? (
+            <EmptyState
+              title="Sin registros neuromusculares vinculados"
+              description="Este jugador todavía no tiene registros neuromusculares vinculados."
+            />
+          ) : latestPlayerReadiness && selectedPlayer ? (
+            <NeuromuscularReadinessSummary
+              playerName={selectedPlayer.name}
+              readinessPoint={latestPlayerReadiness}
+            />
+          ) : (
+            <StatusMessage variant="info" title="Readiness todavía no disponible">
+              Todavía no hay suficientes mediciones PRE puntuables para calcular
+              el readiness. El baseline individual requiere una referencia
+              longitudinal y el resumen necesita al menos dos métricas puntuables
+              en un mismo registro.
+            </StatusMessage>
           )}
         </section>
 
