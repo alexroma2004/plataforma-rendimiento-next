@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import NeuromuscularMetricHistoryChart from "@/components/neuromuscular/NeuromuscularMetricHistoryChart";
 import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -27,8 +28,14 @@ import {
   type NeuromuscularSessionRow,
   type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
-import { calculateNeuromuscularReadiness } from "@/lib/domain/neuromuscular-readiness";
-import type { NeuromuscularHistoryPoint } from "@/lib/domain/neuromuscular";
+import {
+  calculateNeuromuscularReadinessFromLossSeries,
+} from "@/lib/domain/neuromuscular-readiness";
+import { calculateNeuromuscularLosses } from "@/lib/domain/neuromuscular-loss";
+import type {
+  NeuromuscularHistoryPoint,
+  NeuromuscularMetric,
+} from "@/lib/domain/neuromuscular";
 
 type NeuromuscularVariableKey = "cmj" | "rsimod" | "vmp";
 
@@ -59,6 +66,10 @@ const variableOptions: {
     unit: "m/s",
   },
 ];
+
+function getHistoryMetricLabel(metric: NeuromuscularMetric) {
+  return metric === "RSIMOD" ? "RSI modificado" : metric;
+}
 
 function getTeamLabel(team: NeuromuscularTeamRow) {
   const details = [team.category, team.season]
@@ -277,6 +288,8 @@ export default function NeuromuscularPage() {
   const [records, setRecords] = useState<NeuromuscularRecordRow[]>([]);
   const [selectedVariable, setSelectedVariable] =
     useState<NeuromuscularVariableKey>("cmj");
+  const [selectedHistoryMetric, setSelectedHistoryMetric] =
+    useState<NeuromuscularMetric>("CMJ");
   const [teamPlayers, setTeamPlayers] = useState<NeuromuscularPlayerRow[]>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const [loadingPlayers, setLoadingPlayers] = useState(false);
@@ -526,19 +539,41 @@ export default function NeuromuscularPage() {
     return teamPlayers.find((player) => player.id === selectedPlayerId) ?? null;
   }, [selectedPlayerId, teamPlayers]);
 
-  const selectedPlayerReadinessSeries = useMemo(() => {
-    if (!selectedTeamId || !selectedPlayerId || playerHistory.length === 0) {
-      return null;
-    }
+  const playerLossSeries = useMemo(
+    () => calculateNeuromuscularLosses(playerHistory),
+    [playerHistory],
+  );
 
-    return (
-      calculateNeuromuscularReadiness(playerHistory).find(
+  const playerReadinessSeries = useMemo(
+    () => calculateNeuromuscularReadinessFromLossSeries(playerLossSeries),
+    [playerLossSeries],
+  );
+
+  const selectedPlayerReadinessSeries = useMemo(() => {
+    const matchingSeries = playerReadinessSeries.filter(
+      (series) =>
+        series.teamId === selectedTeamId &&
+        series.playerId === selectedPlayerId,
+    );
+
+    return matchingSeries.length === 1 ? matchingSeries[0] : null;
+  }, [playerReadinessSeries, selectedPlayerId, selectedTeamId]);
+
+  const selectedHistoryMetricMatches = useMemo(
+    () =>
+      playerLossSeries.filter(
         (series) =>
           series.teamId === selectedTeamId &&
-          series.playerId === selectedPlayerId,
-      ) ?? null
-    );
-  }, [playerHistory, selectedPlayerId, selectedTeamId]);
+          series.playerId === selectedPlayerId &&
+          series.metric === selectedHistoryMetric,
+      ),
+    [playerLossSeries, selectedHistoryMetric, selectedPlayerId, selectedTeamId],
+  );
+
+  const selectedHistoryMetricSeries =
+    selectedHistoryMetricMatches.length === 1
+      ? selectedHistoryMetricMatches[0]
+      : null;
 
   const latestPlayerReadiness =
     selectedPlayerReadinessSeries?.latestAvailableReadinessPoint ?? null;
@@ -992,18 +1027,69 @@ export default function NeuromuscularPage() {
               title="Sin registros neuromusculares vinculados"
               description="Este jugador todavía no tiene registros neuromusculares vinculados."
             />
-          ) : latestPlayerReadiness && selectedPlayer ? (
-            <NeuromuscularReadinessSummary
-              playerName={selectedPlayer.name}
-              readinessPoint={latestPlayerReadiness}
-            />
           ) : (
-            <StatusMessage variant="info" title="Readiness todavía no disponible">
-              Todavía no hay suficientes mediciones PRE puntuables para calcular
-              el readiness. El baseline individual requiere una referencia
-              longitudinal y el resumen necesita al menos dos métricas puntuables
-              en un mismo registro.
-            </StatusMessage>
+            <div className="space-y-5">
+              {latestPlayerReadiness && selectedPlayer ? (
+                <NeuromuscularReadinessSummary
+                  playerName={selectedPlayer.name}
+                  readinessPoint={latestPlayerReadiness}
+                />
+              ) : (
+                <StatusMessage variant="info" title="Readiness todavía no disponible">
+                  Todavía no hay suficientes mediciones PRE puntuables para calcular
+                  el readiness. El baseline individual requiere una referencia
+                  longitudinal y el resumen necesita al menos dos métricas puntuables
+                  en un mismo registro.
+                </StatusMessage>
+              )}
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <label
+                  htmlFor="neuromuscular-history-metric"
+                  className="block text-sm font-bold text-slate-700"
+                >
+                  Métrica longitudinal
+                  <select
+                    id="neuromuscular-history-metric"
+                    value={selectedHistoryMetric}
+                    onChange={(event) =>
+                      setSelectedHistoryMetric(
+                        event.target.value as NeuromuscularMetric,
+                      )
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 sm:max-w-sm"
+                  >
+                    <option value="CMJ">CMJ</option>
+                    <option value="RSIMOD">RSI modificado</option>
+                    <option value="VMP">VMP</option>
+                  </select>
+                </label>
+                <p className="mt-2 text-sm text-slate-600">
+                  El gráfico usa el histórico PRE del jugador seleccionado y no
+                  modifica el análisis de sesión.
+                </p>
+              </div>
+
+              {selectedHistoryMetricMatches.length > 1 ? (
+                <StatusMessage variant="error" title="Serie longitudinal inconsistente">
+                  Se han encontrado varias series para la misma métrica del jugador.
+                  Revisa la integridad del histórico antes de interpretarlo.
+                </StatusMessage>
+              ) : selectedHistoryMetricSeries ? (
+                <NeuromuscularMetricHistoryChart
+                  series={selectedHistoryMetricSeries}
+                />
+              ) : (
+                <EmptyState
+                  title={`Sin registros PRE de ${getHistoryMetricLabel(
+                    selectedHistoryMetric,
+                  )}`}
+                  description={`Este jugador todavía no tiene registros PRE de ${getHistoryMetricLabel(
+                    selectedHistoryMetric,
+                  )}.`}
+                />
+              )}
+            </div>
           )}
         </section>
 
