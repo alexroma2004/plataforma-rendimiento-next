@@ -8,12 +8,14 @@ import {
 import type { NeuromuscularBaselineDecisionReason } from "@/lib/domain/neuromuscular-baseline";
 import type {
   NeuromuscularLossLevel,
+  NeuromuscularLossPoint,
   NeuromuscularLossSeries,
   NeuromuscularLossUnavailableReason,
 } from "@/lib/domain/neuromuscular-loss";
 
 interface NeuromuscularMetricHistoryTableProps {
   series: NeuromuscularLossSeries;
+  points?: readonly NeuromuscularLossPoint[];
 }
 
 function formatIsoDate(date: string): string {
@@ -140,8 +142,10 @@ function getLossBadgeClass(level: NeuromuscularLossLevel | null): string {
 
 export default function NeuromuscularMetricHistoryTable({
   series,
+  points,
 }: NeuromuscularMetricHistoryTableProps) {
-  const rows = useMemo(() => [...series.points].reverse(), [series.points]);
+  const displayPoints = points ?? series.points;
+  const rows = useMemo(() => [...displayPoints].reverse(), [displayPoints]);
   const includedCount = useMemo(
     () => rows.filter((row) => row.statisticalPoint.comparison.includedInBaseline).length,
     [rows],

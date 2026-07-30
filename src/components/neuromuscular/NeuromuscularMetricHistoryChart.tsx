@@ -22,12 +22,14 @@ import type {
 } from "@/lib/domain/neuromuscular-baseline";
 import type {
   NeuromuscularLossLevel,
+  NeuromuscularLossPoint,
   NeuromuscularLossSeries,
   NeuromuscularLossUnavailableReason,
 } from "@/lib/domain/neuromuscular-loss";
 
 interface NeuromuscularMetricHistoryChartProps {
   series: NeuromuscularLossSeries;
+  points?: readonly NeuromuscularLossPoint[];
 }
 
 type ChartPoint = {
@@ -204,11 +206,13 @@ function HistoryTooltip({
 
 export default function NeuromuscularMetricHistoryChart({
   series,
+  points,
 }: NeuromuscularMetricHistoryChartProps) {
   const metricDefinition = NEUROMUSCULAR_METRIC_DEFINITIONS[series.metric];
+  const displayPoints = points ?? series.points;
   const chartPoints = useMemo<ChartPoint[]>(
     () =>
-      series.points.map((lossPoint) => {
+      displayPoints.map((lossPoint) => {
         const statisticalPoint = lossPoint.statisticalPoint;
         const comparison = statisticalPoint.comparison;
         const point = comparison.point;
@@ -235,7 +239,7 @@ export default function NeuromuscularMetricHistoryChart({
           baselineDecisionReason: comparison.baselineDecisionReason,
         };
       }),
-    [series.points],
+    [displayPoints],
   );
   const latestPoint = chartPoints[chartPoints.length - 1] ?? null;
   const latestBaseline = [...chartPoints]
@@ -244,7 +248,9 @@ export default function NeuromuscularMetricHistoryChart({
   const latestMa3 = [...chartPoints]
     .reverse()
     .find((point) => point.ma3 !== null)?.ma3 ?? null;
-  const latestLossScore = series.latestAvailableLossPoint;
+  const latestLossScore = [...displayPoints]
+    .reverse()
+    .find((point) => point.lossScoreAvailable) ?? null;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
