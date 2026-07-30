@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import NeuromuscularMetricHistoryChart from "@/components/neuromuscular/NeuromuscularMetricHistoryChart";
+import NeuromuscularMetricHistoryTable from "@/components/neuromuscular/NeuromuscularMetricHistoryTable";
 import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -1076,9 +1077,14 @@ export default function NeuromuscularPage() {
                   Revisa la integridad del histórico antes de interpretarlo.
                 </StatusMessage>
               ) : selectedHistoryMetricSeries ? (
-                <NeuromuscularMetricHistoryChart
-                  series={selectedHistoryMetricSeries}
-                />
+                <>
+                  <NeuromuscularMetricHistoryChart
+                    series={selectedHistoryMetricSeries}
+                  />
+                  <NeuromuscularMetricHistoryTable
+                    series={selectedHistoryMetricSeries}
+                  />
+                </>
               ) : (
                 <EmptyState
                   title={`Sin registros PRE de ${getHistoryMetricLabel(
