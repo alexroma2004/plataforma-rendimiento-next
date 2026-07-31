@@ -3,6 +3,8 @@ begin;
 -- Las policies PERMISSIVE se combinan mediante OR: las *_all públicas anulaban
 -- las policies específicas. Se exige un inventario exacto de cinco policies,
 -- semántica exacta y grants explícitos de service_role antes de modificar nada.
+-- PostgreSQL 17.6 incluye MAINTAIN: se conserva para service_role y se retira
+-- de anon y authenticated.
 -- Los roles siguen siendo globales y el fallback de autenticados sin fila es viewer.
 
 do $$
@@ -258,7 +260,7 @@ begin
     end if;
 
     foreach privilege_name in array array[
-      'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+      'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN'
     ]
     loop
       if not exists (
@@ -417,7 +419,7 @@ begin
     end if;
 
     foreach privilege_name in array array[
-      'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+      'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN'
     ]
     loop
       if has_table_privilege(anon_oid, table_oid, privilege_name) then
