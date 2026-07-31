@@ -22,12 +22,14 @@ import {
   getNeuromuscularRecordsBySessionId,
   getNeuromuscularSessionsFromSupabase,
   getNeuromuscularTeamsFromSupabase,
+  loadPlayerNeuromuscularBaselineConfigurationEvents,
   loadPlayerNeuromuscularHistory,
   type NeuromuscularPlayerRow,
   type NeuromuscularRecordRow,
   type NeuromuscularSessionRow,
   type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
+import type { NeuromuscularBaselineConfigurationEvent } from "@/lib/domain/neuromuscular-baseline-configuration";
 import {
   calculateNeuromuscularReadinessFromLossSeries,
 } from "@/lib/domain/neuromuscular-readiness";
@@ -301,6 +303,12 @@ export default function NeuromuscularPage() {
   const [playerHistoryError, setPlayerHistoryError] = useState<string | null>(
     null,
   );
+  const [, setBaselineConfigurationEvents] = useState<
+    NeuromuscularBaselineConfigurationEvent[]
+  >([]);
+  const [, setBaselineConfigurationEventsError] = useState<string | null>(
+    null,
+  );
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -312,6 +320,8 @@ export default function NeuromuscularPage() {
     setSelectedPlayerId("");
     setPlayersError(null);
     setPlayerHistory([]);
+    setBaselineConfigurationEvents([]);
+    setBaselineConfigurationEventsError(null);
     setPlayerHistoryError(null);
     setLoadingPlayerHistory(false);
   }
@@ -488,6 +498,8 @@ export default function NeuromuscularPage() {
 
     async function loadPlayerHistory() {
       setPlayerHistory([]);
+      setBaselineConfigurationEvents([]);
+      setBaselineConfigurationEventsError(null);
       setPlayerHistoryError(null);
 
       if (!selectedTeamId || !selectedPlayerId) {
@@ -498,18 +510,44 @@ export default function NeuromuscularPage() {
       try {
         setLoadingPlayerHistory(true);
 
-        const history = await loadPlayerNeuromuscularHistory({
-          teamId: selectedTeamId,
-          playerId: selectedPlayerId,
-          moment: "PRE",
-        });
+        const [history, baselineEventsResult] = await Promise.all([
+          loadPlayerNeuromuscularHistory({
+            teamId: selectedTeamId,
+            playerId: selectedPlayerId,
+            moment: "PRE",
+          }),
+          loadPlayerNeuromuscularBaselineConfigurationEvents({
+            teamId: selectedTeamId,
+            playerId: selectedPlayerId,
+          }).then(
+            (events) => ({ status: "fulfilled" as const, events }),
+            (baselineError: unknown) => ({
+              status: "rejected" as const,
+              baselineError,
+            }),
+          ),
+        ]);
 
         if (cancelled) return;
 
         setPlayerHistory(history);
+
+        if (baselineEventsResult.status === "fulfilled") {
+          setBaselineConfigurationEvents(baselineEventsResult.events);
+          setBaselineConfigurationEventsError(null);
+        } else {
+          setBaselineConfigurationEvents([]);
+          setBaselineConfigurationEventsError(
+            baselineEventsResult.baselineError instanceof Error
+              ? baselineEventsResult.baselineError.message
+              : "Error desconocido al cargar los eventos de configuración del baseline.",
+          );
+        }
       } catch (err) {
         if (cancelled) return;
 
+        setBaselineConfigurationEvents([]);
+        setBaselineConfigurationEventsError(null);
         setPlayerHistoryError(
           err instanceof Error
             ? err.message
