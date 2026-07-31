@@ -303,9 +303,10 @@ export default function NeuromuscularPage() {
   const [playerHistoryError, setPlayerHistoryError] = useState<string | null>(
     null,
   );
-  const [, setBaselineConfigurationEvents] = useState<
-    NeuromuscularBaselineConfigurationEvent[]
-  >([]);
+  const [
+    baselineConfigurationEvents,
+    setBaselineConfigurationEvents,
+  ] = useState<NeuromuscularBaselineConfigurationEvent[]>([]);
   const [, setBaselineConfigurationEventsError] = useState<string | null>(
     null,
   );
@@ -578,8 +579,14 @@ export default function NeuromuscularPage() {
   }, [selectedPlayerId, teamPlayers]);
 
   const playerLossSeries = useMemo(
-    () => calculateNeuromuscularLosses(playerHistory),
-    [playerHistory],
+    () =>
+      calculateNeuromuscularLosses(
+        playerHistory,
+        undefined,
+        undefined,
+        baselineConfigurationEvents,
+      ),
+    [baselineConfigurationEvents, playerHistory],
   );
 
   const playerReadinessSeries = useMemo(

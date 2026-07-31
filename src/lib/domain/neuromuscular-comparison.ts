@@ -6,6 +6,13 @@ import {
   type NeuromuscularBaselineOptions,
   type NeuromuscularBaselineSeries,
 } from "@/lib/domain/neuromuscular-baseline";
+import {
+  resolveEffectiveNeuromuscularBaseline,
+} from "@/lib/domain/neuromuscular-baseline-configuration";
+import type {
+  EffectiveNeuromuscularBaselineSource,
+  NeuromuscularBaselineConfigurationEvent,
+} from "@/lib/domain/neuromuscular-baseline-configuration";
 import type {
   NeuromuscularHistoryPoint,
   NeuromuscularMetric,
@@ -35,6 +42,9 @@ export interface NeuromuscularComparisonPoint {
   comparisonAvailable: boolean;
   unavailableReason: NeuromuscularComparisonUnavailableReason | null;
   baselineValue: number | null;
+  automaticBaselineValue: number | null;
+  baselineSource: EffectiveNeuromuscularBaselineSource;
+  configurationEvent: NeuromuscularBaselineConfigurationEvent | null;
   absoluteDifference: number | null;
   percentChange: number | null;
   objectiveLossPct: number | null;
@@ -62,6 +72,7 @@ function isFinitePositiveNumber(value: unknown): value is number {
 
 function getComparisonAvailability(
   decision: NeuromuscularBaselineDecision,
+  baselineValue: number | null,
 ): NeuromuscularComparisonAvailability {
   if (decision.point.moment === "POST") {
     return { available: false, unavailableReason: "POST_NOT_ALLOWED" };
@@ -71,11 +82,11 @@ function getComparisonAvailability(
     return { available: false, unavailableReason: "INVALID_VALUE" };
   }
 
-  if (decision.baselineBefore === null) {
+  if (baselineValue === null) {
     return { available: false, unavailableReason: "NO_BASELINE_BEFORE" };
   }
 
-  if (!isFinitePositiveNumber(decision.baselineBefore)) {
+  if (!isFinitePositiveNumber(baselineValue)) {
     return { available: false, unavailableReason: "INVALID_BASELINE" };
   }
 
@@ -112,11 +123,24 @@ export function calculateNeuromuscularImprovementPct(
 export function calculateNeuromuscularComparisonPoint(
   decision: NeuromuscularBaselineDecision,
   baselineWindowValuesBefore: readonly number[] = [],
+  baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[] = [],
 ): NeuromuscularComparisonPoint {
-  const availability = getComparisonAvailability(decision);
+  const automaticBaselineValue = decision.baselineBefore;
+  const effectiveBaseline = resolveEffectiveNeuromuscularBaseline({
+    automaticValue: automaticBaselineValue,
+    events: baselineConfigurationEvents,
+    teamId: decision.point.teamId,
+    playerId: decision.point.playerId,
+    metric: decision.point.metric,
+    date: decision.point.sessionDate,
+  });
+  const availability = getComparisonAvailability(
+    decision,
+    effectiveBaseline.effectiveValue,
+  );
   const baselineWindowValues = [...baselineWindowValuesBefore];
   const baselineValue = availability.available
-    ? decision.baselineBefore
+    ? effectiveBaseline.effectiveValue
     : null;
   const absoluteDifference = baselineValue === null
     ? null
@@ -139,6 +163,9 @@ export function calculateNeuromuscularComparisonPoint(
     comparisonAvailable: availability.available,
     unavailableReason: availability.unavailableReason,
     baselineValue,
+    automaticBaselineValue: effectiveBaseline.automaticValue,
+    baselineSource: effectiveBaseline.source,
+    configurationEvent: effectiveBaseline.configurationEvent,
     absoluteDifference,
     percentChange,
     objectiveLossPct: calculateNeuromuscularObjectiveLossPct(percentChange),
@@ -150,6 +177,7 @@ export function calculateNeuromuscularComparisonPoint(
 
 export function calculateNeuromuscularComparisonSeries(
   baselineSeries: NeuromuscularBaselineSeries,
+  baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[] = [],
 ): NeuromuscularComparisonSeries {
   let previousWindowValues: number[] = [];
 
@@ -157,6 +185,7 @@ export function calculateNeuromuscularComparisonSeries(
     const comparison = calculateNeuromuscularComparisonPoint(
       decision,
       previousWindowValues,
+      baselineConfigurationEvents,
     );
 
     previousWindowValues = [...decision.windowValuesAfter];
@@ -185,8 +214,13 @@ export function calculateNeuromuscularComparisonSeries(
 export function calculateNeuromuscularComparisons(
   points: readonly NeuromuscularHistoryPoint[],
   options?: Partial<NeuromuscularBaselineOptions>,
+  baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[] = [],
 ): NeuromuscularComparisonSeries[] {
   return calculateNeuromuscularBaselines(points, options).map(
-    calculateNeuromuscularComparisonSeries,
+    (baselineSeries) =>
+      calculateNeuromuscularComparisonSeries(
+        baselineSeries,
+        baselineConfigurationEvents,
+      ),
   );
 }

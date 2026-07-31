@@ -3,6 +3,9 @@ import type {
 } from "@/lib/domain/neuromuscular";
 import { normalizeNeuromuscularMicrocycle } from "@/lib/domain/neuromuscular";
 import type { NeuromuscularBaselineOptions } from "@/lib/domain/neuromuscular-baseline";
+import type {
+  NeuromuscularBaselineConfigurationEvent,
+} from "@/lib/domain/neuromuscular-baseline-configuration";
 import {
   calculateNeuromuscularComparisons,
   type NeuromuscularComparisonPoint,
@@ -259,8 +262,11 @@ export function calculateNeuromuscularStatisticalSeries(
 export function calculateNeuromuscularStatistics(
   points: readonly NeuromuscularHistoryPoint[],
   options?: Partial<NeuromuscularBaselineOptions>,
+  baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[] = [],
 ): NeuromuscularStatisticalSeries[] {
-  return calculateNeuromuscularComparisons(points, options).map(
-    calculateNeuromuscularStatisticalSeries,
-  );
+  return calculateNeuromuscularComparisons(
+    points,
+    options,
+    baselineConfigurationEvents,
+  ).map(calculateNeuromuscularStatisticalSeries);
 }

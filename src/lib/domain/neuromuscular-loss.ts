@@ -4,6 +4,9 @@ import {
   type NeuromuscularMetric,
 } from "@/lib/domain/neuromuscular";
 import type { NeuromuscularBaselineOptions } from "@/lib/domain/neuromuscular-baseline";
+import type {
+  NeuromuscularBaselineConfigurationEvent,
+} from "@/lib/domain/neuromuscular-baseline-configuration";
 import type { NeuromuscularStatisticalPoint, NeuromuscularStatisticalSeries } from "@/lib/domain/neuromuscular-statistics";
 import { calculateNeuromuscularStatistics } from "@/lib/domain/neuromuscular-statistics";
 
@@ -283,8 +286,11 @@ export function calculateNeuromuscularLosses(
   points: readonly NeuromuscularHistoryPoint[],
   baselineOptions?: Partial<NeuromuscularBaselineOptions>,
   thresholds?: Partial<NeuromuscularLossThresholds>,
+  baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[] = [],
 ): NeuromuscularLossSeries[] {
-  return calculateNeuromuscularStatistics(points, baselineOptions).map(
-    (series) => calculateNeuromuscularLossSeries(series, thresholds),
-  );
+  return calculateNeuromuscularStatistics(
+    points,
+    baselineOptions,
+    baselineConfigurationEvents,
+  ).map((series) => calculateNeuromuscularLossSeries(series, thresholds));
 }
