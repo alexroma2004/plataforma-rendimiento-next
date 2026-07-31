@@ -200,7 +200,9 @@ create policy "neuromuscular_baseline_events_insert"
     and public.current_app_role()::text in ('admin', 'staff')
     and created_by = auth.uid()
     and (
-      effective_from >= current_date
+      -- Effective dates use the Europe/Madrid civil day; created_at remains
+      -- a timestamptz via now(), avoiding the Spain/UTC midnight offset.
+      effective_from >= (now() at time zone 'Europe/Madrid')::date
       or (
         public.current_app_role()::text = 'admin'
         and reason is not null
