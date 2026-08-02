@@ -6,6 +6,7 @@ import {
   type NeuromuscularMetric,
 } from "@/lib/domain/neuromuscular";
 import type { NeuromuscularBaselineDecisionReason } from "@/lib/domain/neuromuscular-baseline";
+import type { EffectiveNeuromuscularBaselineSource } from "@/lib/domain/neuromuscular-baseline-configuration";
 import type {
   NeuromuscularLossLevel,
   NeuromuscularLossPoint,
@@ -60,6 +61,30 @@ function formatMetricValue(
   return formatted === "—"
     ? formatted
     : `${formatted} ${NEUROMUSCULAR_METRIC_DEFINITIONS[metric].unit}`;
+}
+
+function formatCivilDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+}
+
+function isFiniteNumber(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function getBaselineSourceLabel(
+  source: EffectiveNeuromuscularBaselineSource,
+): "Automático" | "Manual" {
+  return source === "MANUAL_EVENT" ? "Manual" : "Automático";
+}
+
+function getBaselineSourceBadgeClass(
+  source: EffectiveNeuromuscularBaselineSource,
+): string {
+  return source === "MANUAL_EVENT"
+    ? "bg-blue-50 text-blue-800 ring-blue-200"
+    : "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
 function formatSignedValue(
@@ -187,7 +212,7 @@ export default function NeuromuscularMetricHistoryTable({
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
             <tr>
               {[
-                "Fecha", "Microciclo", "Valor PRE", "Baseline anterior", "Diferencia",
+                "Fecha", "Microciclo", "Valor PRE", "Baseline aplicado", "Diferencia",
                 "Cambio", "Pérdida", "MA3", "Z-score", "Loss score", "Baseline", "Motivo",
               ].map((label) => (
                 <th key={label} scope="col" className="border-b border-slate-200 px-3 py-3 font-bold">
@@ -210,6 +235,13 @@ export default function NeuromuscularMetricHistoryTable({
               const reasonLines = lossReason && lossReason !== baselineReason
                 ? [baselineReason, lossReason]
                 : [baselineReason];
+              const hasAppliedBaseline = isFiniteNumber(comparison.baselineValue);
+              const isManualBaseline = comparison.baselineSource === "MANUAL_EVENT";
+              const automaticBaselineAlternative =
+                isManualBaseline && isFiniteNumber(comparison.automaticBaselineValue)
+                  ? comparison.automaticBaselineValue
+                  : null;
+              const effectiveFrom = comparison.configurationEvent?.effectiveFrom ?? null;
 
               return (
                 <tr
@@ -224,7 +256,33 @@ export default function NeuromuscularMetricHistoryTable({
                     {formatMetricValue(point.value, series.metric)}
                   </td>
                   <td className="border-b border-slate-100 px-3 py-3">
-                    {formatMetricValue(comparison.baselineValue, series.metric)}
+                    {hasAppliedBaseline ? (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-slate-950">
+                          {formatMetricValue(comparison.baselineValue, series.metric)}
+                        </p>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${getBaselineSourceBadgeClass(comparison.baselineSource)}`}
+                        >
+                          {getBaselineSourceLabel(comparison.baselineSource)}
+                        </span>
+                        {automaticBaselineAlternative !== null && (
+                          <p className="text-xs leading-5 text-slate-600">
+                            Automático calculado: {formatMetricValue(
+                              automaticBaselineAlternative,
+                              series.metric,
+                            )}
+                          </p>
+                        )}
+                        {effectiveFrom !== null && (
+                          <p className="text-xs text-slate-500">
+                            Desde {formatCivilDate(effectiveFrom)}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">No disponible</span>
+                    )}
                   </td>
                   <td className="border-b border-slate-100 px-3 py-3">
                     {formatSignedValue(
@@ -277,6 +335,10 @@ export default function NeuromuscularMetricHistoryTable({
           </tbody>
         </table>
       </div>
+
+      <p className="mt-4 text-xs text-slate-500">
+        El porcentaje y el loss se calculan utilizando el baseline aplicado en la fecha de cada sesión.
+      </p>
     </section>
   );
 }
