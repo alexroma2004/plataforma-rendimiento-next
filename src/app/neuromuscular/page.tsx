@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
+import BaselineConfigurationForm from "@/components/neuromuscular/BaselineConfigurationForm";
 import NeuromuscularMetricHistorySection from "@/components/neuromuscular/NeuromuscularMetricHistorySection";
 import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
 import StatusMessage from "@/components/ui/StatusMessage";
@@ -30,6 +31,9 @@ import {
   type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
 import type { NeuromuscularBaselineConfigurationEvent } from "@/lib/domain/neuromuscular-baseline-configuration";
+import { sortBaselineConfigurationEventsDescending } from "@/lib/domain/neuromuscular-baseline-configuration";
+import { isAppRole, type AppRole } from "@/lib/auth/permissions";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   calculateNeuromuscularReadinessFromLossSeries,
 } from "@/lib/domain/neuromuscular-readiness";
@@ -46,6 +50,23 @@ type QuickReadingCard = {
   variant: "info" | "warning";
   message: string;
 };
+
+type BaselineConfigurationUiContext = {
+  teamId: string;
+  playerId: string;
+  metric: NeuromuscularMetric;
+};
+
+function isSameBaselineConfigurationUiContext(
+  left: BaselineConfigurationUiContext | null,
+  right: BaselineConfigurationUiContext,
+): boolean {
+  return (
+    left?.teamId === right.teamId &&
+    left.playerId === right.playerId &&
+    left.metric === right.metric
+  );
+}
 
 const variableOptions: {
   key: NeuromuscularVariableKey;
@@ -310,11 +331,69 @@ export default function NeuromuscularPage() {
   const [, setBaselineConfigurationEventsError] = useState<string | null>(
     null,
   );
+  const [userRole, setUserRole] = useState<AppRole>("viewer");
+  const [loadingUserRole, setLoadingUserRole] = useState(true);
+  const [isBaselineConfigurationOpen, setIsBaselineConfigurationOpen] =
+    useState(false);
+  const [baselineConfigurationMessage, setBaselineConfigurationMessage] =
+    useState<{
+      variant: "success" | "warning";
+      text: string;
+    } | null>(null);
 
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionsRequestId = useRef(0);
+  const latestBaselineConfigurationContextRef =
+    useRef<BaselineConfigurationUiContext | null>(null);
+
+  useLayoutEffect(() => {
+    latestBaselineConfigurationContextRef.current =
+      selectedTeamId && selectedPlayerId
+        ? {
+            teamId: selectedTeamId,
+            playerId: selectedPlayerId,
+            metric: selectedHistoryMetric,
+          }
+        : null;
+  }, [selectedHistoryMetric, selectedPlayerId, selectedTeamId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUserRole() {
+      try {
+        const client = getSupabaseClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await client.auth.getUser();
+
+        if (userError || !user) return;
+
+        const { data: roleRow, error: roleError } = await client
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!cancelled && !roleError && isAppRole(roleRow?.role)) {
+          setUserRole(roleRow.role);
+        }
+      } catch {
+        // El rol de cliente solo controla visibilidad; el servidor autoriza.
+      } finally {
+        if (!cancelled) setLoadingUserRole(false);
+      }
+    }
+
+    void loadUserRole();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function resetIndividualReadiness() {
     setTeamPlayers([]);
@@ -380,6 +459,8 @@ export default function NeuromuscularPage() {
 
   async function handleTeamChange(teamId: string) {
     try {
+      setIsBaselineConfigurationOpen(false);
+      setBaselineConfigurationMessage(null);
       setLoadingSessions(true);
       setError(null);
       setSelectedTeamId(teamId);
@@ -577,6 +658,71 @@ export default function NeuromuscularPage() {
   const selectedPlayer = useMemo(() => {
     return teamPlayers.find((player) => player.id === selectedPlayerId) ?? null;
   }, [selectedPlayerId, teamPlayers]);
+
+  async function handleBaselineConfigurationCreated(
+    event: NeuromuscularBaselineConfigurationEvent,
+    submittedContext: BaselineConfigurationUiContext,
+  ): Promise<void> {
+    if (
+      event.teamId !== submittedContext.teamId ||
+      event.playerId !== submittedContext.playerId ||
+      event.metric !== submittedContext.metric ||
+      !isSameBaselineConfigurationUiContext(
+        latestBaselineConfigurationContextRef.current,
+        submittedContext,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const events = await loadPlayerNeuromuscularBaselineConfigurationEvents({
+        teamId: submittedContext.teamId,
+        playerId: submittedContext.playerId,
+      });
+
+      if (
+        !isSameBaselineConfigurationUiContext(
+          latestBaselineConfigurationContextRef.current,
+          submittedContext,
+        )
+      ) {
+        return;
+      }
+
+      setBaselineConfigurationEvents(events);
+      setBaselineConfigurationEventsError(null);
+      setBaselineConfigurationMessage({
+        variant: "success",
+        text: "Configuración guardada correctamente.",
+      });
+      setIsBaselineConfigurationOpen(false);
+    } catch {
+      if (
+        !isSameBaselineConfigurationUiContext(
+          latestBaselineConfigurationContextRef.current,
+          submittedContext,
+        )
+      ) {
+        return;
+      }
+
+      setBaselineConfigurationEvents((currentEvents) =>
+        sortBaselineConfigurationEventsDescending([
+          event,
+          ...currentEvents.filter((currentEvent) => currentEvent.id !== event.id),
+        ]),
+      );
+      setBaselineConfigurationEventsError(
+        "No se pudo verificar el historial recargado tras guardar la configuración del baseline.",
+      );
+      setBaselineConfigurationMessage({
+        variant: "warning",
+        text: "La configuración se guardó, pero no se pudo verificar el historial recargado.",
+      });
+      setIsBaselineConfigurationOpen(false);
+    }
+  }
 
   const playerLossSeries = useMemo(
     () =>
@@ -922,6 +1068,8 @@ export default function NeuromuscularPage() {
                   id="neuromuscular-player"
                   value={selectedPlayerId}
                   onChange={(event) => {
+                    setIsBaselineConfigurationOpen(false);
+                    setBaselineConfigurationMessage(null);
                     setSelectedPlayerId(event.target.value);
                     setPlayerHistory([]);
                     setPlayerHistoryError(null);
@@ -1098,9 +1246,13 @@ export default function NeuromuscularPage() {
                     id="neuromuscular-history-metric"
                     value={selectedHistoryMetric}
                     onChange={(event) =>
-                      setSelectedHistoryMetric(
-                        event.target.value as NeuromuscularMetric,
-                      )
+                      {
+                        setIsBaselineConfigurationOpen(false);
+                        setBaselineConfigurationMessage(null);
+                        setSelectedHistoryMetric(
+                          event.target.value as NeuromuscularMetric,
+                        );
+                      }
                     }
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 sm:max-w-sm"
                   >
@@ -1114,6 +1266,47 @@ export default function NeuromuscularPage() {
                   modifica el análisis de sesión.
                 </p>
               </div>
+
+              {baselineConfigurationMessage && (
+                <StatusMessage variant={baselineConfigurationMessage.variant}>
+                  {baselineConfigurationMessage.text}
+                </StatusMessage>
+              )}
+
+              {!loadingUserRole &&
+                selectedPlayer &&
+                (userRole === "admin" || userRole === "staff") && (
+                  <div className="space-y-4">
+                    {!isBaselineConfigurationOpen ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBaselineConfigurationMessage(null);
+                          setIsBaselineConfigurationOpen(true);
+                        }}
+                        className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        Configurar baseline
+                      </button>
+                    ) : (
+                      <BaselineConfigurationForm
+                        key={`${selectedPlayerId}-${selectedHistoryMetric}`}
+                        playerId={selectedPlayerId}
+                        playerName={selectedPlayer.name}
+                        metric={selectedHistoryMetric}
+                        role={userRole}
+                        onClose={() => setIsBaselineConfigurationOpen(false)}
+                        onCreated={(event) =>
+                          handleBaselineConfigurationCreated(event, {
+                            teamId: selectedTeamId,
+                            playerId: selectedPlayerId,
+                            metric: selectedHistoryMetric,
+                          })
+                        }
+                      />
+                    )}
+                  </div>
+                )}
 
               {selectedHistoryMetricMatches.length > 1 ? (
                 <StatusMessage variant="error" title="Serie longitudinal inconsistente">
