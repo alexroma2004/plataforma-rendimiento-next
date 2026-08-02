@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import BaselineConfigurationForm from "@/components/neuromuscular/BaselineConfigurationForm";
+import BaselineConfigurationHistory from "@/components/neuromuscular/BaselineConfigurationHistory";
 import NeuromuscularMetricHistorySection from "@/components/neuromuscular/NeuromuscularMetricHistorySection";
 import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
 import StatusMessage from "@/components/ui/StatusMessage";
@@ -30,8 +31,12 @@ import {
   type NeuromuscularSessionRow,
   type NeuromuscularTeamRow,
 } from "@/lib/supabase/neuromuscular";
-import type { NeuromuscularBaselineConfigurationEvent } from "@/lib/domain/neuromuscular-baseline-configuration";
-import { sortBaselineConfigurationEventsDescending } from "@/lib/domain/neuromuscular-baseline-configuration";
+import {
+  getNextBaselineConfigurationEvent,
+  resolveBaselineConfigurationAtDate,
+  sortBaselineConfigurationEventsDescending,
+  type NeuromuscularBaselineConfigurationEvent,
+} from "@/lib/domain/neuromuscular-baseline-configuration";
 import { isAppRole, type AppRole } from "@/lib/auth/permissions";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -92,6 +97,29 @@ const variableOptions: {
 
 function getHistoryMetricLabel(metric: NeuromuscularMetric) {
   return metric === "RSIMOD" ? "RSI modificado" : metric;
+}
+
+function getCurrentMadridCivilDate(): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = new Map(
+    parts
+      .filter(({ type }) => type === "year" || type === "month" || type === "day")
+      .map(({ type, value }) => [type, value]),
+  );
+  const year = values.get("year");
+  const month = values.get("month");
+  const day = values.get("day");
+
+  if (!year || !month || !day) {
+    throw new Error("No se pudo obtener la fecha civil de Madrid.");
+  }
+
+  return `${year}-${month}-${day}`;
 }
 
 function getTeamLabel(team: NeuromuscularTeamRow) {
@@ -328,7 +356,7 @@ export default function NeuromuscularPage() {
     baselineConfigurationEvents,
     setBaselineConfigurationEvents,
   ] = useState<NeuromuscularBaselineConfigurationEvent[]>([]);
-  const [, setBaselineConfigurationEventsError] = useState<string | null>(
+  const [baselineConfigurationEventsError, setBaselineConfigurationEventsError] = useState<string | null>(
     null,
   );
   const [userRole, setUserRole] = useState<AppRole>("viewer");
@@ -592,12 +620,18 @@ export default function NeuromuscularPage() {
       try {
         setLoadingPlayerHistory(true);
 
-        const [history, baselineEventsResult] = await Promise.all([
+        const [historyResult, baselineEventsResult] = await Promise.all([
           loadPlayerNeuromuscularHistory({
             teamId: selectedTeamId,
             playerId: selectedPlayerId,
             moment: "PRE",
-          }),
+          }).then(
+            (history) => ({ status: "fulfilled" as const, history }),
+            (historyError: unknown) => ({
+              status: "rejected" as const,
+              historyError,
+            }),
+          ),
           loadPlayerNeuromuscularBaselineConfigurationEvents({
             teamId: selectedTeamId,
             playerId: selectedPlayerId,
@@ -612,7 +646,15 @@ export default function NeuromuscularPage() {
 
         if (cancelled) return;
 
-        setPlayerHistory(history);
+        if (historyResult.status === "fulfilled") {
+          setPlayerHistory(historyResult.history);
+        } else {
+          setPlayerHistoryError(
+            historyResult.historyError instanceof Error
+              ? historyResult.historyError.message
+              : "Error desconocido al cargar el histórico neuromuscular.",
+          );
+        }
 
         if (baselineEventsResult.status === "fulfilled") {
           setBaselineConfigurationEvents(baselineEventsResult.events);
@@ -658,6 +700,62 @@ export default function NeuromuscularPage() {
   const selectedPlayer = useMemo(() => {
     return teamPlayers.find((player) => player.id === selectedPlayerId) ?? null;
   }, [selectedPlayerId, teamPlayers]);
+
+  const todayMadrid = useMemo(() => getCurrentMadridCivilDate(), []);
+
+  const selectedBaselineConfigurationEvents = useMemo(() => {
+    if (!selectedTeamId || !selectedPlayerId) return [];
+
+    return sortBaselineConfigurationEventsDescending(
+      baselineConfigurationEvents.filter(
+        (event) =>
+          event.teamId === selectedTeamId &&
+          event.playerId === selectedPlayerId &&
+          event.metric === selectedHistoryMetric,
+      ),
+    );
+  }, [
+    baselineConfigurationEvents,
+    selectedHistoryMetric,
+    selectedPlayerId,
+    selectedTeamId,
+  ]);
+
+  const currentBaselineConfigurationEvent = useMemo(() => {
+    if (!selectedTeamId || !selectedPlayerId) return null;
+
+    return resolveBaselineConfigurationAtDate({
+      events: selectedBaselineConfigurationEvents,
+      teamId: selectedTeamId,
+      playerId: selectedPlayerId,
+      metric: selectedHistoryMetric,
+      date: todayMadrid,
+    });
+  }, [
+    selectedBaselineConfigurationEvents,
+    selectedHistoryMetric,
+    selectedPlayerId,
+    selectedTeamId,
+    todayMadrid,
+  ]);
+
+  const nextBaselineConfigurationEvent = useMemo(() => {
+    if (!selectedTeamId || !selectedPlayerId) return null;
+
+    return getNextBaselineConfigurationEvent({
+      events: selectedBaselineConfigurationEvents,
+      teamId: selectedTeamId,
+      playerId: selectedPlayerId,
+      metric: selectedHistoryMetric,
+      date: todayMadrid,
+    });
+  }, [
+    selectedBaselineConfigurationEvents,
+    selectedHistoryMetric,
+    selectedPlayerId,
+    selectedTeamId,
+    todayMadrid,
+  ]);
 
   async function handleBaselineConfigurationCreated(
     event: NeuromuscularBaselineConfigurationEvent,
@@ -1068,11 +1166,16 @@ export default function NeuromuscularPage() {
                   id="neuromuscular-player"
                   value={selectedPlayerId}
                   onChange={(event) => {
+                    const nextPlayerId = event.target.value;
+
                     setIsBaselineConfigurationOpen(false);
                     setBaselineConfigurationMessage(null);
-                    setSelectedPlayerId(event.target.value);
+                    setSelectedPlayerId(nextPlayerId);
                     setPlayerHistory([]);
                     setPlayerHistoryError(null);
+                    setBaselineConfigurationEvents([]);
+                    setBaselineConfigurationEventsError(null);
+                    setLoadingPlayerHistory(nextPlayerId !== "");
                   }}
                   className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
                   disabled={
@@ -1207,35 +1310,8 @@ export default function NeuromuscularPage() {
             <StatusMessage variant="info" title="Selecciona un jugador">
               Selecciona un jugador para consultar su evolución neuromuscular.
             </StatusMessage>
-          ) : loadingPlayerHistory ? (
-            <StatusMessage variant="info" title="Cargando histórico individual">
-              Cargando los registros PRE del jugador seleccionado.
-            </StatusMessage>
-          ) : playerHistoryError ? (
-            <StatusMessage variant="error" title="No se ha podido cargar el histórico individual">
-              {playerHistoryError}
-            </StatusMessage>
-          ) : playerHistory.length === 0 ? (
-            <EmptyState
-              title="Sin registros neuromusculares vinculados"
-              description="Este jugador todavía no tiene registros neuromusculares vinculados."
-            />
           ) : (
             <div className="space-y-5">
-              {latestPlayerReadiness && selectedPlayer ? (
-                <NeuromuscularReadinessSummary
-                  playerName={selectedPlayer.name}
-                  readinessPoint={latestPlayerReadiness}
-                />
-              ) : (
-                <StatusMessage variant="info" title="Readiness todavía no disponible">
-                  Todavía no hay suficientes mediciones PRE puntuables para calcular
-                  el readiness. El baseline individual requiere una referencia
-                  longitudinal y el resumen necesita al menos dos métricas puntuables
-                  en un mismo registro.
-                </StatusMessage>
-              )}
-
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <label
                   htmlFor="neuromuscular-history-metric"
@@ -1266,12 +1342,6 @@ export default function NeuromuscularPage() {
                   modifica el análisis de sesión.
                 </p>
               </div>
-
-              {baselineConfigurationMessage && (
-                <StatusMessage variant={baselineConfigurationMessage.variant}>
-                  {baselineConfigurationMessage.text}
-                </StatusMessage>
-              )}
 
               {!loadingUserRole &&
                 selectedPlayer &&
@@ -1308,7 +1378,57 @@ export default function NeuromuscularPage() {
                   </div>
                 )}
 
-              {selectedHistoryMetricMatches.length > 1 ? (
+              {baselineConfigurationMessage && (
+                <StatusMessage variant={baselineConfigurationMessage.variant}>
+                  {baselineConfigurationMessage.text}
+                </StatusMessage>
+              )}
+
+              <BaselineConfigurationHistory
+                key={`${selectedTeamId}-${selectedPlayerId}-${selectedHistoryMetric}`}
+                events={selectedBaselineConfigurationEvents}
+                metric={selectedHistoryMetric}
+                todayMadrid={todayMadrid}
+                currentEvent={currentBaselineConfigurationEvent}
+                nextEvent={nextBaselineConfigurationEvent}
+                loading={loadingPlayerHistory}
+                loadError={
+                  selectedBaselineConfigurationEvents.length > 0
+                    ? null
+                    : baselineConfigurationEventsError
+                }
+              />
+
+              {loadingPlayerHistory ? (
+                <StatusMessage variant="info" title="Cargando histórico individual">
+                  Cargando los registros PRE del jugador seleccionado.
+                </StatusMessage>
+              ) : playerHistoryError ? (
+                <StatusMessage variant="error" title="No se ha podido cargar el histórico individual">
+                  {playerHistoryError}
+                </StatusMessage>
+              ) : playerHistory.length === 0 ? (
+                <EmptyState
+                  title="Sin registros neuromusculares vinculados"
+                  description="Este jugador todavía no tiene registros neuromusculares vinculados."
+                />
+              ) : (
+                <>
+                  {latestPlayerReadiness && selectedPlayer ? (
+                    <NeuromuscularReadinessSummary
+                      playerName={selectedPlayer.name}
+                      readinessPoint={latestPlayerReadiness}
+                    />
+                  ) : (
+                    <StatusMessage variant="info" title="Readiness todavía no disponible">
+                      Todavía no hay suficientes mediciones PRE puntuables para calcular
+                      el readiness. El baseline individual requiere una referencia
+                      longitudinal y el resumen necesita al menos dos métricas puntuables
+                      en un mismo registro.
+                    </StatusMessage>
+                  )}
+
+                  {selectedHistoryMetricMatches.length > 1 ? (
                 <StatusMessage variant="error" title="Serie longitudinal inconsistente">
                   Se han encontrado varias series para la misma métrica del jugador.
                   Revisa la integridad del histórico antes de interpretarlo.
@@ -1323,10 +1443,12 @@ export default function NeuromuscularPage() {
                   title={`Sin registros PRE de ${getHistoryMetricLabel(
                     selectedHistoryMetric,
                   )}`}
-                  description={`Este jugador todavía no tiene registros PRE de ${getHistoryMetricLabel(
-                    selectedHistoryMetric,
-                  )}.`}
-                />
+                    description={`Este jugador todavía no tiene registros PRE de ${getHistoryMetricLabel(
+                      selectedHistoryMetric,
+                    )}.`}
+                  />
+                  )}
+                </>
               )}
             </div>
           )}
