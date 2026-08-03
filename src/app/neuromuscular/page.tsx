@@ -1103,7 +1103,7 @@ export default function NeuromuscularPage() {
               </p>
             </div>
 
-            <div className="grid w-full gap-3 md:w-[480px]">
+            <div className="grid min-w-0 w-full gap-3 md:w-[480px]">
               <label
                 htmlFor="neuromuscular-team"
                 className="text-sm font-bold text-slate-700"
@@ -1256,29 +1256,29 @@ export default function NeuromuscularPage() {
           )}
 
           {selectedSession && (
-            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-bold text-slate-500">Fecha</p>
                 <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
                   {selectedSession.session_date}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-bold text-slate-500">Microciclo</p>
                 <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
                   {selectedSession.microcycle ?? "N/A"}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-bold text-slate-500">Nombre</p>
                 <p className="mt-2 break-words text-xl font-black text-slate-950 sm:text-2xl">
                   {selectedSession.session_name ?? "Sesión neuromuscular"}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-bold text-slate-500">Registros</p>
                 <p className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">
                   {records.length}
@@ -1465,7 +1465,7 @@ export default function NeuromuscularPage() {
               </StatusMessage>
             ) : (
               <>
-                <div className="grid gap-4 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <SummaryCard title="Jugadores" value={records.length} />
 
                   <MetricSummaryCard
@@ -1539,7 +1539,7 @@ export default function NeuromuscularPage() {
                   </section>
                 )}
 
-                <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
+                <div className="mt-8 min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow sm:p-6">
                   <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600 sm:tracking-[0.35em]">
@@ -1576,7 +1576,7 @@ export default function NeuromuscularPage() {
                     </label>
                   </div>
 
-                  <div className="mt-6 h-[340px] w-full sm:h-[440px]">
+                  <div className="mt-6 h-[340px] min-w-0 w-full sm:h-[440px]">
                     {chartData.length === 0 ? (
                       <div className="flex h-full items-center justify-center">
                         <EmptyState
@@ -1592,7 +1592,7 @@ export default function NeuromuscularPage() {
                           margin={{
                             top: 10,
                             right: 12,
-                            left: 40,
+                            left: 8,
                             bottom: 10,
                           }}
                         >
@@ -1609,7 +1609,7 @@ export default function NeuromuscularPage() {
                           <YAxis
                             type="category"
                             dataKey="jugador"
-                            width={100}
+                            width={84}
                             tick={{
                               fontSize: 11,
                             }}
