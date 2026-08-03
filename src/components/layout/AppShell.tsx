@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Sidebar from "@/components/layout/Sidebar";
+
+const MOBILE_NAVIGATION_ID = "app-mobile-navigation";
 
 type AppShellProps = {
   title: string;
@@ -20,6 +22,31 @@ export default function AppShell({
 }: AppShellProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const desktopMediaQuery = window.matchMedia("(min-width: 1024px)");
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileSidebarOpen(false);
+    }
+
+    function handleDesktopViewportChange(event: MediaQueryListEvent) {
+      if (event.matches) setMobileSidebarOpen(false);
+    }
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    desktopMediaQuery.addEventListener("change", handleDesktopViewportChange);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      desktopMediaQuery.removeEventListener("change", handleDesktopViewportChange);
+    };
+  }, [mobileSidebarOpen]);
+
   function openMobileSidebar() {
     setMobileSidebarOpen(true);
   }
@@ -37,26 +64,30 @@ export default function AppShell({
       {mobileSidebarOpen && (
         <button
           type="button"
-          aria-label="Cerrar menú lateral"
+          aria-label="Cerrar navegación"
           onClick={closeMobileSidebar}
           className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
         />
       )}
 
-      <div
-        className={[
-          "fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-200 lg:hidden",
-          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
-        ].join(" ")}
-      >
-        <Sidebar onClose={closeMobileSidebar} onNavigate={closeMobileSidebar} />
-      </div>
+      {mobileSidebarOpen && (
+        <aside
+          id={MOBILE_NAVIGATION_ID}
+          aria-label="Navegación principal"
+          className="fixed inset-y-0 left-0 z-50 w-72 lg:hidden"
+        >
+          <Sidebar onClose={closeMobileSidebar} onNavigate={closeMobileSidebar} />
+        </aside>
+      )}
 
       <section className="min-w-0 flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
           <button
             type="button"
             onClick={openMobileSidebar}
+            aria-controls={MOBILE_NAVIGATION_ID}
+            aria-expanded={mobileSidebarOpen}
+            aria-label="Abrir navegación"
             className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
           >
             Menú
