@@ -18,13 +18,13 @@ import {
   type NeuromuscularMetric,
 } from "@/lib/domain/neuromuscular";
 import type {
-  NeuromuscularBaselineDecisionReason,
-} from "@/lib/domain/neuromuscular-baseline";
+  EffectiveNeuromuscularBaselineSource,
+  NeuromuscularBaselineConfigurationEvent,
+} from "@/lib/domain/neuromuscular-baseline-configuration";
 import type {
   NeuromuscularLossLevel,
   NeuromuscularLossPoint,
   NeuromuscularLossSeries,
-  NeuromuscularLossUnavailableReason,
 } from "@/lib/domain/neuromuscular-loss";
 
 interface NeuromuscularMetricHistoryChartProps {
@@ -33,7 +33,6 @@ interface NeuromuscularMetricHistoryChartProps {
 }
 
 type ChartPoint = {
-  recordId: string;
   sessionId: string;
   sessionDate: string;
   dateLabel: string;
@@ -41,23 +40,34 @@ type ChartPoint = {
   metric: NeuromuscularMetric;
   value: number;
   baselineBefore: number | null;
+  automaticBaselineValue: number | null;
+  baselineSource: EffectiveNeuromuscularBaselineSource;
+  configurationEvent: NeuromuscularBaselineConfigurationEvent | null;
   ma3: number | null;
-  ma3Eligible: boolean;
   zScore: number | null;
   percentChange: number | null;
   objectiveLossPct: number | null;
   lossScore: number | null;
   lossLevel: NeuromuscularLossLevel | null;
   lossScoreAvailable: boolean;
-  lossUnavailableReason: NeuromuscularLossUnavailableReason | null;
   includedInBaseline: boolean;
-  baselineDecisionReason: NeuromuscularBaselineDecisionReason;
 };
+
+type HistoryTooltipProps = Pick<
+  TooltipContentProps<number, string>,
+  "active" | "payload"
+>;
 
 function formatDateLabel(date: string): string {
   const [year, month, day] = date.split("-");
 
   return year && month && day ? `${day}/${month}` : date;
+}
+
+function formatCivilDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
 }
 
 function formatMetricValue(
@@ -73,10 +83,21 @@ function formatMetricValue(
   });
 }
 
-function formatSignedPercent(value: number | null): string {
+function formatMetricValueWithUnit(
+  value: number | null,
+  metric: NeuromuscularMetric,
+): string {
+  const formattedValue = formatMetricValue(value, metric);
+
+  return formattedValue === "No disponible"
+    ? formattedValue
+    : `${formattedValue} ${NEUROMUSCULAR_METRIC_DEFINITIONS[metric].unit}`;
+}
+
+function formatPercent(value: number | null, includeSign = false): string {
   if (value === null || !Number.isFinite(value)) return "No disponible";
 
-  const sign = value > 0 ? "+" : "";
+  const sign = includeSign && value > 0 ? "+" : "";
 
   return `${sign}${value.toLocaleString("es-ES", {
     maximumFractionDigits: 2,
@@ -85,36 +106,6 @@ function formatSignedPercent(value: number | null): string {
 
 function getMetricLabel(metric: NeuromuscularMetric): string {
   return metric === "RSIMOD" ? "RSI modificado" : metric;
-}
-
-function getBaselineReasonLabel(reason: NeuromuscularBaselineDecisionReason) {
-  const labels: Record<NeuromuscularBaselineDecisionReason, string> = {
-    SEED_MD1: "Registro utilizado para crear la semilla",
-    INCLUDED_MD1: "MD-1 incorporado al baseline",
-    INCLUDED_CANDIDATE: "Registro incorporado al baseline",
-    INSUFFICIENT_SEED: "Baseline todavía insuficiente",
-    EXCLUDED_MICROCYCLE: "Microciclo excluido del baseline",
-    UNKNOWN_MICROCYCLE: "Microciclo no reconocido",
-    POST_NOT_ALLOWED: "Medición POST no válida para baseline",
-    INVALID_VALUE: "Valor no válido",
-    BELOW_CANDIDATE_THRESHOLD: "Pérdida superior al umbral de inclusión",
-  };
-
-  return labels[reason];
-}
-
-function getLossUnavailableLabel(
-  reason: NeuromuscularLossUnavailableReason | null,
-): string | null {
-  const labels: Record<NeuromuscularLossUnavailableReason, string> = {
-    COMPARISON_UNAVAILABLE: "Sin baseline anterior para puntuar",
-    POST_NOT_ALLOWED: "Medición POST no puntuable",
-    INVALID_OBJECTIVE_LOSS: "Pérdida objetiva no válida",
-    EXCLUDED_MICROCYCLE: "Microciclo no puntuable",
-    UNKNOWN_MICROCYCLE: "Microciclo no reconocido",
-  };
-
-  return reason === null ? null : labels[reason];
 }
 
 function getLossLevelLabel(level: NeuromuscularLossLevel | null): string {
@@ -126,6 +117,63 @@ function getLossLevelLabel(level: NeuromuscularLossLevel | null): string {
   };
 
   return level === null ? "Sin valoración" : labels[level];
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
+function isNeuromuscularMetric(value: unknown): value is NeuromuscularMetric {
+  return value === "CMJ" || value === "RSIMOD" || value === "VMP";
+}
+
+function isBaselineSource(
+  value: unknown,
+): value is EffectiveNeuromuscularBaselineSource {
+  return value === "AUTOMATIC_DEFAULT" ||
+    value === "AUTOMATIC_EVENT" ||
+    value === "MANUAL_EVENT";
+}
+
+function isConfigurationEvent(
+  value: unknown,
+): value is NeuromuscularBaselineConfigurationEvent {
+  return typeof value === "object" &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).effectiveFrom === "string";
+}
+
+function isChartPoint(value: unknown): value is ChartPoint {
+  if (typeof value !== "object" || value === null) return false;
+
+  const point = value as Record<string, unknown>;
+
+  return typeof point.sessionId === "string" &&
+    typeof point.sessionDate === "string" &&
+    typeof point.dateLabel === "string" &&
+    typeof point.microcycle === "string" &&
+    isNeuromuscularMetric(point.metric) &&
+    typeof point.value === "number" &&
+    isNullableNumber(point.baselineBefore) &&
+    isNullableNumber(point.automaticBaselineValue) &&
+    isBaselineSource(point.baselineSource) &&
+    (point.configurationEvent === null || isConfigurationEvent(point.configurationEvent)) &&
+    isNullableNumber(point.ma3) &&
+    isNullableNumber(point.zScore) &&
+    isNullableNumber(point.percentChange) &&
+    isNullableNumber(point.objectiveLossPct) &&
+    isNullableNumber(point.lossScore) &&
+    (point.lossLevel === null ||
+      point.lossLevel === "NORMAL" ||
+      point.lossLevel === "ATTENTION" ||
+      point.lossLevel === "ALERT" ||
+      point.lossLevel === "CRITICAL") &&
+    typeof point.lossScoreAvailable === "boolean" &&
+    typeof point.includedInBaseline === "boolean";
 }
 
 function ObservedValueDot({
@@ -159,45 +207,59 @@ function ObservedValueDot({
 function HistoryTooltip({
   active,
   payload,
-}: TooltipContentProps) {
-  const point = payload?.[0]?.payload as ChartPoint | undefined;
+}: HistoryTooltipProps) {
+  const candidate = payload?.[0]?.payload;
 
-  if (!active || !point) return null;
+  if (!active || !isChartPoint(candidate)) return null;
 
-  const unit = NEUROMUSCULAR_METRIC_DEFINITIONS[point.metric].unit;
-  const lossReason = getLossUnavailableLabel(point.lossUnavailableReason);
+  const point = candidate;
+  const hasAppliedBaseline = isFiniteNumber(point.baselineBefore);
+  const automaticBaselineAlternative = hasAppliedBaseline &&
+    point.baselineSource === "MANUAL_EVENT" &&
+    isFiniteNumber(point.automaticBaselineValue)
+    ? point.automaticBaselineValue
+    : null;
+  const effectiveFrom = hasAppliedBaseline
+    ? point.configurationEvent?.effectiveFrom ?? null
+    : null;
+  const sessionContext = point.microcycle.trim();
 
   return (
     <div className="max-w-xs rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-lg">
       <p className="font-black text-slate-950">
-        {point.sessionDate} · {point.microcycle}
+        {formatCivilDate(point.sessionDate)}{sessionContext ? ` · ${sessionContext}` : ""}
       </p>
-      <p className="mt-1 text-slate-600">Registro: {point.recordId}</p>
       <div className="mt-3 space-y-1 text-slate-700">
-        <p>Valor PRE: {formatMetricValue(point.value, point.metric)} {unit}</p>
+        <p>Valor PRE: {formatMetricValueWithUnit(point.value, point.metric)}</p>
+        <p>MA3: {formatMetricValueWithUnit(point.ma3, point.metric)}</p>
         <p>
-          Baseline anterior: {formatMetricValue(point.baselineBefore, point.metric)}
-          {point.baselineBefore === null ? "" : ` ${unit}`}
+          Baseline aplicado: {formatMetricValueWithUnit(point.baselineBefore, point.metric)}
         </p>
-        <p>MA3: {formatMetricValue(point.ma3, point.metric)}</p>
-        <p>
-          Estado MA3: {point.ma3Eligible
-            ? "Actualizado con esta medición"
-            : "MA3 vigente, no actualizado con esta medición"}
-        </p>
-        <p>Cambio respecto al baseline: {formatSignedPercent(point.percentChange)}</p>
-        <p>Pérdida objetiva: {formatSignedPercent(point.objectiveLossPct)}</p>
-        <p>Z-score: {point.zScore === null ? "No disponible" : formatMetricValue(point.zScore, point.metric)}</p>
-        <p>
-          Baseline: {point.includedInBaseline ? "Incluido" : "Excluido"} ·{" "}
-          {getBaselineReasonLabel(point.baselineDecisionReason)}
-        </p>
-        {point.lossScoreAvailable ? (
+        {hasAppliedBaseline && (
+          <>
+            <p>
+              Fuente: {point.baselineSource === "MANUAL_EVENT" ? "Manual" : "Automático"}
+            </p>
+            {automaticBaselineAlternative !== null && (
+              <p>
+                Automático calculado: {formatMetricValueWithUnit(
+                  automaticBaselineAlternative,
+                  point.metric,
+                )}
+              </p>
+            )}
+            {effectiveFrom !== null && <p>Desde {formatCivilDate(effectiveFrom)}</p>}
+          </>
+        )}
+        <p>Variación: {formatPercent(point.percentChange, true)}</p>
+        <p>Loss: {formatPercent(point.objectiveLossPct)}</p>
+        <p>Z-score: {formatMetricValue(point.zScore, point.metric)}</p>
+        {point.lossScoreAvailable && isFiniteNumber(point.lossScore) ? (
           <p>
             Loss score: {point.lossScore} · {getLossLevelLabel(point.lossLevel)}
           </p>
         ) : (
-          <p>Sin score operativo: {lossReason ?? "Sin valoración"}</p>
+          <p>Loss score: No disponible</p>
         )}
       </div>
     </div>
@@ -218,7 +280,6 @@ export default function NeuromuscularMetricHistoryChart({
         const point = comparison.point;
 
         return {
-          recordId: point.recordId,
           sessionId: point.sessionId,
           sessionDate: point.sessionDate,
           dateLabel: formatDateLabel(point.sessionDate),
@@ -226,17 +287,17 @@ export default function NeuromuscularMetricHistoryChart({
           metric: point.metric,
           value: point.value,
           baselineBefore: comparison.baselineValue,
+          automaticBaselineValue: comparison.automaticBaselineValue,
+          baselineSource: comparison.baselineSource,
+          configurationEvent: comparison.configurationEvent,
           ma3: statisticalPoint.ma3,
-          ma3Eligible: statisticalPoint.ma3Eligible,
           zScore: statisticalPoint.zScore,
           percentChange: comparison.percentChange,
           objectiveLossPct: comparison.objectiveLossPct,
           lossScore: lossPoint.lossScore,
           lossLevel: lossPoint.lossLevel,
           lossScoreAvailable: lossPoint.lossScoreAvailable,
-          lossUnavailableReason: lossPoint.lossUnavailableReason,
           includedInBaseline: comparison.includedInBaseline,
-          baselineDecisionReason: comparison.baselineDecisionReason,
         };
       }),
     [displayPoints],
