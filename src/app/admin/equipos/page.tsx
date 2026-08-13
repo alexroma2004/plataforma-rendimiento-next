@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import EmptyState from "@/components/ui/EmptyState";
 import StatusMessage from "@/components/ui/StatusMessage";
+import { deleteTeamAction } from "./actions";
 import {
   getAdminTeamsFromSupabase,
   saveAdminTeamToSupabase,
@@ -50,6 +51,11 @@ export default function AdminEquiposPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTeamForDeletion, setSelectedTeamForDeletion] =
+    useState<AdminTeamRow | null>(null);
+  const [confirmationInput, setConfirmationInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function loadTeams() {
     try {
@@ -101,6 +107,60 @@ export default function AdminEquiposPage() {
     setForm(buildFormFromTeam(team));
     setMessage(null);
     setError(null);
+  }
+
+  function openDeleteConfirmation(team: AdminTeamRow) {
+    setSelectedTeamForDeletion(team);
+    setConfirmationInput("");
+    setDeleteError(null);
+  }
+
+  function closeDeleteConfirmation() {
+    if (deleting) return;
+
+    setSelectedTeamForDeletion(null);
+    setConfirmationInput("");
+    setDeleteError(null);
+  }
+
+  async function handleDeleteTeam() {
+    if (!selectedTeamForDeletion || deleting) return;
+
+    if (
+      confirmationInput.trim() !== selectedTeamForDeletion.name.trim()
+    ) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setDeleteError(null);
+
+      const result = await deleteTeamAction({
+        teamId: selectedTeamForDeletion.id,
+        confirmationName: confirmationInput,
+      });
+
+      if (!result.ok) {
+        setDeleteError(result.error);
+        return;
+      }
+
+      if (editingTeamId === result.deletedTeamId) {
+        setEditingTeamId(null);
+        setForm(emptyForm);
+      }
+
+      setSelectedTeamForDeletion(null);
+      setConfirmationInput("");
+      setDeleteError(null);
+      setMessage(result.message);
+      await loadTeams();
+    } catch {
+      setDeleteError("No se pudo completar la eliminación del equipo.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -373,12 +433,96 @@ export default function AdminEquiposPage() {
                     >
                       Editar
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => openDeleteConfirmation(team)}
+                      className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-black text-red-700 transition hover:bg-red-50"
+                    >
+                      Eliminar equipo
+                    </button>
                   </div>
                 </article>
               ))}
             </div>
           )}
         </section>
+
+        {selectedTeamForDeletion && (
+          <section
+            aria-labelledby="delete-team-title"
+            className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm sm:p-6"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-red-700">
+              Confirmación necesaria
+            </p>
+            <h2
+              id="delete-team-title"
+              className="mt-2 text-xl font-black text-red-950 sm:text-2xl"
+            >
+              Eliminar equipo definitivamente
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-red-900">
+              Vas a eliminar definitivamente <strong>{selectedTeamForDeletion.name}</strong>.
+              Esta acción no se puede deshacer.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-red-200 bg-white p-4 text-sm text-slate-700">
+              <p className="font-black text-slate-950">Se eliminarán definitivamente:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Jugadores y perfiles.</li>
+                <li>Sesiones y registros GPS.</li>
+                <li>Sesiones y registros neuromusculares.</li>
+                <li>Historial de configuración de baseline.</li>
+                <li>Sesiones y resultados de tests.</li>
+              </ul>
+              <p className="mt-3 font-bold text-slate-900">
+                Los usuarios y roles de la aplicación no se eliminarán.
+              </p>
+            </div>
+
+            <label className="mt-4 block text-sm font-bold text-red-950">
+              Escribe {selectedTeamForDeletion.name} para confirmar
+              <input
+                type="text"
+                value={confirmationInput}
+                onChange={(event) => setConfirmationInput(event.target.value)}
+                disabled={deleting}
+                className="mt-2 w-full rounded-xl border border-red-300 bg-white px-3 py-3 text-sm text-slate-950 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+                aria-describedby={deleteError ? "delete-team-error" : undefined}
+              />
+            </label>
+
+            {deleteError && (
+              <div id="delete-team-error" className="mt-4" role="alert">
+                <StatusMessage variant="error" title="No se ha podido eliminar el equipo">
+                  {deleteError}
+                </StatusMessage>
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                onClick={handleDeleteTeam}
+                disabled={
+                  deleting ||
+                  confirmationInput.trim() !== selectedTeamForDeletion.name.trim()
+                }
+                className="rounded-xl border border-red-700 bg-red-700 px-5 py-3 text-sm font-black text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Eliminando..." : "Eliminar equipo definitivamente"}
+              </button>
+              <button
+                type="button"
+                onClick={closeDeleteConfirmation}
+                disabled={deleting}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+            </div>
+          </section>
+        )}
       </div>
     </AppShell>
   );
