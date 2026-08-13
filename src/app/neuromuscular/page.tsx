@@ -6,6 +6,7 @@ import BaselineConfigurationForm from "@/components/neuromuscular/BaselineConfig
 import BaselineConfigurationHistory from "@/components/neuromuscular/BaselineConfigurationHistory";
 import NeuromuscularMetricHistorySection from "@/components/neuromuscular/NeuromuscularMetricHistorySection";
 import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
+import NeuromuscularTeamSummary from "@/components/neuromuscular/NeuromuscularTeamSummary";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
@@ -21,6 +22,8 @@ import {
 
 import {
   getNeuromuscularPlayersByTeamId,
+  getNeuromuscularBaselineConfigurationEventsByTeamId,
+  getNeuromuscularRecordsByTeamId,
   getNeuromuscularRecordsBySessionId,
   getNeuromuscularSessionsFromSupabase,
   getNeuromuscularTeamsFromSupabase,
@@ -47,6 +50,10 @@ import type {
   NeuromuscularHistoryPoint,
   NeuromuscularMetric,
 } from "@/lib/domain/neuromuscular";
+import {
+  buildNeuromuscularTeamAggregation,
+  type NeuromuscularTeamAggregation,
+} from "@/lib/domain/neuromuscular-team";
 
 type NeuromuscularVariableKey = "cmj" | "rsimod" | "vmp";
 
@@ -372,6 +379,12 @@ export default function NeuromuscularPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [teamAggregation, setTeamAggregation] =
+    useState<NeuromuscularTeamAggregation | null>(null);
+  const [teamDashboardLoading, setTeamDashboardLoading] = useState(false);
+  const [teamDashboardError, setTeamDashboardError] = useState<string | null>(
+    null,
+  );
   const sessionsRequestId = useRef(0);
   const latestBaselineConfigurationContextRef =
     useRef<BaselineConfigurationUiContext | null>(null);
@@ -692,6 +705,66 @@ export default function NeuromuscularPage() {
   const selectedSession = useMemo(() => {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTeamDashboard() {
+      setTeamAggregation(null);
+      setTeamDashboardError(null);
+
+      if (!selectedTeamId || !selectedSession || teamPlayers.length === 0) {
+        setTeamDashboardLoading(false);
+        return;
+      }
+
+      try {
+        setTeamDashboardLoading(true);
+        const [recordsResult, baselineEventsResult] = await Promise.all([
+          getNeuromuscularRecordsByTeamId(
+            selectedTeamId,
+            selectedSession.session_date,
+          ),
+          getNeuromuscularBaselineConfigurationEventsByTeamId(selectedTeamId),
+        ]);
+
+        if (cancelled) return;
+
+        if (recordsResult.length === 0) {
+          return;
+        }
+
+        setTeamAggregation(
+          buildNeuromuscularTeamAggregation({
+            teamId: selectedTeamId,
+            session: selectedSession,
+            players: teamPlayers.map((player) => ({
+              id: player.id,
+              name: player.name,
+            })),
+            records: recordsResult,
+            baselineConfigurationEvents: baselineEventsResult,
+          }),
+        );
+      } catch (err) {
+        if (cancelled) return;
+
+        setTeamDashboardError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo calcular el resumen neuromuscular del equipo.",
+        );
+      } finally {
+        if (!cancelled) setTeamDashboardLoading(false);
+      }
+    }
+
+    void loadTeamDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSession, selectedTeamId, teamPlayers]);
 
   const selectedTeam = useMemo(() => {
     return teams.find((team) => team.id === selectedTeamId) ?? null;
@@ -1157,48 +1230,6 @@ export default function NeuromuscularPage() {
                 </select>
               </label>
 
-              <label
-                htmlFor="neuromuscular-player"
-                className="text-sm font-bold text-slate-700"
-              >
-                Jugador para resumen longitudinal
-                <select
-                  id="neuromuscular-player"
-                  value={selectedPlayerId}
-                  onChange={(event) => {
-                    const nextPlayerId = event.target.value;
-
-                    setIsBaselineConfigurationOpen(false);
-                    setBaselineConfigurationMessage(null);
-                    setSelectedPlayerId(nextPlayerId);
-                    setPlayerHistory([]);
-                    setPlayerHistoryError(null);
-                    setBaselineConfigurationEvents([]);
-                    setBaselineConfigurationEventsError(null);
-                    setLoadingPlayerHistory(nextPlayerId !== "");
-                  }}
-                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
-                  disabled={
-                    !selectedTeamId ||
-                    loadingPlayers ||
-                    teamPlayers.length === 0
-                  }
-                >
-                  <option value="">
-                    {!selectedTeamId
-                      ? "Selecciona equipo primero"
-                      : loadingPlayers
-                        ? "Cargando jugadores..."
-                        : "Selecciona jugador"}
-                  </option>
-
-                  {teamPlayers.map((player) => (
-                    <option key={player.id} value={player.id}>
-                      {player.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
             </div>
           </div>
 
@@ -1288,7 +1319,58 @@ export default function NeuromuscularPage() {
           )}
         </section>
 
+        <NeuromuscularTeamSummary
+          sessionDate={selectedSession?.session_date ?? null}
+          summary={teamAggregation?.summary ?? null}
+          loading={teamDashboardLoading}
+          error={teamDashboardError}
+        />
+
         <section aria-label="Resumen longitudinal individual">
+          <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">
+              Análisis individual
+            </p>
+            <label
+              htmlFor="neuromuscular-player"
+              className="mt-3 block text-sm font-bold text-slate-700"
+            >
+              Jugador para resumen longitudinal
+              <select
+                id="neuromuscular-player"
+                value={selectedPlayerId}
+                onChange={(event) => {
+                  const nextPlayerId = event.target.value;
+
+                  setIsBaselineConfigurationOpen(false);
+                  setBaselineConfigurationMessage(null);
+                  setSelectedPlayerId(nextPlayerId);
+                  setPlayerHistory([]);
+                  setPlayerHistoryError(null);
+                  setBaselineConfigurationEvents([]);
+                  setBaselineConfigurationEventsError(null);
+                  setLoadingPlayerHistory(nextPlayerId !== "");
+                }}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 sm:max-w-xl"
+                disabled={!selectedTeamId || loadingPlayers || teamPlayers.length === 0}
+              >
+                <option value="">
+                  {!selectedTeamId
+                    ? "Selecciona equipo primero"
+                    : loadingPlayers
+                      ? "Cargando jugadores..."
+                      : "Selecciona jugador"}
+                </option>
+
+                {teamPlayers.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           {!selectedTeamId ? (
             <StatusMessage variant="info" title="Readiness individual">
               Selecciona un equipo para consultar el readiness individual.
