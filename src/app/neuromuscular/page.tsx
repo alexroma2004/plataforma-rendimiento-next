@@ -6,7 +6,11 @@ import BaselineConfigurationForm from "@/components/neuromuscular/BaselineConfig
 import BaselineConfigurationHistory from "@/components/neuromuscular/BaselineConfigurationHistory";
 import NeuromuscularMetricHistorySection from "@/components/neuromuscular/NeuromuscularMetricHistorySection";
 import NeuromuscularReadinessSummary from "@/components/neuromuscular/NeuromuscularReadinessSummary";
+import NeuromuscularRiskDistributionChart, {
+  type NeuromuscularRiskDistributionPoint,
+} from "@/components/neuromuscular/NeuromuscularRiskDistributionChart";
 import NeuromuscularTeamSummary from "@/components/neuromuscular/NeuromuscularTeamSummary";
+import NeuromuscularTeamReadinessChart from "@/components/neuromuscular/NeuromuscularTeamReadinessChart";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import {
@@ -51,7 +55,9 @@ import type {
   NeuromuscularMetric,
 } from "@/lib/domain/neuromuscular";
 import {
+  buildNeuromuscularTeamReadinessHistory,
   buildNeuromuscularTeamAggregation,
+  type NeuromuscularTeamReadinessHistoryPoint,
   type NeuromuscularTeamAggregation,
 } from "@/lib/domain/neuromuscular-team";
 
@@ -385,6 +391,9 @@ export default function NeuromuscularPage() {
   const [teamDashboardError, setTeamDashboardError] = useState<string | null>(
     null,
   );
+  const [teamReadinessHistory, setTeamReadinessHistory] = useState<
+    NeuromuscularTeamReadinessHistoryPoint[]
+  >([]);
   const sessionsRequestId = useRef(0);
   const latestBaselineConfigurationContextRef =
     useRef<BaselineConfigurationUiContext | null>(null);
@@ -711,6 +720,7 @@ export default function NeuromuscularPage() {
 
     async function loadTeamDashboard() {
       setTeamAggregation(null);
+      setTeamReadinessHistory([]);
       setTeamDashboardError(null);
 
       if (!selectedTeamId || !selectedSession || teamPlayers.length === 0) {
@@ -734,16 +744,28 @@ export default function NeuromuscularPage() {
           return;
         }
 
+        const playersForAggregation = teamPlayers.map((player) => ({
+          id: player.id,
+          name: player.name,
+        }));
+
         setTeamAggregation(
           buildNeuromuscularTeamAggregation({
             teamId: selectedTeamId,
             session: selectedSession,
-            players: teamPlayers.map((player) => ({
-              id: player.id,
-              name: player.name,
-            })),
+            players: playersForAggregation,
             records: recordsResult,
             baselineConfigurationEvents: baselineEventsResult,
+          }),
+        );
+        setTeamReadinessHistory(
+          buildNeuromuscularTeamReadinessHistory({
+            teamId: selectedTeamId,
+            sessions,
+            players: playersForAggregation,
+            records: recordsResult,
+            baselineConfigurationEvents: baselineEventsResult,
+            selectedSessionDate: selectedSession.session_date,
           }),
         );
       } catch (err) {
@@ -764,7 +786,7 @@ export default function NeuromuscularPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSession, selectedTeamId, teamPlayers]);
+  }, [selectedSession, selectedTeamId, sessions, teamPlayers]);
 
   const selectedTeam = useMemo(() => {
     return teams.find((team) => team.id === selectedTeamId) ?? null;
@@ -773,6 +795,36 @@ export default function NeuromuscularPage() {
   const selectedPlayer = useMemo(() => {
     return teamPlayers.find((player) => player.id === selectedPlayerId) ?? null;
   }, [selectedPlayerId, teamPlayers]);
+
+  const riskDistribution = useMemo<NeuromuscularRiskDistributionPoint[]>(() => {
+    const categories: Array<{
+      status: NeuromuscularRiskDistributionPoint["status"];
+      label: string;
+    }> = [
+      { status: "OPTIMAL", label: "Óptimo" },
+      { status: "GOOD", label: "Bueno" },
+      { status: "MILD", label: "Fatiga leve" },
+      { status: "MODERATE", label: "Fatiga moderada" },
+      { status: "CRITICAL", label: "Fatiga crítica" },
+    ];
+    const counts = new Map(
+      categories.map((category) => [category.status, 0]),
+    );
+
+    teamAggregation?.playerSnapshots.forEach((snapshot) => {
+      if (snapshot.fatigueStatus) {
+        counts.set(
+          snapshot.fatigueStatus,
+          (counts.get(snapshot.fatigueStatus) ?? 0) + 1,
+        );
+      }
+    });
+
+    return categories.map((category) => ({
+      ...category,
+      count: counts.get(category.status) ?? 0,
+    }));
+  }, [teamAggregation]);
 
   const todayMadrid = useMemo(() => getCurrentMadridCivilDate(), []);
 
@@ -1325,6 +1377,20 @@ export default function NeuromuscularPage() {
           loading={teamDashboardLoading}
           error={teamDashboardError}
         />
+
+        {teamAggregation && selectedSession && !teamDashboardLoading && !teamDashboardError && (
+          <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
+            <NeuromuscularRiskDistributionChart
+              data={riskDistribution}
+              classifiedPlayerCount={teamAggregation.summary.classifiedPlayerCount}
+              totalPlayerCount={teamAggregation.summary.totalPlayerCount}
+            />
+            <NeuromuscularTeamReadinessChart
+              data={teamReadinessHistory}
+              selectedSessionDate={selectedSession.session_date}
+            />
+          </div>
+        )}
 
         <section aria-label="Resumen longitudinal individual">
           <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

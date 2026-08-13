@@ -96,12 +96,28 @@ export type NeuromuscularTeamAggregation = {
   summary: NeuromuscularTeamSummary;
 };
 
+export type NeuromuscularTeamReadinessHistoryPoint = {
+  sessionId: string;
+  sessionDate: string;
+  readinessMean: number | null;
+  validPlayerCount: number;
+};
+
 export type BuildNeuromuscularTeamAggregationInput = {
   teamId: string;
   session: NeuromuscularTeamSession;
   players: readonly NeuromuscularTeamPlayer[];
   records: readonly NeuromuscularTeamRecord[];
   baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[];
+};
+
+export type BuildNeuromuscularTeamReadinessHistoryInput = {
+  teamId: string;
+  sessions: readonly NeuromuscularTeamSession[];
+  players: readonly NeuromuscularTeamPlayer[];
+  records: readonly NeuromuscularTeamRecord[];
+  baselineConfigurationEvents: readonly NeuromuscularBaselineConfigurationEvent[];
+  selectedSessionDate: string;
 };
 
 const EMPTY_METRIC_SNAPSHOT: NeuromuscularTeamMetricSnapshot = {
@@ -319,4 +335,32 @@ export function buildNeuromuscularTeamAggregation(
   };
 
   return { playerSnapshots, summary };
+}
+
+export function buildNeuromuscularTeamReadinessHistory(
+  input: BuildNeuromuscularTeamReadinessHistoryInput,
+): NeuromuscularTeamReadinessHistoryPoint[] {
+  return input.sessions
+    .filter((session) => session.session_date <= input.selectedSessionDate)
+    .map((session) => {
+      const aggregation = buildNeuromuscularTeamAggregation({
+        teamId: input.teamId,
+        session,
+        players: input.players,
+        records: input.records,
+        baselineConfigurationEvents: input.baselineConfigurationEvents,
+      });
+
+      return {
+        sessionId: session.id,
+        sessionDate: session.session_date,
+        readinessMean: aggregation.summary.readinessMean,
+        validPlayerCount: aggregation.playerSnapshots.filter(
+          (snapshot) => snapshot.readinessAvailable,
+        ).length,
+      };
+    })
+    .sort((first, second) =>
+      first.sessionDate.localeCompare(second.sessionDate),
+    );
 }
