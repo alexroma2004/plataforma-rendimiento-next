@@ -270,6 +270,40 @@ export async function getNeuromuscularRecordsBySessionId(
   return (data ?? []) as NeuromuscularRecordRow[];
 }
 
+export async function getNeuromuscularRecordsByTeamId(
+  teamId: string,
+  selectedSessionDate: string,
+): Promise<NeuromuscularRecordRow[]> {
+  const client = getSupabaseClient();
+  const selectedTeamId = cleanText(teamId);
+
+  if (!selectedTeamId) {
+    return [];
+  }
+
+  if (!isIsoDate(selectedSessionDate)) {
+    throw new Error("La fecha de sesiÃ³n debe usar el formato ISO YYYY-MM-DD.");
+  }
+
+  const query = client
+    .from("neuromuscular_records")
+    .select("*")
+    .eq("team_id", selectedTeamId)
+    .lte("session_date", selectedSessionDate);
+
+  const { data, error } = await query
+    .order("session_date", { ascending: true })
+    .order("player_name", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      `No se ha podido cargar el histÃ³rico neuromuscular del equipo: ${error.message}`,
+    );
+  }
+
+  return (data ?? []) as NeuromuscularRecordRow[];
+}
+
 export async function loadPlayerNeuromuscularHistory(
   input: LoadPlayerNeuromuscularHistoryInput,
 ): Promise<NeuromuscularHistoryPoint[]> {
@@ -370,6 +404,31 @@ export async function loadPlayerNeuromuscularBaselineConfigurationEvents({
   );
 
   return sortBaselineConfigurationEventsDescending(events);
+}
+
+export async function getNeuromuscularBaselineConfigurationEventsByTeamId(
+  teamId: string,
+): Promise<NeuromuscularBaselineConfigurationEvent[]> {
+  const client = getSupabaseClient();
+  assertNonEmptyIdentifier(teamId, "teamId");
+
+  const { data, error } = await client
+    .from("neuromuscular_baseline_configuration_events")
+    .select(NEUROMUSCULAR_BASELINE_CONFIGURATION_EVENT_COLUMNS)
+    .eq("team_id", teamId)
+    .order("effective_from", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error) {
+    throw new Error(
+      `No se pudieron cargar los eventos de baseline del equipo: ${error.message}`,
+    );
+  }
+
+  return sortBaselineConfigurationEventsDescending(
+    (data ?? []).map(parseNeuromuscularBaselineConfigurationEventRow),
+  );
 }
 
 export async function createNeuromuscularSessionWithRecords(
