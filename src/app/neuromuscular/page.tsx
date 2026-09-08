@@ -11,6 +11,7 @@ import NeuromuscularRiskDistributionChart, {
 } from "@/components/neuromuscular/NeuromuscularRiskDistributionChart";
 import NeuromuscularTeamSummary from "@/components/neuromuscular/NeuromuscularTeamSummary";
 import NeuromuscularTeamHeatmap from "@/components/neuromuscular/NeuromuscularTeamHeatmap";
+import NeuromuscularTeamLossRanking from "@/components/neuromuscular/NeuromuscularTeamLossRanking";
 import NeuromuscularTeamReadinessChart from "@/components/neuromuscular/NeuromuscularTeamReadinessChart";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -1397,7 +1398,10 @@ export default function NeuromuscularPage() {
           teamAggregation.playerSnapshots.every((player) =>
             player.teamId === selectedTeamId && player.sessionId === selectedSession.id,
           ) && (
-            <NeuromuscularTeamHeatmap playerSnapshots={teamAggregation.playerSnapshots} />
+            <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
+              <NeuromuscularTeamHeatmap playerSnapshots={teamAggregation.playerSnapshots} />
+              <NeuromuscularTeamLossRanking playerSnapshots={teamAggregation.playerSnapshots} />
+            </div>
           )}
 
         <section aria-label="Resumen longitudinal individual">
