@@ -10,6 +10,7 @@ import NeuromuscularRiskDistributionChart, {
   type NeuromuscularRiskDistributionPoint,
 } from "@/components/neuromuscular/NeuromuscularRiskDistributionChart";
 import NeuromuscularTeamSummary from "@/components/neuromuscular/NeuromuscularTeamSummary";
+import NeuromuscularTeamHeatmap from "@/components/neuromuscular/NeuromuscularTeamHeatmap";
 import NeuromuscularTeamReadinessChart from "@/components/neuromuscular/NeuromuscularTeamReadinessChart";
 import StatusMessage from "@/components/ui/StatusMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -1391,6 +1392,13 @@ export default function NeuromuscularPage() {
             />
           </div>
         )}
+
+        {teamAggregation && selectedSession && !teamDashboardLoading && !teamDashboardError &&
+          teamAggregation.playerSnapshots.every((player) =>
+            player.teamId === selectedTeamId && player.sessionId === selectedSession.id,
+          ) && (
+            <NeuromuscularTeamHeatmap playerSnapshots={teamAggregation.playerSnapshots} />
+          )}
 
         <section aria-label="Resumen longitudinal individual">
           <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

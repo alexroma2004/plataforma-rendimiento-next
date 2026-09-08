@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import type { NeuromuscularTeamFatigueStatus } from "@/lib/domain/neuromuscular-team";
+import { NEUROMUSCULAR_STATUS_VISUALS } from "@/lib/ui/neuromuscular-status";
 
 export type NeuromuscularRiskDistributionPoint = {
   status: NeuromuscularTeamFatigueStatus;
@@ -23,14 +24,6 @@ type Props = {
   data: readonly NeuromuscularRiskDistributionPoint[];
   classifiedPlayerCount: number;
   totalPlayerCount: number;
-};
-
-const STATUS_COLORS: Record<NeuromuscularTeamFatigueStatus, string> = {
-  OPTIMAL: "#16a34a",
-  GOOD: "#4ade80",
-  MILD: "#f59e0b",
-  MODERATE: "#f97316",
-  CRITICAL: "#dc2626",
 };
 
 function RiskTooltip({
@@ -89,7 +82,7 @@ export default function NeuromuscularRiskDistributionChart({
               <Tooltip content={<RiskTooltip />} />
               <Bar dataKey="count" name="Jugadores" radius={[6, 6, 0, 0]}>
                 {data.map((point) => (
-                  <Cell key={point.status} fill={STATUS_COLORS[point.status]} />
+                  <Cell key={point.status} fill={NEUROMUSCULAR_STATUS_VISUALS[point.status].chartColor} />
                 ))}
                 <LabelList dataKey="count" position="top" fill="#334155" fontSize={12} fontWeight={700} />
               </Bar>
