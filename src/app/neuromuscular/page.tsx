@@ -65,6 +65,12 @@ import {
 
 type NeuromuscularVariableKey = "cmj" | "rsimod" | "vmp";
 
+type TeamDashboardSource = {
+  teamId: string;
+  sessionId: string;
+  sessionDate: string;
+};
+
 type QuickReadingCard = {
   title: string;
   variant: "info" | "warning";
@@ -389,6 +395,8 @@ export default function NeuromuscularPage() {
   const [error, setError] = useState<string | null>(null);
   const [teamAggregation, setTeamAggregation] =
     useState<NeuromuscularTeamAggregation | null>(null);
+  const [teamDashboardSource, setTeamDashboardSource] =
+    useState<TeamDashboardSource | null>(null);
   const [teamDashboardLoading, setTeamDashboardLoading] = useState(false);
   const [teamDashboardError, setTeamDashboardError] = useState<string | null>(
     null,
@@ -717,12 +725,21 @@ export default function NeuromuscularPage() {
     return sessions.find((session) => session.id === selectedSessionId) ?? null;
   }, [sessions, selectedSessionId]);
 
+  const isCurrentTeamDashboard =
+    teamDashboardSource !== null &&
+    selectedTeamId !== "" &&
+    selectedSession !== null &&
+    teamDashboardSource.teamId === selectedTeamId &&
+    teamDashboardSource.sessionId === selectedSession.id &&
+    teamDashboardSource.sessionDate === selectedSession.session_date;
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadTeamDashboard() {
       setTeamAggregation(null);
       setTeamReadinessHistory([]);
+      setTeamDashboardSource(null);
       setTeamDashboardError(null);
 
       if (!selectedTeamId || !selectedSession || teamPlayers.length === 0) {
@@ -751,25 +768,31 @@ export default function NeuromuscularPage() {
           name: player.name,
         }));
 
-        setTeamAggregation(
-          buildNeuromuscularTeamAggregation({
-            teamId: selectedTeamId,
-            session: selectedSession,
-            players: playersForAggregation,
-            records: recordsResult,
-            baselineConfigurationEvents: baselineEventsResult,
-          }),
-        );
-        setTeamReadinessHistory(
-          buildNeuromuscularTeamReadinessHistory({
-            teamId: selectedTeamId,
-            sessions,
-            players: playersForAggregation,
-            records: recordsResult,
-            baselineConfigurationEvents: baselineEventsResult,
-            selectedSessionDate: selectedSession.session_date,
-          }),
-        );
+        const aggregation = buildNeuromuscularTeamAggregation({
+          teamId: selectedTeamId,
+          session: selectedSession,
+          players: playersForAggregation,
+          records: recordsResult,
+          baselineConfigurationEvents: baselineEventsResult,
+        });
+        const readinessHistory = buildNeuromuscularTeamReadinessHistory({
+          teamId: selectedTeamId,
+          sessions,
+          players: playersForAggregation,
+          records: recordsResult,
+          baselineConfigurationEvents: baselineEventsResult,
+          selectedSessionDate: selectedSession.session_date,
+        });
+
+        if (cancelled) return;
+
+        setTeamAggregation(aggregation);
+        setTeamReadinessHistory(readinessHistory);
+        setTeamDashboardSource({
+          teamId: selectedTeamId,
+          sessionId: selectedSession.id,
+          sessionDate: selectedSession.session_date,
+        });
       } catch (err) {
         if (cancelled) return;
 
@@ -1375,12 +1398,12 @@ export default function NeuromuscularPage() {
 
         <NeuromuscularTeamSummary
           sessionDate={selectedSession?.session_date ?? null}
-          summary={teamAggregation?.summary ?? null}
+          summary={isCurrentTeamDashboard ? teamAggregation?.summary ?? null : null}
           loading={teamDashboardLoading}
           error={teamDashboardError}
         />
 
-        {teamAggregation && selectedSession && !teamDashboardLoading && !teamDashboardError && (
+        {isCurrentTeamDashboard && teamAggregation && selectedSession && !teamDashboardLoading && !teamDashboardError && (
           <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
             <NeuromuscularRiskDistributionChart
               data={riskDistribution}
@@ -1394,10 +1417,7 @@ export default function NeuromuscularPage() {
           </div>
         )}
 
-        {teamAggregation && selectedSession && !teamDashboardLoading && !teamDashboardError &&
-          teamAggregation.playerSnapshots.every((player) =>
-            player.teamId === selectedTeamId && player.sessionId === selectedSession.id,
-          ) && (
+        {isCurrentTeamDashboard && teamAggregation && selectedSession && !teamDashboardLoading && !teamDashboardError && (
             <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
               <NeuromuscularTeamHeatmap playerSnapshots={teamAggregation.playerSnapshots} />
               <NeuromuscularTeamLossRanking playerSnapshots={teamAggregation.playerSnapshots} />
